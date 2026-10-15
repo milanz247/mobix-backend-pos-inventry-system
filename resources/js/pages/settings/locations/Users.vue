@@ -39,7 +39,7 @@ defineOptions({
 
         <div
             v-if="location.status !== 'active'"
-            class="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm"
+            class="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-amber-900 dark:text-amber-200"
         >
             This location is inactive. Reactivate it before changing
             assignments.
@@ -47,15 +47,11 @@ defineOptions({
 
         <Form
             v-bind="update.form(location.id)"
-            class="space-y-5"
+            class="form-section space-y-5"
             v-slot="{ errors, processing }"
         >
             <div class="grid gap-3 sm:grid-cols-2">
-                <label
-                    v-for="user in users"
-                    :key="user.id"
-                    class="flex items-start gap-3 rounded-lg border p-4"
-                >
+                <label v-for="user in users" :key="user.id" class="choice-card">
                     <input
                         type="checkbox"
                         name="user_ids[]"
@@ -95,7 +91,7 @@ defineOptions({
                 </label>
             </div>
             <InputError :message="errors.user_ids" />
-            <div class="flex gap-3">
+            <div class="flex flex-wrap gap-3 border-t border-border/70 pt-5">
                 <Button :disabled="processing || location.status !== 'active'"
                     >Save assignments</Button
                 >

@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Business;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
 class ApplyBusinessPreferences
@@ -16,13 +17,17 @@ class ApplyBusinessPreferences
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $business = Business::query()->first(['name', 'timezone', 'time_format']);
+        $business = Business::query()->first(['name', 'logo_path', 'timezone', 'time_format']);
         $businessName = null;
+        $businessLogoUrl = null;
         $timezone = config()->string('app.timezone');
         $timeFormat = config()->string('app.time_format');
 
         if ($business !== null) {
             $businessName = $business->name;
+            $businessLogoUrl = $business->logo_path === null
+                ? null
+                : Storage::disk('public')->url($business->logo_path);
             $timezone = $business->timezone;
             $timeFormat = $business->time_format->value;
         }
@@ -36,6 +41,7 @@ class ApplyBusinessPreferences
 
         $request->attributes->set('businessPreferences', [
             'name' => $businessName,
+            'logoUrl' => $businessLogoUrl,
             'timezone' => $timezone,
             'timeFormat' => $timeFormat,
         ]);

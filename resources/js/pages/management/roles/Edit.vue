@@ -20,7 +20,7 @@ defineOptions({
 
 <template>
     <Head :title="`Edit ${role.name}`" />
-    <section class="space-y-6 p-6">
+    <section class="page-shell">
         <Heading
             title="Edit role"
             :description="

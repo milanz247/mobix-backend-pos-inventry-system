@@ -33,7 +33,7 @@ const hasRole = (roleId: number): boolean =>
     <Form
         :action="action"
         :method="method"
-        class="space-y-6"
+        class="form-section space-y-7"
         :reset-on-success="
             method === 'post' ? ['password', 'password_confirmation'] : []
         "
@@ -81,7 +81,7 @@ const hasRole = (roleId: number): boolean =>
                     name="status"
                     required
                     :value="managedUser?.status ?? 'active'"
-                    class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                    class="w-full"
                 >
                     <option
                         v-for="status in statuses"
@@ -118,13 +118,13 @@ const hasRole = (roleId: number): boolean =>
             </div>
         </div>
 
-        <fieldset class="space-y-3 rounded-lg border p-4">
+        <fieldset class="space-y-3 rounded-xl border border-border/80 p-4">
             <legend class="px-1 text-sm font-medium">Roles</legend>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label
                     v-for="role in roles"
                     :key="role.id"
-                    class="flex items-center gap-3 rounded-md border p-3 text-sm"
+                    class="choice-card items-center"
                 >
                     <input
                         type="checkbox"
@@ -139,7 +139,7 @@ const hasRole = (roleId: number): boolean =>
             <InputError :message="errors.role_ids" />
         </fieldset>
 
-        <div class="flex gap-3">
+        <div class="flex flex-wrap gap-3 border-t border-border/70 pt-6">
             <Button :disabled="processing">{{
                 managedUser ? 'Save changes' : 'Create user'
             }}</Button>

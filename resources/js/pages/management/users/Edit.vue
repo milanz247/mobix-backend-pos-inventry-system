@@ -27,7 +27,7 @@ defineOptions({
 
 <template>
     <Head :title="`Edit ${managedUser.name}`" />
-    <section class="space-y-6 p-6">
+    <section class="page-shell">
         <Heading
             title="Edit user"
             description="Update account details, status, password, and roles."

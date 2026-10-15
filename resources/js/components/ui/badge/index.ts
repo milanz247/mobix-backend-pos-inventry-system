@@ -9,11 +9,17 @@ export const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+          "border-primary/15 bg-primary/10 text-primary dark:bg-primary/20 dark:text-blue-200 [a&]:hover:bg-primary/15",
         secondary:
           "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
         destructive:
-         "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+         "border-destructive/15 bg-destructive/10 text-destructive [a&]:hover:bg-destructive/15 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 dark:text-red-300",
+        success:
+          "border-success/15 bg-success/10 text-success [a&]:hover:bg-success/15 dark:bg-success/15 dark:text-emerald-300",
+        warning:
+          "border-warning/20 bg-warning/15 text-amber-800 [a&]:hover:bg-warning/20 dark:text-amber-300",
+        info:
+          "border-info/15 bg-info/10 text-sky-700 [a&]:hover:bg-info/15 dark:text-sky-300",
         outline:
           "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
       },

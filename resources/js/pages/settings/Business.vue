@@ -15,6 +15,7 @@ type Option = {
 
 type Business = {
     name: string;
+    logo_url: string | null;
     business_type: string;
     email: string | null;
     phone: string;
@@ -59,10 +60,48 @@ defineOptions({
             v-bind="BusinessSettingsController.update.form()"
             :options="{ preserveScroll: true }"
             set-defaults-on-success
-            class="space-y-6"
+            class="form-section space-y-7"
             v-slot="{ errors, processing, recentlySuccessful }"
         >
             <div class="grid gap-5 sm:grid-cols-2">
+                <div class="grid gap-2 sm:col-span-2">
+                    <Label for="logo">Business logo</Label>
+                    <div
+                        class="flex flex-col gap-4 rounded-xl border border-dashed border-border bg-background/50 p-4 sm:flex-row sm:items-center"
+                    >
+                        <div
+                            class="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-card"
+                        >
+                            <img
+                                v-if="business.logo_url"
+                                :src="business.logo_url"
+                                :alt="`${business.name} logo preview`"
+                                class="size-full object-contain"
+                            />
+                            <span v-else class="text-xs text-muted-foreground"
+                                >No logo</span
+                            >
+                        </div>
+                        <div class="grid min-w-0 flex-1 gap-2">
+                            <Input
+                                id="logo"
+                                name="logo"
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                :aria-invalid="Boolean(errors.logo)"
+                                aria-describedby="logo-help"
+                            />
+                            <p
+                                id="logo-help"
+                                class="text-xs leading-5 text-muted-foreground"
+                            >
+                                Add a PNG, JPG, or WebP image up to 2 MB. It
+                                appears in the sidebar and business documents.
+                            </p>
+                            <InputError :message="errors.logo" />
+                        </div>
+                    </div>
+                </div>
                 <div class="grid gap-2">
                     <Label for="name">Business name</Label>
                     <Input
@@ -85,7 +124,7 @@ defineOptions({
                         required
                         :value="business.business_type"
                         :aria-invalid="Boolean(errors.business_type)"
-                        class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:bg-input/30"
+                        class="w-full"
                     >
                         <option
                             v-for="option in businessTypes"
@@ -135,7 +174,7 @@ defineOptions({
                         autocomplete="street-address"
                         :value="business.address"
                         :aria-invalid="Boolean(errors.address)"
-                        class="min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
+                        class="min-h-24 w-full resize-y"
                     />
                     <InputError :message="errors.address" />
                 </div>
@@ -199,7 +238,7 @@ defineOptions({
                             required
                             :value="business.timezone"
                             :aria-invalid="Boolean(errors.timezone)"
-                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:bg-input/30"
+                            class="w-full"
                         >
                             <option
                                 v-for="timezone in timezones"
@@ -220,7 +259,7 @@ defineOptions({
                             required
                             :value="business.time_format"
                             :aria-invalid="Boolean(errors.time_format)"
-                            class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:bg-input/30"
+                            class="w-full"
                         >
                             <option
                                 v-for="option in timeFormats"
@@ -235,7 +274,9 @@ defineOptions({
                 </div>
             </div>
 
-            <div class="flex items-center gap-4">
+            <div
+                class="flex flex-wrap items-center gap-4 border-t border-border/70 pt-6"
+            >
                 <Button :disabled="processing">Save changes</Button>
                 <p
                     v-if="recentlySuccessful"

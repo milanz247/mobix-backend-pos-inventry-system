@@ -53,7 +53,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
 
 <template>
     <Head title="Users" />
-    <section class="space-y-6 p-6">
+    <section class="page-shell">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
                 title="Users"
@@ -67,28 +67,20 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
         <Form
             :action="index.url()"
             method="get"
-            class="grid gap-3 rounded-lg border p-4 sm:grid-cols-4"
+            class="filter-panel grid gap-3 sm:grid-cols-4"
         >
             <Input
                 name="search"
                 placeholder="Search users"
                 :default-value="filters.search"
             />
-            <select
-                name="role"
-                :value="filters.role ?? ''"
-                class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            >
+            <select name="role" :value="filters.role ?? ''" class="w-full">
                 <option value="">All roles</option>
                 <option v-for="role in roles" :key="role.id" :value="role.id">
                     {{ role.name }}
                 </option>
             </select>
-            <select
-                name="status"
-                :value="filters.status ?? ''"
-                class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            >
+            <select name="status" :value="filters.status ?? ''" class="w-full">
                 <option value="">All statuses</option>
                 <option
                     v-for="status in statuses"
@@ -101,27 +93,27 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
             <Button variant="outline">Filter</Button>
         </Form>
 
-        <div class="overflow-x-auto rounded-lg border">
-            <table class="w-full text-sm">
-                <thead class="bg-muted/50 text-left">
+        <div class="table-panel">
+            <table class="data-table">
+                <thead>
                     <tr>
-                        <th class="p-3">User</th>
-                        <th class="p-3">Contact</th>
-                        <th class="p-3">Roles</th>
-                        <th class="p-3">Status</th>
-                        <th class="p-3 text-right">Actions</th>
+                        <th>User</th>
+                        <th>Contact</th>
+                        <th>Roles</th>
+                        <th>Status</th>
+                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y">
+                <tbody>
                     <tr v-for="user in users.data" :key="user.id">
-                        <td class="p-3">
+                        <td>
                             <div class="font-medium">{{ user.name }}</div>
                             <div class="text-muted-foreground">
                                 {{ user.email }}
                             </div>
                         </td>
-                        <td class="p-3">{{ user.phone || '—' }}</td>
-                        <td class="p-3">
+                        <td>{{ user.phone || '—' }}</td>
+                        <td>
                             <div class="flex flex-wrap gap-1">
                                 <Badge
                                     v-for="role in user.roles"
@@ -131,18 +123,18 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                                 >
                             </div>
                         </td>
-                        <td class="p-3">
+                        <td>
                             <Badge
                                 :variant="
                                     user.status === 'active'
-                                        ? 'default'
+                                        ? 'success'
                                         : 'secondary'
                                 "
                                 >{{ user.status }}</Badge
                             >
                         </td>
-                        <td class="p-3">
-                            <div class="flex justify-end gap-2">
+                        <td>
+                            <div class="flex flex-wrap justify-end gap-2">
                                 <Button
                                     v-if="can('users.update')"
                                     size="sm"
@@ -176,7 +168,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                     <tr v-if="users.data.length === 0">
                         <td
                             colspan="5"
-                            class="p-8 text-center text-muted-foreground"
+                            class="py-12 text-center text-muted-foreground"
                         >
                             No users found.
                         </td>

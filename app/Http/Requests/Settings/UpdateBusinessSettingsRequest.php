@@ -38,6 +38,7 @@ class UpdateBusinessSettingsRequest extends FormRequest
             'currency' => ['required', 'string', Rule::in(['LKR'])],
             'timezone' => ['required', 'string', 'max:64', 'timezone:all'],
             'time_format' => ['required', Rule::enum(TimeFormat::class)],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ];
     }
 

@@ -32,7 +32,7 @@ defineProps<{
     <Form
         :action="action"
         :method="method"
-        class="space-y-6"
+        class="form-section space-y-7"
         v-slot="{ errors, processing }"
     >
         <div class="grid gap-5 sm:grid-cols-2">
@@ -65,7 +65,7 @@ defineProps<{
                     name="type"
                     required
                     :value="location?.type ?? 'shop'"
-                    class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                    class="w-full"
                 >
                     <option
                         v-for="option in types"
@@ -85,7 +85,7 @@ defineProps<{
                     required
                     :value="location?.status ?? 'active'"
                     :disabled="location?.is_main"
-                    class="h-9 rounded-md border border-input bg-transparent px-3 text-sm disabled:opacity-60"
+                    class="w-full disabled:opacity-60"
                 >
                     <option
                         v-for="option in statuses"
@@ -135,7 +135,7 @@ defineProps<{
                     required
                     :value="location?.address"
                     autocomplete="street-address"
-                    class="rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                    class="min-h-24 w-full resize-y"
                 />
                 <InputError :message="errors.address" />
             </div>
@@ -152,7 +152,7 @@ defineProps<{
             </div>
         </div>
 
-        <div class="flex flex-wrap gap-3">
+        <div class="flex flex-wrap gap-3 border-t border-border/70 pt-6">
             <Button :disabled="processing">{{
                 location ? 'Save changes' : 'Create location'
             }}</Button>

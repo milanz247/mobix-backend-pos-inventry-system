@@ -21,6 +21,7 @@ declare module '@inertiajs/core' {
             auth: Auth;
             businessPreferences: {
                 name: string | null;
+                logoUrl: string | null;
                 timezone: string;
                 timeFormat: '12' | '24';
             };

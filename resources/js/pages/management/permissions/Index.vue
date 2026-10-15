@@ -13,7 +13,7 @@ defineOptions({
 
 <template>
     <Head title="Permissions" />
-    <section class="space-y-6 p-6">
+    <section class="page-shell">
         <Heading
             title="Permissions"
             description="Available access controls for implemented modules."
@@ -22,14 +22,14 @@ defineOptions({
             <section
                 v-for="(permissions, module) in permissionGroups"
                 :key="module"
-                class="rounded-lg border p-4"
+                class="surface-panel p-5"
             >
                 <h2 class="mb-3 font-semibold">{{ module }}</h2>
                 <ul class="space-y-2">
                     <li
                         v-for="permission in permissions"
                         :key="permission.name"
-                        class="flex items-center justify-between gap-4 rounded-md bg-muted/40 p-3 text-sm"
+                        class="flex items-center justify-between gap-4 rounded-lg border border-transparent bg-muted/50 p-3 text-sm transition-colors hover:border-primary/15 hover:bg-accent/50"
                     >
                         <span>{{ permission.label }}</span
                         ><Badge variant="secondary">{{

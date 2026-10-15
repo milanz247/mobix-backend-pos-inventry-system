@@ -31,7 +31,7 @@ defineProps<{
 
     <div
         v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
+        class="mb-4 rounded-lg border border-success/20 bg-success/10 p-3 text-center text-sm font-medium text-success"
     >
         {{ status }}
     </div>
@@ -90,7 +90,7 @@ defineProps<{
 
             <Button
                 type="submit"
-                class="mt-4 w-full"
+                class="mt-2 w-full"
                 :tabindex="4"
                 :disabled="processing"
                 data-test="login-button"

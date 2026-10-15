@@ -76,7 +76,7 @@ defineOptions({
         </div>
 
         <dl
-            class="grid gap-4 rounded-lg border p-5 sm:grid-cols-2 lg:grid-cols-3"
+            class="surface-panel grid gap-6 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3"
         >
             <div>
                 <dt class="text-sm text-muted-foreground">Code</dt>
@@ -94,7 +94,7 @@ defineOptions({
                     <Badge
                         :variant="
                             location.status === 'active'
-                                ? 'default'
+                                ? 'success'
                                 : 'secondary'
                         "
                         >{{ location.status }}</Badge

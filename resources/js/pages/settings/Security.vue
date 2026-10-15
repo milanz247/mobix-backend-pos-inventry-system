@@ -55,7 +55,7 @@ defineOptions({
                 'password_confirmation',
                 'current_password',
             ]"
-            class="space-y-6"
+            class="form-section space-y-6"
             v-slot="{ errors, processing }"
         >
             <div class="grid gap-2">

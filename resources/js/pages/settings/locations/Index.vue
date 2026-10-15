@@ -52,7 +52,7 @@ defineOptions({
 
 <template>
     <Head title="Locations" />
-    <div class="space-y-6">
+    <div class="page-shell">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
                 title="Locations"
@@ -66,18 +66,14 @@ defineOptions({
         <Form
             :action="index.url()"
             method="get"
-            class="grid gap-3 rounded-lg border p-4 sm:grid-cols-3"
+            class="filter-panel grid gap-3 sm:grid-cols-3"
         >
             <Input
                 name="search"
                 placeholder="Search name, code, or city"
                 :default-value="filters.search"
             />
-            <select
-                name="status"
-                :value="filters.status ?? ''"
-                class="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-            >
+            <select name="status" :value="filters.status ?? ''" class="w-full">
                 <option value="">All statuses</option>
                 <option
                     v-for="status in statuses"
@@ -90,21 +86,21 @@ defineOptions({
             <Button variant="outline">Filter</Button>
         </Form>
 
-        <div class="overflow-x-auto rounded-lg border">
-            <table class="w-full text-sm">
-                <thead class="bg-muted/50 text-left">
+        <div class="table-panel">
+            <table class="data-table">
+                <thead>
                     <tr>
-                        <th class="p-3">Location</th>
-                        <th class="p-3">Type</th>
-                        <th class="p-3">City</th>
-                        <th class="p-3">Users</th>
-                        <th class="p-3">Status</th>
-                        <th class="p-3 text-right">Actions</th>
+                        <th>Location</th>
+                        <th>Type</th>
+                        <th>City</th>
+                        <th>Users</th>
+                        <th>Status</th>
+                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y">
+                <tbody>
                     <tr v-for="location in locations.data" :key="location.id">
-                        <td class="p-3">
+                        <td>
                             <div class="flex items-center gap-2 font-medium">
                                 {{ location.name
                                 }}<Badge
@@ -117,23 +113,23 @@ defineOptions({
                                 {{ location.code }}
                             </div>
                         </td>
-                        <td class="p-3 capitalize">
+                        <td class="capitalize">
                             {{ location.type.replace('_', ' ') }}
                         </td>
-                        <td class="p-3">{{ location.city }}</td>
-                        <td class="p-3">{{ location.users_count }}</td>
-                        <td class="p-3">
+                        <td>{{ location.city }}</td>
+                        <td>{{ location.users_count }}</td>
+                        <td>
                             <Badge
                                 :variant="
                                     location.status === 'active'
-                                        ? 'default'
+                                        ? 'success'
                                         : 'secondary'
                                 "
                                 >{{ location.status }}</Badge
                             >
                         </td>
-                        <td class="p-3">
-                            <div class="flex justify-end gap-2">
+                        <td>
+                            <div class="flex flex-wrap justify-end gap-2">
                                 <Button size="sm" variant="outline" as-child
                                     ><Link :href="show(location.id)"
                                         >View</Link
@@ -181,7 +177,7 @@ defineOptions({
                     <tr v-if="locations.data.length === 0">
                         <td
                             colspan="6"
-                            class="p-8 text-center text-muted-foreground"
+                            class="py-12 text-center text-muted-foreground"
                         >
                             No accessible locations found.
                         </td>

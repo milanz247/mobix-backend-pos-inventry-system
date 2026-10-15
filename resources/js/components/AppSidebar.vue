@@ -36,10 +36,7 @@ import { dashboard } from '@/routes';
 import { create as createRole, index as rolesIndex } from '@/routes/roles';
 import { index as permissionsIndex } from '@/routes/permissions';
 import { create as createUser, index as usersIndex } from '@/routes/users';
-import {
-    create as createLocation,
-    index as locationsIndex,
-} from '@/routes/locations';
+import { index as locationsIndex } from '@/routes/locations';
 import { edit as editSecurity } from '@/routes/security';
 import type { Auth, NavItem } from '@/types';
 
@@ -76,9 +73,6 @@ const settingsNavItems = computed<NavItem[]>(() => [
     ...(can('locations.view')
         ? [{ title: 'Locations', href: locationsIndex() }]
         : []),
-    ...(can('locations.create')
-        ? [{ title: 'Create location', href: createLocation() }]
-        : []),
     { title: 'Security', href: editSecurity() },
 ]);
 
@@ -95,8 +89,8 @@ const rolesAreActive = computed(() =>
 </script>
 
 <template>
-    <Sidebar collapsible="icon" variant="inset">
-        <SidebarHeader>
+    <Sidebar collapsible="icon" variant="inset" class="border-0">
+        <SidebarHeader class="border-b border-sidebar-border/70 p-3">
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
@@ -108,7 +102,7 @@ const rolesAreActive = computed(() =>
             </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
+        <SidebarContent class="gap-4 px-1 py-4">
             <NavMain :items="mainNavItems" />
 
             <SidebarGroup class="px-2 py-0">
@@ -225,7 +219,7 @@ const rolesAreActive = computed(() =>
             </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter>
+        <SidebarFooter class="border-t border-sidebar-border/70 p-3">
             <NavUser />
         </SidebarFooter>
     </Sidebar>

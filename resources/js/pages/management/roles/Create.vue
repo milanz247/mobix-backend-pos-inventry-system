@@ -13,7 +13,7 @@ defineOptions({
 
 <template>
     <Head title="Create role" />
-    <section class="space-y-6 p-6">
+    <section class="page-shell">
         <Heading
             title="Create role"
             description="Create a role from the available implemented permissions."

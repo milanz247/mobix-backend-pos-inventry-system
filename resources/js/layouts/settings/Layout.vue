@@ -29,16 +29,16 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
 </script>
 
 <template>
-    <div class="px-4 py-6">
+    <div class="page-shell">
         <Heading
             title="Settings"
             description="Manage your business and sign-in preferences"
         />
 
-        <div class="flex flex-col lg:flex-row lg:space-x-12">
-            <aside class="w-full max-w-xl lg:w-48">
+        <div class="flex flex-col gap-6 lg:flex-row lg:gap-10">
+            <aside class="w-full lg:w-56 lg:shrink-0">
                 <nav
-                    class="flex flex-col space-y-1 space-x-0"
+                    class="surface-panel flex gap-1 overflow-x-auto p-2 lg:sticky lg:top-20 lg:flex-col"
                     aria-label="Settings"
                 >
                     <Button
@@ -46,8 +46,11 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
                         :key="toUrl(item.href)"
                         variant="ghost"
                         :class="[
-                            'w-full justify-start',
-                            { 'bg-muted': isCurrentOrParentUrl(item.href) },
+                            'shrink-0 justify-start lg:w-full',
+                            {
+                                'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary':
+                                    isCurrentOrParentUrl(item.href),
+                            },
                         ]"
                         as-child
                     >
@@ -59,10 +62,10 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
                 </nav>
             </aside>
 
-            <Separator class="my-6 lg:hidden" />
+            <Separator class="lg:hidden" />
 
             <div class="min-w-0 flex-1">
-                <section class="max-w-5xl space-y-12">
+                <section class="max-w-5xl space-y-8">
                     <slot />
                 </section>
             </div>

@@ -29,7 +29,7 @@ const hasPermission = (id: number): boolean =>
     <Form
         :action="action"
         :method="method"
-        class="space-y-6"
+        class="form-section space-y-7"
         v-slot="{ errors, processing }"
     >
         <div class="grid gap-5 sm:grid-cols-2">
@@ -51,7 +51,7 @@ const hasPermission = (id: number): boolean =>
                     name="description"
                     rows="3"
                     :value="role?.description ?? ''"
-                    class="rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                    class="w-full"
                 />
                 <InputError :message="errors.description" />
             </div>
@@ -67,14 +67,14 @@ const hasPermission = (id: number): boolean =>
             <fieldset
                 v-for="(permissions, module) in permissionGroups"
                 :key="module"
-                class="rounded-lg border p-4"
+                class="rounded-xl border border-border/80 bg-background/40 p-4"
             >
                 <legend class="px-1 text-sm font-semibold">{{ module }}</legend>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <label
                         v-for="permission in permissions"
                         :key="permission.id"
-                        class="flex items-center gap-3 rounded-md border p-3 text-sm"
+                        class="choice-card"
                     >
                         <input
                             type="checkbox"
@@ -97,7 +97,7 @@ const hasPermission = (id: number): boolean =>
             <InputError :message="errors.permission_ids || errors.role" />
         </div>
 
-        <div class="flex gap-3">
+        <div class="flex flex-wrap gap-3 border-t border-border/70 pt-6">
             <Button :disabled="processing">{{
                 role ? 'Save changes' : 'Create role'
             }}</Button>

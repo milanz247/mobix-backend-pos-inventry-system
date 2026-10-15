@@ -15,7 +15,7 @@ defineOptions({
 
 <template>
     <Head title="Create user" />
-    <section class="space-y-6 p-6">
+    <section class="page-shell">
         <Heading
             title="Create user"
             description="Create an account and assign its access roles."

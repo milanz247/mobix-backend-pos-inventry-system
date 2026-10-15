@@ -43,7 +43,9 @@ defineOptions({
             class="rounded-md border border-destructive/30 bg-destructive/10 p-3"
         />
 
-        <fieldset class="grid gap-5">
+        <fieldset
+            class="grid gap-5 rounded-xl border border-border/80 bg-background/40 p-5 sm:p-6"
+        >
             <div class="grid gap-1">
                 <legend class="text-lg font-semibold">Business details</legend>
                 <p class="text-sm text-muted-foreground">
@@ -74,7 +76,7 @@ defineOptions({
                         name="business_type"
                         required
                         :aria-invalid="Boolean(errors.business_type)"
-                        class="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:bg-input/30 dark:aria-invalid:ring-destructive/40"
+                        class="w-full"
                     >
                         <option value="" disabled selected>
                             Select a business type
@@ -129,7 +131,7 @@ defineOptions({
                         autocomplete="street-address"
                         placeholder="Street address"
                         :aria-invalid="Boolean(errors.business_address)"
-                        class="min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40"
+                        class="min-h-24 w-full resize-y"
                     />
                     <InputError :message="errors.business_address" />
                 </div>
@@ -164,7 +166,9 @@ defineOptions({
             </div>
         </fieldset>
 
-        <fieldset class="grid gap-5 border-t pt-8">
+        <fieldset
+            class="grid gap-5 rounded-xl border border-border/80 bg-background/40 p-5 sm:p-6"
+        >
             <div class="grid gap-1">
                 <legend class="text-lg font-semibold">
                     Owner account details

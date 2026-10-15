@@ -26,7 +26,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
 
 <template>
     <Head title="Roles" />
-    <section class="space-y-6 p-6">
+    <section class="page-shell">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
                 title="Roles"
@@ -36,19 +36,19 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                 ><Link :href="create()">Create role</Link></Button
             >
         </div>
-        <div class="overflow-x-auto rounded-lg border">
-            <table class="w-full text-sm">
-                <thead class="bg-muted/50 text-left">
+        <div class="table-panel">
+            <table class="data-table">
+                <thead>
                     <tr>
-                        <th class="p-3">Role</th>
-                        <th class="p-3">Users</th>
-                        <th class="p-3">Permissions</th>
-                        <th class="p-3 text-right">Actions</th>
+                        <th>Role</th>
+                        <th>Users</th>
+                        <th>Permissions</th>
+                        <th class="text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y">
+                <tbody>
                     <tr v-for="role in roles" :key="role.id">
-                        <td class="p-3">
+                        <td>
                             <div class="flex items-center gap-2 font-medium">
                                 {{ role.name
                                 }}<Badge
@@ -61,9 +61,9 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                                 {{ role.description || 'No description' }}
                             </div>
                         </td>
-                        <td class="p-3">{{ role.users_count }}</td>
-                        <td class="p-3">{{ role.permissions_count }}</td>
-                        <td class="p-3">
+                        <td>{{ role.users_count }}</td>
+                        <td>{{ role.permissions_count }}</td>
+                        <td>
                             <div class="flex justify-end gap-2">
                                 <Button
                                     v-if="can('roles.update')"
