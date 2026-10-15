@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Eye, Pencil, Power, UsersRound } from '@lucide/vue';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
+import RowActions from '@/components/management/RowActions.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
 import { create, edit, index, show } from '@/routes/locations';
 import { update as updateStatus } from '@/routes/locations/status';
 import { edit as editUsers } from '@/routes/locations/users';
@@ -30,19 +34,35 @@ defineProps<{
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string): boolean =>
     auth.permissions.includes(permission);
+const {
+    isOpen: confirmationOpen,
+    title: confirmationTitle,
+    description: confirmationDescription,
+    confirmLabel,
+    destructive,
+    request,
+    setOpen: setConfirmationOpen,
+    confirm: confirmAction,
+} = useConfirmationDialog();
 const changeStatus = (location: Location): void => {
     const status = location.status === 'active' ? 'inactive' : 'active';
-    if (
-        window.confirm(
-            `${status === 'inactive' ? 'Deactivate' : 'Activate'} ${location.name}?`,
-        )
-    ) {
-        router.patch(
-            updateStatus.url(location.id),
-            { status },
-            { preserveScroll: true },
-        );
-    }
+    const action = status === 'inactive' ? 'Deactivate' : 'Activate';
+
+    request({
+        title: `${action} ${location.name}?`,
+        description:
+            status === 'inactive'
+                ? 'Users may lose access to this location while it is inactive. You can activate it again later.'
+                : 'This location will become available to assigned users again.',
+        confirmLabel: action,
+        destructive: status === 'inactive',
+        onConfirm: () =>
+            router.patch(
+                updateStatus.url(location.id),
+                { status },
+                { preserveScroll: true },
+            ),
+    });
 };
 
 defineOptions({
@@ -88,14 +108,22 @@ defineOptions({
 
         <div class="table-panel">
             <table class="data-table">
+                <colgroup>
+                    <col class="w-[25%]" />
+                    <col class="w-[14%]" />
+                    <col class="w-[14%]" />
+                    <col class="w-[8%]" />
+                    <col class="w-[13%]" />
+                    <col class="w-[26%]" />
+                </colgroup>
                 <thead>
                     <tr>
-                        <th>Location</th>
-                        <th>Type</th>
-                        <th>City</th>
-                        <th>Users</th>
-                        <th>Status</th>
-                        <th class="text-right">Actions</th>
+                        <th scope="col">Location</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">City</th>
+                        <th scope="col">Users</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -128,50 +156,68 @@ defineOptions({
                                 >{{ location.status }}</Badge
                             >
                         </td>
-                        <td>
-                            <div class="flex flex-wrap justify-end gap-2">
-                                <Button size="sm" variant="outline" as-child
-                                    ><Link :href="show(location.id)"
-                                        >View</Link
-                                    ></Button
+                        <td class="text-right">
+                            <RowActions :label="location.name">
+                                <Button
+                                    as-child
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action"
                                 >
+                                    <Link
+                                        :href="show(location.id)"
+                                        :aria-label="`View ${location.name}`"
+                                        :title="`View ${location.name}`"
+                                    >
+                                        <Eye aria-hidden="true" />
+                                    </Link>
+                                </Button>
                                 <Button
                                     v-if="can('locations.update')"
-                                    size="sm"
-                                    variant="outline"
                                     as-child
-                                    ><Link :href="edit(location.id)"
-                                        >Edit</Link
-                                    ></Button
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action"
                                 >
+                                    <Link
+                                        :href="edit(location.id)"
+                                        :aria-label="`Edit ${location.name}`"
+                                        :title="`Edit ${location.name}`"
+                                    >
+                                        <Pencil aria-hidden="true" />
+                                    </Link>
+                                </Button>
                                 <Button
                                     v-if="can('locations.assign-users')"
-                                    size="sm"
-                                    variant="outline"
                                     as-child
-                                    ><Link :href="editUsers(location.id)"
-                                        >Users</Link
-                                    ></Button
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action"
                                 >
+                                    <Link
+                                        :href="editUsers(location.id)"
+                                        :aria-label="`Manage users for ${location.name}`"
+                                        :title="`Manage users for ${location.name}`"
+                                    >
+                                        <UsersRound aria-hidden="true" />
+                                    </Link>
+                                </Button>
                                 <Button
                                     v-if="
                                         can('locations.update') &&
                                         !location.is_main
                                     "
-                                    size="sm"
-                                    :variant="
-                                        location.status === 'active'
-                                            ? 'destructive'
-                                            : 'outline'
-                                    "
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action"
+                                    :aria-label="`${location.status === 'active' ? 'Deactivate' : 'Activate'} ${location.name}`"
+                                    :title="`${location.status === 'active' ? 'Deactivate' : 'Activate'} ${location.name}`"
                                     @click="changeStatus(location)"
-                                    >{{
-                                        location.status === 'active'
-                                            ? 'Deactivate'
-                                            : 'Activate'
-                                    }}</Button
                                 >
-                            </div>
+                                    <Power aria-hidden="true" />
+                                </Button>
+                            </RowActions>
                         </td>
                     </tr>
                     <tr v-if="locations.data.length === 0">
@@ -202,5 +248,14 @@ defineOptions({
                 />
             </Button>
         </nav>
+        <ConfirmActionDialog
+            :open="confirmationOpen"
+            :title="confirmationTitle"
+            :description="confirmationDescription"
+            :confirm-label="confirmLabel"
+            :destructive="destructive"
+            @update:open="setConfirmationOpen"
+            @confirm="confirmAction"
+        />
     </div>
 </template>

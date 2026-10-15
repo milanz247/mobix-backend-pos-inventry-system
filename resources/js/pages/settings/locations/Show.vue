@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
 import { edit, index } from '@/routes/locations';
 import { update as updateStatus } from '@/routes/locations/status';
 import { edit as editUsers } from '@/routes/locations/users';
@@ -25,14 +27,31 @@ defineProps<{ location: Location }>();
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string): boolean =>
     auth.permissions.includes(permission);
+const {
+    isOpen: confirmationOpen,
+    title: confirmationTitle,
+    description: confirmationDescription,
+    confirmLabel,
+    destructive,
+    request,
+    setOpen: setConfirmationOpen,
+    confirm: confirmAction,
+} = useConfirmationDialog();
 const changeStatus = (location: Location): void => {
     const status = location.status === 'active' ? 'inactive' : 'active';
-    if (
-        window.confirm(
-            `${status === 'inactive' ? 'Deactivate' : 'Activate'} ${location.name}?`,
-        )
-    )
-        router.patch(updateStatus.url(location.id), { status });
+    const action = status === 'inactive' ? 'Deactivate' : 'Activate';
+
+    request({
+        title: `${action} ${location.name}?`,
+        description:
+            status === 'inactive'
+                ? 'Users may lose access to this location while it is inactive. You can activate it again later.'
+                : 'This location will become available to assigned users again.',
+        confirmLabel: action,
+        destructive: status === 'inactive',
+        onConfirm: () =>
+            router.patch(updateStatus.url(location.id), { status }),
+    });
 };
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Location details', href: index() }] },
@@ -123,5 +142,14 @@ defineOptions({
                 </dd>
             </div>
         </dl>
+        <ConfirmActionDialog
+            :open="confirmationOpen"
+            :title="confirmationTitle"
+            :description="confirmationDescription"
+            :confirm-label="confirmLabel"
+            :destructive="destructive"
+            @update:open="setConfirmationOpen"
+            @confirm="confirmAction"
+        />
     </div>
 </template>

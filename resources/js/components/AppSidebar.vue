@@ -3,6 +3,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import {
     ChevronRight,
     LayoutGrid,
+    Package,
     Settings,
     ShieldCheck,
     Users,
@@ -33,6 +34,9 @@ import {
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { edit as editBusiness } from '@/routes/business-settings';
 import { dashboard } from '@/routes';
+import { index as brandsIndex } from '@/routes/brands';
+import { index as categoriesIndex } from '@/routes/categories';
+import { index as productsIndex } from '@/routes/products';
 import { create as createRole, index as rolesIndex } from '@/routes/roles';
 import { index as permissionsIndex } from '@/routes/permissions';
 import { create as createUser, index as usersIndex } from '@/routes/users';
@@ -66,6 +70,15 @@ const roleNavItems = computed<NavItem[]>(() => [
         ? [{ title: 'Permissions', href: permissionsIndex() }]
         : []),
 ]);
+const catalogNavItems = computed<NavItem[]>(() => [
+    ...(can('products.view')
+        ? [{ title: 'All products', href: productsIndex() }]
+        : []),
+    ...(can('categories.view')
+        ? [{ title: 'Categories', href: categoriesIndex() }]
+        : []),
+    ...(can('brands.view') ? [{ title: 'Brands', href: brandsIndex() }] : []),
+]);
 const settingsNavItems = computed<NavItem[]>(() => [
     ...(can('business-settings.view')
         ? [{ title: 'Business settings', href: editBusiness() }]
@@ -85,6 +98,9 @@ const usersAreActive = computed(() =>
 );
 const rolesAreActive = computed(() =>
     roleNavItems.value.some((item) => isCurrentUrl(item.href)),
+);
+const catalogIsActive = computed(() =>
+    catalogNavItems.value.some((item) => isCurrentUrl(item.href)),
 );
 </script>
 
@@ -200,6 +216,49 @@ const rolesAreActive = computed(() =>
                                 <SidebarMenuSub>
                                     <SidebarMenuSubItem
                                         v-for="item in settingsNavItems"
+                                        :key="item.title"
+                                    >
+                                        <SidebarMenuSubButton
+                                            as-child
+                                            :is-active="isCurrentUrl(item.href)"
+                                        >
+                                            <Link :href="item.href">
+                                                <span>{{ item.title }}</span>
+                                            </Link>
+                                        </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                </SidebarMenuSub>
+                            </CollapsibleContent>
+                        </SidebarMenuItem>
+                    </Collapsible>
+                </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarGroup v-if="catalogNavItems.length" class="px-2 py-0">
+                <SidebarGroupLabel>Catalog</SidebarGroupLabel>
+                <SidebarMenu>
+                    <Collapsible
+                        as-child
+                        :default-open="catalogIsActive"
+                        class="group/collapsible"
+                    >
+                        <SidebarMenuItem>
+                            <CollapsibleTrigger as-child>
+                                <SidebarMenuButton
+                                    tooltip="Product Management"
+                                    :is-active="catalogIsActive"
+                                >
+                                    <Package />
+                                    <span>Product Management</span>
+                                    <ChevronRight
+                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                                    />
+                                </SidebarMenuButton>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                <SidebarMenuSub>
+                                    <SidebarMenuSubItem
+                                        v-for="item in catalogNavItems"
                                         :key="item.title"
                                     >
                                         <SidebarMenuSubButton

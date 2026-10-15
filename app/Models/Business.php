@@ -67,6 +67,30 @@ class Business extends Model
         return $this->hasMany(Location::class);
     }
 
+    /** @return HasMany<Category, $this> */
+    public function categories(): HasMany
+    {
+        return $this->hasMany(Category::class);
+    }
+
+    /** @return HasMany<Brand, $this> */
+    public function brands(): HasMany
+    {
+        return $this->hasMany(Brand::class);
+    }
+
+    /** @return HasMany<Product, $this> */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    /** @return HasMany<ProductVariant, $this> */
+    public function productVariants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

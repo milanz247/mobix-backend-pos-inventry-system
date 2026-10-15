@@ -237,15 +237,15 @@
     }
 
     .data-table thead {
-        @apply bg-muted/70 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase;
+        @apply bg-muted/70 text-left text-[0.7rem] font-semibold tracking-[0.08em] text-muted-foreground uppercase;
     }
 
     .data-table th {
-        @apply px-4 py-3;
+        @apply h-11 border-b border-border/80 px-4 py-3 whitespace-nowrap;
     }
 
     .data-table td {
-        @apply px-4 py-3.5 align-middle;
+        @apply px-4 py-3 align-middle leading-5;
     }
 
     .data-table tbody {
@@ -253,7 +253,15 @@
     }
 
     .data-table tbody tr {
-        @apply transition-colors hover:bg-muted/35;
+        @apply transition-colors hover:bg-accent/35;
+    }
+
+    .data-table tbody tr:last-child td {
+        @apply border-b-0;
+    }
+
+    .row-action {
+        @apply size-8 rounded-lg p-0 text-muted-foreground shadow-none transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/30;
     }
 
     .form-section {

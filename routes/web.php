@@ -14,4 +14,5 @@ Route::middleware(['auth'])->group(function () {
 });
 
 require __DIR__.'/management.php';
+require __DIR__.'/catalog.php';
 require __DIR__.'/settings.php';

@@ -21,6 +21,20 @@ enum PermissionName: string
     case LocationsCreate = 'locations.create';
     case LocationsUpdate = 'locations.update';
     case LocationsAssignUsers = 'locations.assign-users';
+    case ProductsView = 'products.view';
+    case ProductsCreate = 'products.create';
+    case ProductsUpdate = 'products.update';
+    case ProductsDeactivate = 'products.deactivate';
+    case CategoriesView = 'categories.view';
+    case CategoriesCreate = 'categories.create';
+    case CategoriesUpdate = 'categories.update';
+    case CategoriesDeactivate = 'categories.deactivate';
+    case BrandsView = 'brands.view';
+    case BrandsCreate = 'brands.create';
+    case BrandsUpdate = 'brands.update';
+    case BrandsDeactivate = 'brands.deactivate';
+    case VariantsManage = 'variants.manage';
+    case BundlesManage = 'bundles.manage';
 
     public function module(): string
     {
@@ -42,6 +56,20 @@ enum PermissionName: string
             self::LocationsCreate,
             self::LocationsUpdate,
             self::LocationsAssignUsers => 'Locations',
+            self::ProductsView,
+            self::ProductsCreate,
+            self::ProductsUpdate,
+            self::ProductsDeactivate => 'Products',
+            self::CategoriesView,
+            self::CategoriesCreate,
+            self::CategoriesUpdate,
+            self::CategoriesDeactivate => 'Categories',
+            self::BrandsView,
+            self::BrandsCreate,
+            self::BrandsUpdate,
+            self::BrandsDeactivate => 'Brands',
+            self::VariantsManage => 'Variants',
+            self::BundlesManage => 'Bundles',
         };
     }
 
@@ -50,6 +78,11 @@ enum PermissionName: string
         return match ($this) {
             self::UsersAssignRoles => 'Assign roles',
             self::LocationsAssignUsers => 'Assign users',
+            self::ProductsDeactivate,
+            self::CategoriesDeactivate,
+            self::BrandsDeactivate => 'Deactivate',
+            self::VariantsManage,
+            self::BundlesManage => 'Manage',
             default => ucfirst(str_replace('-', ' ', str($this->value)->after('.')->toString())),
         };
     }

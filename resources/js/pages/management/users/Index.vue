@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Pencil, Power, Trash2 } from '@lucide/vue';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
+import RowActions from '@/components/management/RowActions.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
 import { create, destroy, edit, index } from '@/routes/users';
 import { update as updateStatus } from '@/routes/users/status';
 import type { Auth } from '@/types';
@@ -28,24 +32,46 @@ defineProps<{
 
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string) => auth.permissions.includes(permission);
+const {
+    isOpen: confirmationOpen,
+    title: confirmationTitle,
+    description: confirmationDescription,
+    confirmLabel,
+    destructive,
+    request,
+    setOpen: setConfirmationOpen,
+    confirm: confirmAction,
+} = useConfirmationDialog();
 const changeStatus = (user: User) => {
     const status = user.status === 'active' ? 'inactive' : 'active';
-    if (
-        window.confirm(
-            `${status === 'inactive' ? 'Deactivate' : 'Activate'} ${user.name}?`,
-        )
-    ) {
-        router.patch(
-            updateStatus.url(user.id),
-            { status },
-            { preserveScroll: true },
-        );
-    }
+    const action = status === 'inactive' ? 'Deactivate' : 'Activate';
+
+    request({
+        title: `${action} ${user.name}?`,
+        description:
+            status === 'inactive'
+                ? 'This user will no longer be able to sign in until the account is activated again.'
+                : 'This user will be able to sign in again.',
+        confirmLabel: action,
+        destructive: status === 'inactive',
+        onConfirm: () =>
+            router.patch(
+                updateStatus.url(user.id),
+                { status },
+                { preserveScroll: true },
+            ),
+    });
 };
 const remove = (user: User) => {
-    if (window.confirm(`Delete ${user.name}? This cannot be undone.`)) {
-        router.delete(destroy.url(user.id), { preserveScroll: true });
-    }
+    request({
+        title: `Delete ${user.name}?`,
+        description:
+            'This user account will be permanently deleted. This action cannot be undone.',
+        confirmLabel: 'Delete account',
+        destructive: true,
+        onConfirm: () =>
+            router.delete(destroy.url(user.id), { preserveScroll: true }),
+    });
 };
 
 defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
@@ -95,18 +121,25 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
 
         <div class="table-panel">
             <table class="data-table">
+                <colgroup>
+                    <col class="w-[24%]" />
+                    <col class="w-[16%]" />
+                    <col class="w-[23%]" />
+                    <col class="w-[12%]" />
+                    <col class="w-[25%]" />
+                </colgroup>
                 <thead>
                     <tr>
-                        <th>User</th>
-                        <th>Contact</th>
-                        <th>Roles</th>
-                        <th>Status</th>
-                        <th class="text-right">Actions</th>
+                        <th scope="col">User</th>
+                        <th scope="col">Contact</th>
+                        <th scope="col">Roles</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="user in users.data" :key="user.id">
-                        <td>
+                        <td class="truncate">
                             <div class="font-medium">{{ user.name }}</div>
                             <div class="text-muted-foreground">
                                 {{ user.email }}
@@ -133,36 +166,53 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                                 >{{ user.status }}</Badge
                             >
                         </td>
-                        <td>
-                            <div class="flex flex-wrap justify-end gap-2">
+                        <td class="text-right">
+                            <RowActions
+                                v-if="
+                                    can('users.update') || can('users.delete')
+                                "
+                                :label="user.name"
+                            >
                                 <Button
                                     v-if="can('users.update')"
-                                    size="sm"
-                                    variant="outline"
                                     as-child
-                                    ><Link :href="edit(user.id)"
-                                        >Edit</Link
-                                    ></Button
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action"
                                 >
+                                    <Link
+                                        :href="edit(user.id)"
+                                        :aria-label="`Edit ${user.name}`"
+                                        :title="`Edit ${user.name}`"
+                                    >
+                                        <Pencil aria-hidden="true" />
+                                    </Link>
+                                </Button>
                                 <Button
                                     v-if="can('users.update')"
-                                    size="sm"
+                                    type="button"
                                     variant="outline"
+                                    size="icon-sm"
+                                    class="row-action"
+                                    :aria-label="`${user.status === 'active' ? 'Deactivate' : 'Activate'} ${user.name}`"
+                                    :title="`${user.status === 'active' ? 'Deactivate' : 'Activate'} ${user.name}`"
                                     @click="changeStatus(user)"
-                                    >{{
-                                        user.status === 'active'
-                                            ? 'Deactivate'
-                                            : 'Activate'
-                                    }}</Button
                                 >
+                                    <Power aria-hidden="true" />
+                                </Button>
                                 <Button
                                     v-if="can('users.delete')"
-                                    size="sm"
-                                    variant="destructive"
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action text-destructive hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                                    :aria-label="`Delete ${user.name}`"
+                                    :title="`Delete ${user.name}`"
                                     @click="remove(user)"
-                                    >Delete</Button
                                 >
-                            </div>
+                                    <Trash2 aria-hidden="true" />
+                                </Button>
+                            </RowActions>
                         </td>
                     </tr>
                     <tr v-if="users.data.length === 0">
@@ -192,5 +242,14 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                 />
             </Button>
         </nav>
+        <ConfirmActionDialog
+            :open="confirmationOpen"
+            :title="confirmationTitle"
+            :description="confirmationDescription"
+            :confirm-label="confirmLabel"
+            :destructive="destructive"
+            @update:open="setConfirmationOpen"
+            @confirm="confirmAction"
+        />
     </section>
 </template>
