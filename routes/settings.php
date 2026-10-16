@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\BusinessSettingsController;
+use App\Http\Controllers\Settings\InvoiceSettingsController;
 use App\Http\Controllers\Settings\LocationController;
 use App\Http\Controllers\Settings\LocationStatusController;
 use App\Http\Controllers\Settings\LocationUserController;
@@ -22,6 +23,14 @@ Route::middleware(['auth'])->group(function () {
     Route::put('settings/business', [BusinessSettingsController::class, 'update'])
         ->middleware('can:'.PermissionName::BusinessSettingsUpdate->value)
         ->name('business-settings.update');
+
+    Route::get('settings/invoices', [InvoiceSettingsController::class, 'edit'])
+        ->middleware('can:'.PermissionName::BusinessSettingsView->value)
+        ->name('invoice-settings.edit');
+
+    Route::put('settings/invoices', [InvoiceSettingsController::class, 'update'])
+        ->middleware('can:'.PermissionName::BusinessSettingsUpdate->value)
+        ->name('invoice-settings.update');
 
     Route::get('settings/locations', [LocationController::class, 'index'])->name('locations.index');
     Route::get('settings/locations/create', [LocationController::class, 'create'])->name('locations.create');

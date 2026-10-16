@@ -9,16 +9,16 @@ defineProps<{
     statuses: { value: string; label: string }[];
 }>();
 defineOptions({
-    layout: { breadcrumbs: [{ title: 'Create user', href: create() }] },
+    layout: { breadcrumbs: [{ title: 'Invite team member', href: create() }] },
 });
 </script>
 
 <template>
-    <Head title="Create user" />
+    <Head title="Invite team member" />
     <section class="page-shell">
         <Heading
-            title="Create user"
-            description="Create an account and assign its access roles."
+            title="Invite a team member"
+            description="Send a secure password setup link and assign the right access roles."
         />
         <UserForm
             :action="store.url()"

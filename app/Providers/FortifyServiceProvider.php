@@ -9,6 +9,7 @@ use App\Models\Business;
 use App\Models\User;
 use App\UserStatus;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -16,6 +17,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\LogoutResponse;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
@@ -26,7 +28,15 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(LogoutResponse::class, function (): LogoutResponse {
+            return new class implements LogoutResponse
+            {
+                public function toResponse(mixed $request): RedirectResponse
+                {
+                    return to_route('login');
+                }
+            };
+        });
     }
 
     /**

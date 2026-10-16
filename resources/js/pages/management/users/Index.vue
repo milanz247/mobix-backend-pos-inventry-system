@@ -83,10 +83,10 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
                 title="Users"
-                description="Manage user accounts, roles, and account status."
+                description="Invite teammates and manage roles and account status."
             />
             <Button v-if="can('users.create')" as-child
-                ><Link :href="create()">Create user</Link></Button
+                ><Link :href="create()">Invite user</Link></Button
             >
         </div>
 

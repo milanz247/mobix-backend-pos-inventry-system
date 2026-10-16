@@ -37,7 +37,7 @@ class DemoCatalogSeeder extends Seeder
             'Mobile Phones', 'Accessories', 'Spare Parts', 'Other',
         ])->get()->keyBy('name');
         $brands = $business->brands()->whereIn('name', [
-            'Apple', 'Samsung', 'Xiaomi', 'Other',
+            'Apple', 'Samsung', 'Xiaomi', 'Oppo', 'Vivo', 'Other',
         ])->get()->keyBy('name');
 
         $mobilePhones = $categories->get('Mobile Phones');
@@ -141,7 +141,101 @@ class DemoCatalogSeeder extends Seeder
             ],
         ]);
 
+        $this->createProduct($business, $accessories, $otherBrand instanceof Brand ? $otherBrand : null, [
+            'name' => '10,000 mAh Fast-Charge Power Bank',
+            'product_type' => ProductType::Simple,
+            'description' => 'Portable power bank with USB-C charging and battery protection.',
+            'variants' => [
+                $this->quantityVariant('Black', 'DEMO-ACC-PBANK-10K', '4799999000110', '4800.00', '7500.00', '6900.00', color: 'Black'),
+            ],
+        ]);
+
+        $this->createProduct($business, $accessories, $otherBrand instanceof Brand ? $otherBrand : null, [
+            'name' => '33W USB-C Fast Charger',
+            'product_type' => ProductType::Simple,
+            'description' => 'Universal 33W USB-C wall charger for compatible phones.',
+            'variants' => [
+                $this->quantityVariant('White', 'DEMO-ACC-CHG-33W', '4799999000127', '3900.00', '6200.00', '5700.00', color: 'White'),
+            ],
+        ]);
+
+        $this->createProduct($business, $accessories, $otherBrand instanceof Brand ? $otherBrand : null, [
+            'name' => 'Lightning to USB-C Cable 1m',
+            'product_type' => ProductType::Simple,
+            'description' => 'One-metre charging and data cable for compatible Apple devices.',
+            'variants' => [
+                $this->quantityVariant('White', 'DEMO-ACC-CABLE-LIGHTNING', '4799999000134', '1250.00', '2400.00', '2100.00', color: 'White'),
+            ],
+        ]);
+
+        $this->createProduct($business, $accessories, $samsung instanceof Brand ? $samsung : null, [
+            'name' => 'Galaxy S24 Silicone Case',
+            'product_type' => ProductType::Simple,
+            'description' => 'Soft-touch protective case for Samsung Galaxy S24.',
+            'variants' => [
+                $this->quantityVariant('Navy Blue', 'DEMO-ACC-CASE-S24-NAVY', null, '1800.00', '3500.00', '3100.00', model: 'Galaxy S24', color: 'Navy Blue'),
+            ],
+        ]);
+
+        $this->createProduct($business, $accessories, $samsung instanceof Brand ? $samsung : null, [
+            'name' => 'Galaxy S24 Tempered Glass',
+            'product_type' => ProductType::Simple,
+            'description' => 'Tempered-glass screen protector sized for Samsung Galaxy S24.',
+            'variants' => [
+                $this->quantityVariant('Clear', 'DEMO-ACC-GLASS-S24', null, '900.00', '1900.00', '1600.00', model: 'Galaxy S24', color: 'Clear'),
+            ],
+        ]);
+
+        $this->createProduct($business, $spareParts, $samsung instanceof Brand ? $samsung : null, [
+            'name' => 'Galaxy A54 Charging Port Flex',
+            'product_type' => ProductType::Simple,
+            'description' => 'Replacement USB-C charging port flex assembly for Galaxy A54.',
+            'variants' => [
+                $this->quantityVariant('Service Part', 'DEMO-SP-A54-CHARGE-FLEX', null, '3200.00', '5900.00', '5200.00', model: 'Galaxy A54 5G'),
+            ],
+        ]);
+
+        $this->createProduct($business, $spareParts, $apple instanceof Brand ? $apple : null, [
+            'name' => 'iPhone 13 Replacement Battery',
+            'product_type' => ProductType::Simple,
+            'description' => 'Replacement battery for iPhone 13 repair service.',
+            'variants' => [
+                $this->quantityVariant('Service Part', 'DEMO-SP-IPH13-BATTERY', null, '8500.00', '12900.00', '11800.00', model: 'iPhone 13'),
+            ],
+        ]);
+
+        $this->createProduct($business, $mobilePhones, $brands->get('Oppo') instanceof Brand ? $brands->get('Oppo') : null, [
+            'name' => 'Oppo Reno 12 5G',
+            'product_type' => ProductType::Variable,
+            'description' => 'Reno 12 5G catalogue model with separate storage and colour variants.',
+            'variants' => [
+                $this->serializedVariant('256 GB · Astro Silver', 'DEMO-PHN-RENO12-256-SLV', null, '142000.00', '169000.00', '159000.00', 'CPH2625', '256 GB', 'Astro Silver', ProductCondition::New),
+                $this->serializedVariant('256 GB · Sunset Pink', 'DEMO-PHN-RENO12-256-PNK', null, '142000.00', '169000.00', '159000.00', 'CPH2625', '256 GB', 'Sunset Pink', ProductCondition::New),
+            ],
+        ]);
+
+        $this->createProduct($business, $mobilePhones, $samsung instanceof Brand ? $samsung : null, [
+            'name' => 'Pre-Owned Samsung Galaxy A15',
+            'product_type' => ProductType::Serialized,
+            'description' => 'Used Galaxy A15 model; actual units and IMEIs are tracked individually.',
+            'variants' => [
+                $this->serializedVariant('128 GB · Used · Blue Black', 'DEMO-PHN-A15-128-USED', null, '39000.00', '52500.00', '48000.00', 'SM-A155F', '128 GB', 'Blue Black', ProductCondition::Used),
+            ],
+        ]);
+
         $this->createBundle($business, $other, $otherBrand instanceof Brand ? $otherBrand : null);
+        $this->createBundle(
+            $business,
+            $other,
+            $otherBrand instanceof Brand ? $otherBrand : null,
+            'DEMO-BUNDLE-PROTECTION',
+            'Phone Protection Pack',
+            'Phone protection bundle containing one universal clear case and one standard tempered-glass protector.',
+            ['DEMO-ACC-CASE-CLEAR' => '1.000', 'DEMO-ACC-GLASS-STD' => '1.000'],
+            '3200.00',
+            '2700.00',
+            '4799999000141',
+        );
     }
 
     /**
@@ -173,21 +267,29 @@ class DemoCatalogSeeder extends Seeder
         }
     }
 
-    private function createBundle(Business $business, Category $category, ?Brand $brand): void
-    {
-        $bundleSku = 'DEMO-BUNDLE-STARTER';
-
-        if ($business->productVariants()->where('sku', $bundleSku)->exists()
-            || $business->products()->where('name', 'Mobile Starter Pack')->exists()) {
-            return;
-        }
-
-        $componentSkus = [
+    /** @param array<string, string> $componentSkus */
+    private function createBundle(
+        Business $business,
+        Category $category,
+        ?Brand $brand,
+        string $bundleSku = 'DEMO-BUNDLE-STARTER',
+        string $name = 'Mobile Starter Pack',
+        string $description = 'Virtual bundle containing one charger, cable, clear case, and tempered-glass protector.',
+        array $componentSkus = [
             'DEMO-ACC-CHG-25W' => '1.000',
             'DEMO-ACC-CABLE-C2C' => '1.000',
             'DEMO-ACC-CASE-CLEAR' => '1.000',
             'DEMO-ACC-GLASS-STD' => '1.000',
-        ];
+        ],
+        string $sellingPrice = '8500.00',
+        string $minimumSellingPrice = '7500.00',
+        ?string $barcode = '4799999000103',
+    ): void {
+
+        if ($business->productVariants()->where('sku', $bundleSku)->exists()
+            || $business->products()->where('name', $name)->exists()) {
+            return;
+        }
         $components = $business->productVariants()
             ->whereIn('sku', array_keys($componentSkus))
             ->get()
@@ -200,20 +302,20 @@ class DemoCatalogSeeder extends Seeder
         $product = $business->products()->create([
             'category_id' => $category->id,
             'brand_id' => $brand?->id,
-            'name' => 'Mobile Starter Pack',
+            'name' => $name,
             'product_type' => ProductType::Combo,
-            'description' => 'Virtual bundle containing one charger, cable, clear case, and tempered-glass protector.',
+            'description' => $description,
             'status' => CatalogStatus::Active,
         ]);
         $bundleVariant = new ProductVariant([
             'name' => 'Standard Pack',
             'sku' => $bundleSku,
-            'barcode' => '4799999000103',
+            'barcode' => $barcode,
             'tracking_mode' => VariantTrackingMode::QuantityBased,
             'unit' => 'pack',
             'cost_price' => '0.00',
-            'selling_price' => '8500.00',
-            'minimum_selling_price' => '7500.00',
+            'selling_price' => $sellingPrice,
+            'minimum_selling_price' => $minimumSellingPrice,
             'status' => CatalogStatus::Active,
         ]);
         $bundleVariant->business()->associate($business);

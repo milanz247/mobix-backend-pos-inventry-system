@@ -36,7 +36,7 @@ class RolePermissionSeeder extends Seeder
             }
 
             if ($systemRole === SystemRole::Owner) {
-                $role->syncPermissions($permissions->values());
+                $role->givePermissionTo($permissions->values());
             } elseif ($role->wasRecentlyCreated) {
                 $role->syncPermissions($this->defaultPermissions($systemRole));
             }
@@ -61,8 +61,24 @@ class RolePermissionSeeder extends Seeder
                 PermissionName::UsersView->value,
                 PermissionName::BusinessSettingsView->value,
                 PermissionName::LocationsView->value,
+                PermissionName::SuppliersView->value,
+                PermissionName::PurchasesView->value,
+                PermissionName::SalesView->value,
+                PermissionName::PosAccess->value,
+                PermissionName::SalesCreate->value,
+                PermissionName::SalesDiscount->value,
+                PermissionName::SalePaymentsCreate->value,
+                PermissionName::SaleReturnsCreate->value,
+                PermissionName::SalesReportsView->value,
             ],
-            SystemRole::Cashier, SystemRole::Technician => [PermissionName::DashboardView->value],
+            SystemRole::Cashier => [
+                PermissionName::DashboardView->value,
+                PermissionName::PosAccess->value,
+                PermissionName::SalesCreate->value,
+                PermissionName::SalesView->value,
+                PermissionName::SalePaymentsCreate->value,
+            ],
+            SystemRole::Technician => [PermissionName::DashboardView->value],
         };
     }
 }

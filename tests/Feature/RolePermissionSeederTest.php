@@ -24,3 +24,17 @@ test('reseed does not overwrite customized non owner permissions', function () {
 
     expect($role->refresh()->permissions->pluck('name')->all())->toBe([PermissionName::DashboardView->value]);
 });
+
+test('reseed adds defined owner permissions without removing custom permissions', function () {
+    $this->seed(RolePermissionSeeder::class);
+    $owner = Role::findByName(SystemRole::Owner->value);
+    $customPermission = Permission::findOrCreate('custom.audit-view', 'web');
+    $owner->givePermissionTo($customPermission);
+
+    $this->seed(RolePermissionSeeder::class);
+
+    expect($owner->refresh()->permissions->pluck('name')->all())
+        ->toContain('custom.audit-view')
+        ->toContain(PermissionName::InventoryView->value)
+        ->toContain(PermissionName::InventoryTransfer->value);
+});

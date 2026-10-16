@@ -11,9 +11,12 @@ use App\Services\UserAdministrationService;
 use App\UserStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class UserController extends Controller
 {
@@ -67,9 +70,34 @@ class UserController extends Controller
      */
     public function store(StoreUserRequest $request, UserAdministrationService $service): RedirectResponse
     {
-        $service->create($request->user(), $request->validated());
+        $attributes = $request->validated();
+        $sendInvite = (bool) ($attributes['send_invite'] ?? false);
+        unset($attributes['send_invite']);
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => __('User created.')]);
+        if ($sendInvite) {
+            $attributes['password'] = Str::random(64);
+        }
+
+        $user = $service->create($request->user(), $attributes);
+        $message = __('User created.');
+        $status = null;
+
+        if ($sendInvite) {
+            try {
+                $status = Password::sendResetLink(['email' => $user->email]);
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+
+            $message = $status === Password::RESET_LINK_SENT
+                ? __('User created and a password setup link was sent by email.')
+                : __('User created, but the password setup link could not be sent. Use the password reset flow to resend it.');
+        }
+
+        Inertia::flash('toast', [
+            'type' => $sendInvite && $status !== Password::RESET_LINK_SENT ? 'error' : 'success',
+            'message' => $message,
+        ]);
 
         return to_route('users.index');
     }

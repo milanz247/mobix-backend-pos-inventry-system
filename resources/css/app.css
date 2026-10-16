@@ -186,7 +186,7 @@
         @apply border-border outline-ring/50;
     }
     body {
-        @apply min-h-svh bg-background text-foreground antialiased;
+        @apply min-h-svh bg-background text-sm text-foreground antialiased;
         background-image: radial-gradient(
             circle at top right,
             color-mix(in srgb, var(--primary) 7%, transparent) 0,
@@ -207,7 +207,7 @@
     }
 
     select {
-        @apply h-10 rounded-lg border px-3 text-sm;
+        @apply h-9 rounded-lg border px-3 text-sm;
     }
 
     textarea {
@@ -217,7 +217,7 @@
 
 @layer components {
     .page-shell {
-        @apply flex flex-1 flex-col gap-6 p-4 sm:p-6 lg:p-8;
+        @apply flex flex-1 flex-col gap-4 p-4 sm:p-5 lg:p-6;
     }
 
     .surface-panel {

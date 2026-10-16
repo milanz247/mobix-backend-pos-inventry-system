@@ -11,7 +11,7 @@ const logoUrl = businessPreferences?.logoUrl;
 
 <template>
     <div
-        class="flex aspect-square size-9 items-center justify-center overflow-hidden rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 text-white shadow-sm shadow-blue-950/30"
+        class="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 text-white shadow-sm shadow-blue-950/30"
     >
         <img
             v-if="logoUrl"
@@ -19,7 +19,7 @@ const logoUrl = businessPreferences?.logoUrl;
             :alt="`${name} logo`"
             class="size-full bg-white object-contain p-0.5"
         />
-        <AppLogoIcon v-else class="size-5 fill-current text-white" />
+        <AppLogoIcon v-else class="size-4 fill-current text-white" />
     </div>
     <div class="ml-1 grid flex-1 text-left text-sm leading-tight">
         <span class="truncate font-semibold text-white">{{ name }}</span>

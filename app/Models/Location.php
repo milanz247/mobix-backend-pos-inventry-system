@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -27,6 +28,8 @@ use Illuminate\Support\Carbon;
  * @property LocationStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property numeric-string|null $quantity_on_hand
+ * @property int $serialized_in_stock
  */
 #[Fillable(['name', 'code', 'type', 'phone', 'email', 'address', 'city', 'status'])]
 #[Hidden(['main_slot'])]
@@ -51,6 +54,36 @@ class Location extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withTimestamps();
+    }
+
+    /** @return HasMany<InventoryStock, $this> */
+    public function inventoryStocks(): HasMany
+    {
+        return $this->hasMany(InventoryStock::class);
+    }
+
+    /** @return HasMany<SerializedDevice, $this> */
+    public function serializedDevices(): HasMany
+    {
+        return $this->hasMany(SerializedDevice::class);
+    }
+
+    /** @return HasMany<Purchase, $this> */
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    /** @return HasMany<Sale, $this> */
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class);
+    }
+
+    /** @return HasMany<PurchaseReturn, $this> */
+    public function purchaseReturns(): HasMany
+    {
+        return $this->hasMany(PurchaseReturn::class);
     }
 
     /** @return array<string, string> */

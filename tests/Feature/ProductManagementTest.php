@@ -17,8 +17,9 @@ use Spatie\Permission\Models\Permission;
 
 function catalogManager(string ...$permissions): User
 {
+    $owner = User::factory()->create();
     $user = User::factory()->create();
-    Business::factory()->for($user, 'owner')->create();
+    Business::factory()->for($owner, 'owner')->create();
 
     foreach ($permissions as $permission) {
         $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
@@ -265,7 +266,8 @@ test('authorized users can view product details and unauthorized users cannot us
 
 test('database constraints reject variant links across business boundaries', function () {
     $business = Business::factory()->create();
-    $otherBusiness = Business::factory()->create();
+    $otherBusiness = Business::factory()->for(User::factory(), 'owner')->make();
+    $otherBusiness->forceFill(['setup_key' => 'test-business'])->save();
     $category = Category::factory()->for($business)->create();
     $product = Product::factory()->for($business)->for($category)->create();
 
@@ -362,6 +364,9 @@ test('combo validation refuses nested bundles and bundle permission is required'
         ->post(route('products.store'), $payload)
         ->assertSessionHasErrors('variants.0.components');
 
+    $componentProduct = Product::factory()->for($business)->for($category)->create(['name' => 'Valid Component']);
+    $componentVariant = ProductVariant::factory()->for($business)->for($componentProduct)->create(['sku' => 'VALID-COMPONENT']);
+    $payload['variants'][0]['components'][0]['component_variant_id'] = $componentVariant->id;
     $user->revokePermissionTo('bundles.manage');
 
     $this->actingAs($user)->post(route('products.store'), $payload)->assertForbidden();
@@ -482,7 +487,9 @@ test('product and variants roll back together when a database write fails', func
 });
 
 test('catalog management routes reject users without the matching permissions', function () {
-    $user = catalogManager();
+    $owner = User::factory()->create();
+    $user = User::factory()->create();
+    Business::factory()->for($owner, 'owner')->create();
 
     $this->actingAs($user)->get(route('products.index'))->assertForbidden();
     $this->actingAs($user)->post(route('categories.store'), ['name' => 'Unauthorized'])->assertForbidden();

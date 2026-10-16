@@ -33,6 +33,9 @@ use Illuminate\Support\Carbon;
  * @property CatalogStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property numeric-string|null $quantity_on_hand
+ * @property int $serialized_in_stock
+ * @property-read Product $product
  */
 #[Fillable(['name', 'sku', 'barcode', 'model_number', 'storage_capacity', 'color', 'variant_attributes', 'condition', 'tracking_mode', 'unit', 'cost_price', 'selling_price', 'minimum_selling_price', 'status'])]
 class ProductVariant extends Model
@@ -64,6 +67,24 @@ class ProductVariant extends Model
     public function includedInBundles(): HasMany
     {
         return $this->hasMany(BundleComponent::class, 'component_variant_id');
+    }
+
+    /** @return HasMany<InventoryStock, $this> */
+    public function inventoryStocks(): HasMany
+    {
+        return $this->hasMany(InventoryStock::class);
+    }
+
+    /** @return HasMany<SerializedDevice, $this> */
+    public function serializedDevices(): HasMany
+    {
+        return $this->hasMany(SerializedDevice::class);
+    }
+
+    /** @return HasMany<PurchaseLine, $this> */
+    public function purchaseLines(): HasMany
+    {
+        return $this->hasMany(PurchaseLine::class);
     }
 
     /** @return array<string, string> */

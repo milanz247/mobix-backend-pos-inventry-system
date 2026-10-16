@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-    AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -53,14 +52,13 @@ const emit = defineEmits<{
                     <AlertDialogCancel as-child>
                         <Button type="button" variant="outline">Cancel</Button>
                     </AlertDialogCancel>
-                    <AlertDialogAction as-child @click="emit('confirm')">
-                        <Button
-                            type="button"
-                            :variant="destructive ? 'destructive' : 'default'"
-                        >
-                            {{ confirmLabel }}
-                        </Button>
-                    </AlertDialogAction>
+                    <Button
+                        type="button"
+                        :variant="destructive ? 'destructive' : 'default'"
+                        @click="emit('confirm')"
+                    >
+                        {{ confirmLabel }}
+                    </Button>
                 </div>
             </AlertDialogContent>
         </AlertDialogPortal>

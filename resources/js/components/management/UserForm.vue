@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { index } from '@/routes/users';
+import { ref } from 'vue';
 
 type Role = { id: number; name: string };
 type Option = { value: string; label: string };
@@ -24,6 +25,7 @@ const props = defineProps<{
     statuses: Option[];
     managedUser?: ManagedUser;
 }>();
+const sendInvite = ref(!props.managedUser);
 
 const hasRole = (roleId: number): boolean =>
     props.managedUser?.roles.some((role) => role.id === roleId) ?? false;
@@ -93,7 +95,25 @@ const hasRole = (roleId: number): boolean =>
                 </select>
                 <InputError :message="errors.status" />
             </div>
-            <div class="grid gap-2">
+            <label
+                v-if="!managedUser"
+                class="choice-card items-start gap-3 sm:col-span-2"
+            >
+                <input
+                    v-model="sendInvite"
+                    type="checkbox"
+                    name="send_invite"
+                    value="1"
+                    class="mt-1 size-4 rounded border-input"
+                />
+                <span>
+                    <span class="block font-medium">Email an invitation</span>
+                    <span class="mt-1 block text-xs text-muted-foreground">
+                        Send a password setup link to this user's email address.
+                    </span>
+                </span>
+            </label>
+            <div v-if="!sendInvite || managedUser" class="grid gap-2">
                 <Label for="password"
                     >Password{{
                         managedUser ? ' (leave blank to keep current)' : ''
@@ -107,7 +127,7 @@ const hasRole = (roleId: number): boolean =>
                 />
                 <InputError :message="errors.password" />
             </div>
-            <div class="grid gap-2">
+            <div v-if="!sendInvite || managedUser" class="grid gap-2">
                 <Label for="password_confirmation">Confirm password</Label>
                 <PasswordInput
                     id="password_confirmation"
@@ -141,7 +161,11 @@ const hasRole = (roleId: number): boolean =>
 
         <div class="flex flex-wrap gap-3 border-t border-border/70 pt-6">
             <Button :disabled="processing">{{
-                managedUser ? 'Save changes' : 'Create user'
+                managedUser
+                    ? 'Save changes'
+                    : sendInvite
+                      ? 'Send invitation'
+                      : 'Create user'
             }}</Button>
             <Button variant="outline" as-child
                 ><Link :href="index()">Cancel</Link></Button
