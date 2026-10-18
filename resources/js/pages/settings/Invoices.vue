@@ -17,6 +17,7 @@ const props = defineProps<{
         return_policy: string | null;
         title: string;
         paper_size: 'a4' | 'thermal';
+        thermal_width: 58 | 80;
         accent_color: string;
         show_logo: boolean;
         show_business_details: boolean;
@@ -24,6 +25,8 @@ const props = defineProps<{
         show_cashier: boolean;
         show_payment_details: boolean;
         show_tax: boolean;
+        show_product_codes: boolean;
+        show_line_discounts: boolean;
     };
 }>();
 
@@ -33,6 +36,7 @@ const businessName =
     page.props.name;
 const title = ref(props.invoice.title);
 const paperSize = ref(props.invoice.paper_size);
+const thermalWidth = ref(props.invoice.thermal_width);
 const accentColor = ref(props.invoice.accent_color);
 const footerMessage = ref(props.invoice.footer ?? '');
 const returnPolicy = ref(props.invoice.return_policy ?? '');
@@ -42,6 +46,8 @@ const showCustomer = ref(props.invoice.show_customer);
 const showCashier = ref(props.invoice.show_cashier);
 const showPaymentDetails = ref(props.invoice.show_payment_details);
 const showTax = ref(props.invoice.show_tax);
+const showProductCodes = ref(props.invoice.show_product_codes);
+const showLineDiscounts = ref(props.invoice.show_line_discounts);
 
 const layoutOptions = [
     { value: 'a4', label: 'A4 invoice', description: 'Full-page print layout' },
@@ -132,6 +138,29 @@ defineOptions({
                             </select>
                             <InputError :message="errors.invoice_paper_size" />
                         </div>
+                        <div v-if="paperSize === 'thermal'" class="grid gap-2">
+                            <Label for="invoice_thermal_width"
+                                >Thermal paper width</Label
+                            >
+                            <select
+                                id="invoice_thermal_width"
+                                v-model="thermalWidth"
+                                name="invoice_thermal_width"
+                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option :value="58">58 mm compact</option>
+                                <option :value="80">80 mm standard</option>
+                            </select>
+                            <InputError
+                                :message="errors.invoice_thermal_width"
+                            />
+                        </div>
+                        <input
+                            v-else
+                            type="hidden"
+                            name="invoice_thermal_width"
+                            :value="thermalWidth"
+                        />
                         <div class="grid gap-2 sm:col-span-2">
                             <Label for="invoice_accent_color"
                                 >Brand accent</Label
@@ -276,6 +305,44 @@ defineOptions({
                                 ></span
                             >
                         </label>
+                        <label
+                            for="invoice_show_product_codes"
+                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                        >
+                            <Checkbox
+                                id="invoice_show_product_codes"
+                                v-model:checked="showProductCodes"
+                                name="invoice_show_product_codes"
+                                value="1"
+                            />
+                            <span
+                                ><span class="block text-sm font-medium"
+                                    >SKU and IMEI</span
+                                ><span class="text-xs text-muted-foreground"
+                                    >Print product codes and device
+                                    identifiers</span
+                                ></span
+                            >
+                        </label>
+                        <label
+                            for="invoice_show_line_discounts"
+                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                        >
+                            <Checkbox
+                                id="invoice_show_line_discounts"
+                                v-model:checked="showLineDiscounts"
+                                name="invoice_show_line_discounts"
+                                value="1"
+                            />
+                            <span
+                                ><span class="block text-sm font-medium"
+                                    >Line discounts</span
+                                ><span class="text-xs text-muted-foreground"
+                                    >Show each product discount below its
+                                    item</span
+                                ></span
+                            >
+                        </label>
                     </div>
                 </section>
 
@@ -399,7 +466,18 @@ defineOptions({
                                 <span>USB-C Fast Charger</span
                                 ><span>LKR 4,500.00</span>
                             </div>
-                            <p class="text-slate-500">1 × LKR 4,500.00</p>
+                            <p class="text-slate-500">
+                                1 × LKR 5,000.00
+                                <span v-if="showProductCodes"
+                                    >· DEMO-CHG-33W</span
+                                >
+                            </p>
+                            <p
+                                v-if="showLineDiscounts"
+                                class="text-emerald-700"
+                            >
+                                Line discount · −LKR 500.00
+                            </p>
                         </div>
                         <div class="space-y-1 text-xs">
                             <p class="flex justify-between">

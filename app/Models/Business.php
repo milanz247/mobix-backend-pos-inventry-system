@@ -32,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $invoice_return_policy
  * @property string $invoice_title
  * @property string $invoice_paper_size
+ * @property int $invoice_thermal_width
  * @property string $invoice_accent_color
  * @property bool $invoice_show_logo
  * @property bool $invoice_show_business_details
@@ -39,24 +40,29 @@ use Illuminate\Support\Carbon;
  * @property bool $invoice_show_cashier
  * @property bool $invoice_show_payment_details
  * @property bool $invoice_show_tax
+ * @property bool $invoice_show_product_codes
+ * @property bool $invoice_show_line_discounts
  * @property bool $pos_show_sale_source
  * @property bool $pos_show_customer_name
  * @property bool $pos_show_customer_phone
  * @property bool $pos_show_customer_email
  * @property bool $pos_show_sale_notes
  * @property bool $pos_show_pay_exact
+ * @property bool $pos_allow_price_override
+ * @property bool $pos_require_imei_on_sale
  * @property bool $pos_show_date_time
  * @property bool $pos_show_sales_history
  * @property bool $pos_show_category_filter
  * @property bool $pos_show_brand_filter
  * @property bool $pos_show_location_filter
  * @property bool $pos_show_receipt_after_sale
+ * @property bool $pos_auto_print_receipt
  * @property int $pos_products_per_page
  * @property BusinessStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'business_type', 'email', 'phone', 'address', 'city', 'country', 'currency', 'timezone', 'time_format', 'logo_path', 'invoice_footer', 'invoice_return_policy', 'invoice_title', 'invoice_paper_size', 'invoice_accent_color', 'invoice_show_logo', 'invoice_show_business_details', 'invoice_show_customer', 'invoice_show_cashier', 'invoice_show_payment_details', 'invoice_show_tax', 'pos_show_sale_source', 'pos_show_customer_name', 'pos_show_customer_phone', 'pos_show_customer_email', 'pos_show_sale_notes', 'pos_show_pay_exact', 'pos_show_date_time', 'pos_show_sales_history', 'pos_show_category_filter', 'pos_show_brand_filter', 'pos_show_location_filter', 'pos_show_receipt_after_sale', 'pos_products_per_page', 'status'])]
+#[Fillable(['name', 'business_type', 'email', 'phone', 'address', 'city', 'country', 'currency', 'timezone', 'time_format', 'logo_path', 'invoice_footer', 'invoice_return_policy', 'invoice_title', 'invoice_paper_size', 'invoice_thermal_width', 'invoice_accent_color', 'invoice_show_logo', 'invoice_show_business_details', 'invoice_show_customer', 'invoice_show_cashier', 'invoice_show_payment_details', 'invoice_show_tax', 'invoice_show_product_codes', 'invoice_show_line_discounts', 'pos_show_sale_source', 'pos_show_customer_name', 'pos_show_customer_phone', 'pos_show_customer_email', 'pos_show_sale_notes', 'pos_show_pay_exact', 'pos_allow_price_override', 'pos_require_imei_on_sale', 'pos_show_date_time', 'pos_show_sales_history', 'pos_show_category_filter', 'pos_show_brand_filter', 'pos_show_location_filter', 'pos_show_receipt_after_sale', 'pos_auto_print_receipt', 'pos_products_per_page', 'status'])]
 class Business extends Model
 {
     /** @use HasFactory<BusinessFactory> */
@@ -75,6 +81,7 @@ class Business extends Model
         'status' => 'active',
         'invoice_title' => 'Sales receipt',
         'invoice_paper_size' => 'a4',
+        'invoice_thermal_width' => 80,
         'invoice_accent_color' => '#1e293b',
         'invoice_show_logo' => true,
         'invoice_show_business_details' => true,
@@ -82,18 +89,23 @@ class Business extends Model
         'invoice_show_cashier' => true,
         'invoice_show_payment_details' => true,
         'invoice_show_tax' => true,
+        'invoice_show_product_codes' => true,
+        'invoice_show_line_discounts' => true,
         'pos_show_sale_source' => true,
         'pos_show_customer_name' => true,
         'pos_show_customer_phone' => true,
         'pos_show_customer_email' => true,
         'pos_show_sale_notes' => true,
         'pos_show_pay_exact' => true,
+        'pos_allow_price_override' => false,
+        'pos_require_imei_on_sale' => true,
         'pos_show_date_time' => true,
         'pos_show_sales_history' => true,
         'pos_show_category_filter' => true,
         'pos_show_brand_filter' => true,
         'pos_show_location_filter' => true,
         'pos_show_receipt_after_sale' => true,
+        'pos_auto_print_receipt' => false,
         'pos_products_per_page' => 24,
     ];
 
@@ -181,18 +193,24 @@ class Business extends Model
             'invoice_show_cashier' => 'boolean',
             'invoice_show_payment_details' => 'boolean',
             'invoice_show_tax' => 'boolean',
+            'invoice_show_product_codes' => 'boolean',
+            'invoice_show_line_discounts' => 'boolean',
+            'invoice_thermal_width' => 'integer',
             'pos_show_sale_source' => 'boolean',
             'pos_show_customer_name' => 'boolean',
             'pos_show_customer_phone' => 'boolean',
             'pos_show_customer_email' => 'boolean',
             'pos_show_sale_notes' => 'boolean',
             'pos_show_pay_exact' => 'boolean',
+            'pos_allow_price_override' => 'boolean',
+            'pos_require_imei_on_sale' => 'boolean',
             'pos_show_date_time' => 'boolean',
             'pos_show_sales_history' => 'boolean',
             'pos_show_category_filter' => 'boolean',
             'pos_show_brand_filter' => 'boolean',
             'pos_show_location_filter' => 'boolean',
             'pos_show_receipt_after_sale' => 'boolean',
+            'pos_auto_print_receipt' => 'boolean',
             'pos_products_per_page' => 'integer',
             'business_type' => BusinessType::class,
             'time_format' => TimeFormat::class,

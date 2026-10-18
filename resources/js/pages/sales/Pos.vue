@@ -4,6 +4,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
     Barcode,
     CircleCheckBig,
+    LoaderCircle,
+    Percent,
     Plus,
     Printer,
     Search,
@@ -70,12 +72,20 @@ type Payment = {
     reference: string;
     cash_tendered: string;
 };
+type DiscountMode = 'percentage' | 'amount';
 type HeldCart = {
     id: string;
     held_at: string;
     location_id: number;
     lines: CartLine[];
     order_discount: string;
+};
+type ActiveCartSnapshot = {
+    saved_at: string;
+    location_id: number;
+    lines: CartLine[];
+    order_discount: string;
+    sale_source: string;
 };
 type PosSettings = {
     show_sale_source: boolean;
@@ -84,12 +94,14 @@ type PosSettings = {
     show_customer_email: boolean;
     show_sale_notes: boolean;
     show_pay_exact: boolean;
+    require_imei_on_sale: boolean;
     show_date_time: boolean;
     show_sales_history: boolean;
     show_category_filter: boolean;
     show_brand_filter: boolean;
     show_location_filter: boolean;
     show_receipt_after_sale: boolean;
+    auto_print_receipt: boolean;
     products_per_page: number;
 };
 type CompletedSale = {
@@ -138,14 +150,23 @@ const customerEmail = ref('');
 const saleSource = ref('in_store_pos');
 const notes = ref('');
 const currentDateTime = ref<Date | null>(null);
-const checkoutModalOpen = ref(false);
+const discountModalOpen = ref(false);
+const customerModalOpen = ref(false);
 const receiptModalOpen = ref(false);
 const completedSale = ref<CompletedSale | null>(null);
+const receiptPrintFrameKey = ref(0);
+const receiptPrintUrl = ref<string | null>(null);
+const discountMode = ref<DiscountMode>('amount');
+const discountValue = ref('');
+const discountLineIndex = ref<number | null>(null);
 const payments = ref<Payment[]>([
     { amount: '', method: 'cash', reference: '', cash_tendered: '' },
 ]);
 const confirmation = useConfirmationDialog();
 const heldCartStorageKey = `nalakamobile:pos-held-carts:${props.cashierId}`;
+const activeCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}`;
+const activeCartLifetime = 12 * 60 * 60 * 1000;
+let activeCartRestored = false;
 const form = useForm({
     operation_key: crypto.randomUUID(),
     location_id: Number(locationId.value),
@@ -193,6 +214,27 @@ const showAnyCustomerDetails = computed(
         props.posSettings.show_customer_email ||
         props.posSettings.show_sale_notes,
 );
+const discountBase = computed(() => {
+    if (discountLineIndex.value === null) {
+        return cartBeforeOrderDiscount();
+    }
+
+    const line = cart.value[discountLineIndex.value];
+
+    return line ? lineSubtotal(line) : 0n;
+});
+const discountPreview = computed(() => {
+    if (discountMode.value === 'percentage') {
+        const percentage = minorUnits(discountValue.value);
+        const cappedPercentage = percentage > 10000n ? 10000n : percentage;
+
+        return (discountBase.value * cappedPercentage + 5000n) / 10000n;
+    }
+
+    const amount = minorUnits(discountValue.value);
+
+    return amount > discountBase.value ? discountBase.value : amount;
+});
 const hasUnavailableProducts = computed(() =>
     props.variants.data.some(
         (variant) =>
@@ -239,6 +281,7 @@ let originalBodyOverflow = '';
 let originalSidebarWrapperHeight = '';
 let originalSidebarWrapperMinHeight = '';
 let originalSidebarWrapperOverflow = '';
+let pendingReceiptWindow: Window | null = null;
 watch([search, categoryId, brandId, locationId], () => {
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
@@ -265,9 +308,17 @@ watch([search, categoryId, brandId, locationId], () => {
         );
     }, 250);
 });
+watch(
+    [cart, orderDiscount, saleSource, locationId],
+    () => {
+        if (activeCartRestored) saveActiveCart();
+    },
+    { deep: true, flush: 'sync' },
+);
 onBeforeUnmount(() => {
     if (searchTimer) clearTimeout(searchTimer);
     if (clockTimer) clearInterval(clockTimer);
+    closePendingReceiptWindow();
 
     document.documentElement.style.overflow = originalDocumentOverflow;
     document.body.style.overflow = originalBodyOverflow;
@@ -304,18 +355,19 @@ onMounted(() => {
 
     try {
         const stored = window.localStorage.getItem(heldCartStorageKey);
-        const parsed = stored ? (JSON.parse(stored) as HeldCart[]) : [];
+        const parsed: unknown = stored ? JSON.parse(stored) : [];
         heldCarts.value = Array.isArray(parsed)
-            ? parsed.filter(
-                  (held) =>
-                      Date.now() - Date.parse(held.held_at) <
-                      7 * 24 * 60 * 60 * 1000,
-              )
+            ? parsed
+                  .map(restoreHeldCart)
+                  .filter((held): held is HeldCart => held !== null)
             : [];
         saveHeldCarts();
     } catch {
         heldCarts.value = [];
     }
+
+    restoreActiveCart();
+    activeCartRestored = true;
 });
 
 function minorUnits(value: string): bigint {
@@ -358,11 +410,11 @@ function lineTotal(line: CartLine): bigint {
 function cartSubtotal(): bigint {
     return cart.value.reduce((sum, line) => sum + lineSubtotal(line), 0n);
 }
+function cartBeforeOrderDiscount(): bigint {
+    return cart.value.reduce((sum, line) => sum + lineTotal(line), 0n);
+}
 function cartTotal(): bigint {
-    const beforeOrderDiscount = cart.value.reduce(
-        (sum, line) => sum + lineTotal(line),
-        0n,
-    );
+    const beforeOrderDiscount = cartBeforeOrderDiscount();
     return beforeOrderDiscount > minorUnits(orderDiscount.value)
         ? beforeOrderDiscount - minorUnits(orderDiscount.value)
         : 0n;
@@ -405,17 +457,250 @@ function canAddVariant(variant: Variant): boolean {
         ? variant.devices_in_stock > 0
         : thousandths(variant.quantity_on_hand) >= 1000n;
 }
+function variantStockLabel(variant: Variant): string {
+    if (variant.is_virtual_combo) return 'Bundle available';
+
+    if (variant.tracking_mode === 'serialized') {
+        if (variant.devices_in_stock === 0) return 'No devices available';
+
+        return `${variant.devices_in_stock} device${variant.devices_in_stock === 1 ? '' : 's'} available`;
+    }
+
+    return thousandths(variant.quantity_on_hand) >= 1000n
+        ? `${variant.quantity_on_hand} in stock`
+        : 'Out of stock';
+}
 function formatQuantity(value: bigint): string {
     return `${value / 1000n}.${(value % 1000n).toString().padStart(3, '0')}`;
 }
 function removeLine(index: number): void {
     cart.value.splice(index, 1);
 }
-function saveHeldCarts(): void {
-    window.localStorage.setItem(
-        heldCartStorageKey,
-        JSON.stringify(heldCarts.value.slice(0, 10)),
+function openOrderDiscount(): void {
+    discountLineIndex.value = null;
+    discountMode.value = 'amount';
+    discountValue.value =
+        orderDiscount.value === '0.00' ? '' : orderDiscount.value;
+    discountModalOpen.value = true;
+}
+function openLineDiscount(index: number): void {
+    discountLineIndex.value = index;
+    discountMode.value = 'amount';
+    discountValue.value =
+        cart.value[index]?.discount_amount === '0.00'
+            ? ''
+            : (cart.value[index]?.discount_amount ?? '');
+    discountModalOpen.value = true;
+}
+function applyDiscount(): void {
+    const amount = formatMinor(discountPreview.value);
+
+    if (discountLineIndex.value === null) {
+        orderDiscount.value = amount;
+    } else if (cart.value[discountLineIndex.value]) {
+        cart.value[discountLineIndex.value].discount_amount = amount;
+    }
+
+    discountModalOpen.value = false;
+}
+function clearDiscount(): void {
+    discountValue.value = '';
+    applyDiscount();
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+function isMoneyValue(value: unknown): value is string {
+    return typeof value === 'string' && /^\d+(?:\.\d{0,2})?$/.test(value);
+}
+function isQuantityValue(value: unknown): value is string {
+    return typeof value === 'string' && /^\d+(?:\.\d{0,3})?$/.test(value);
+}
+function nullableString(value: unknown): string | null {
+    return typeof value === 'string' ? value : null;
+}
+function restoreCartLine(value: unknown): CartLine | null {
+    if (!isRecord(value) || !isRecord(value.variant)) return null;
+
+    const storedVariant = value.variant;
+    const id = storedVariant.id;
+    const trackingMode = storedVariant.tracking_mode;
+
+    if (
+        typeof id !== 'number' ||
+        !Number.isInteger(id) ||
+        id < 1 ||
+        (trackingMode !== 'serialized' && trackingMode !== 'quantity_based') ||
+        typeof storedVariant.name !== 'string' ||
+        typeof storedVariant.variant !== 'string' ||
+        typeof storedVariant.sku !== 'string' ||
+        !isQuantityValue(value.quantity) ||
+        !isMoneyValue(value.unit_price) ||
+        !isMoneyValue(value.discount_amount) ||
+        typeof value.device_identifier !== 'string'
+    ) {
+        return null;
+    }
+
+    return {
+        variant: {
+            id,
+            name: storedVariant.name,
+            variant: storedVariant.variant,
+            sku: storedVariant.sku,
+            barcode: nullableString(storedVariant.barcode),
+            category:
+                typeof storedVariant.category === 'string'
+                    ? storedVariant.category
+                    : '',
+            brand: nullableString(storedVariant.brand),
+            product_type:
+                typeof storedVariant.product_type === 'string'
+                    ? storedVariant.product_type
+                    : '',
+            tracking_mode: trackingMode,
+            price: isMoneyValue(storedVariant.price)
+                ? storedVariant.price
+                : value.unit_price,
+            minimum_selling_price: isMoneyValue(
+                storedVariant.minimum_selling_price,
+            )
+                ? storedVariant.minimum_selling_price
+                : null,
+            image_url: null,
+            quantity_on_hand: isQuantityValue(storedVariant.quantity_on_hand)
+                ? storedVariant.quantity_on_hand
+                : '0.000',
+            devices_in_stock:
+                typeof storedVariant.devices_in_stock === 'number' &&
+                Number.isInteger(storedVariant.devices_in_stock)
+                    ? storedVariant.devices_in_stock
+                    : 0,
+            is_virtual_combo: storedVariant.is_virtual_combo === true,
+        },
+        quantity: value.quantity,
+        unit_price: value.unit_price,
+        discount_amount: value.discount_amount,
+        device_identifier: value.device_identifier,
+    };
+}
+function restoreHeldCart(value: unknown): HeldCart | null {
+    if (!isRecord(value) || !Array.isArray(value.lines)) return null;
+
+    const heldAt = typeof value.held_at === 'string' ? value.held_at : '';
+    const heldTime = Date.parse(heldAt);
+    const locationIsAccessible = props.locations.some(
+        (location) => location.id === value.location_id,
     );
+    const lines = value.lines
+        .slice(0, 100)
+        .map(restoreCartLine)
+        .filter((line): line is CartLine => line !== null);
+
+    if (
+        typeof value.id !== 'string' ||
+        !Number.isFinite(heldTime) ||
+        Date.now() - heldTime < 0 ||
+        Date.now() - heldTime >= 7 * 24 * 60 * 60 * 1000 ||
+        !locationIsAccessible ||
+        lines.length === 0 ||
+        !isMoneyValue(value.order_discount)
+    ) {
+        return null;
+    }
+
+    return {
+        id: value.id,
+        held_at: heldAt,
+        location_id: value.location_id as number,
+        lines,
+        order_discount: value.order_discount,
+    };
+}
+function saveActiveCart(): void {
+    try {
+        if (cart.value.length === 0) {
+            clearActiveCart();
+            return;
+        }
+
+        const snapshot: ActiveCartSnapshot = {
+            saved_at: new Date().toISOString(),
+            location_id: Number(locationId.value),
+            lines: copyCartLines(cart.value),
+            order_discount: orderDiscount.value,
+            sale_source: saleSource.value,
+        };
+
+        window.sessionStorage.setItem(
+            activeCartStorageKey,
+            JSON.stringify(snapshot),
+        );
+    } catch {
+        // Storage may be unavailable in restricted browser modes.
+    }
+}
+function restoreActiveCart(): void {
+    try {
+        const stored = window.sessionStorage.getItem(activeCartStorageKey);
+        const parsed: unknown = stored ? JSON.parse(stored) : null;
+
+        if (!isRecord(parsed) || !Array.isArray(parsed.lines)) {
+            if (stored) clearActiveCart();
+            return;
+        }
+
+        const savedTime =
+            typeof parsed.saved_at === 'string'
+                ? Date.parse(parsed.saved_at)
+                : Number.NaN;
+        const isCurrentLocation =
+            parsed.location_id === Number(locationId.value);
+        const lines = parsed.lines
+            .slice(0, 100)
+            .map(restoreCartLine)
+            .filter((line): line is CartLine => line !== null);
+
+        if (
+            !Number.isFinite(savedTime) ||
+            Date.now() - savedTime < 0 ||
+            Date.now() - savedTime > activeCartLifetime ||
+            !isCurrentLocation ||
+            lines.length === 0 ||
+            !isMoneyValue(parsed.order_discount)
+        ) {
+            clearActiveCart();
+            return;
+        }
+
+        cart.value = lines;
+        orderDiscount.value = parsed.order_discount;
+        saleSource.value = props.saleSources.some(
+            (source) => source.value === parsed.sale_source,
+        )
+            ? (parsed.sale_source as string)
+            : 'in_store_pos';
+        resetCashPayment();
+    } catch {
+        clearActiveCart();
+    }
+}
+function clearActiveCart(): void {
+    try {
+        window.sessionStorage.removeItem(activeCartStorageKey);
+    } catch {
+        // Storage may be unavailable in restricted browser modes.
+    }
+}
+function saveHeldCarts(): void {
+    try {
+        window.localStorage.setItem(
+            heldCartStorageKey,
+            JSON.stringify(heldCarts.value.slice(0, 10)),
+        );
+    } catch {
+        // The current cart remains usable when browser storage is unavailable.
+    }
 }
 function copyCartLines(lines: CartLine[]): CartLine[] {
     return lines.map((line) => ({
@@ -443,7 +728,8 @@ function holdCart(): void {
     customerPhone.value = '';
     customerEmail.value = '';
     notes.value = '';
-    payRemaining();
+    resetCashPayment();
+    clearActiveCart();
 }
 function resumeHeldCart(id: string): void {
     const held = heldCarts.value.find((item) => item.id === id);
@@ -454,7 +740,7 @@ function resumeHeldCart(id: string): void {
     orderDiscount.value = held.order_discount;
     heldCarts.value = heldCarts.value.filter((item) => item.id !== id);
     saveHeldCarts();
-    payRemaining();
+    resetCashPayment();
 }
 function selectHeldCart(event: Event): void {
     const select = event.target as HTMLSelectElement;
@@ -476,20 +762,15 @@ function clearCart(): void {
             customerPhone.value = '';
             customerEmail.value = '';
             notes.value = '';
-            payRemaining();
+            resetCashPayment();
+            clearActiveCart();
         },
     });
 }
-function addPayment(): void {
-    payments.value.push({
-        amount: '',
-        method: 'cash',
-        reference: '',
-        cash_tendered: '',
-    });
-}
-function removePayment(index: number): void {
-    if (payments.value.length > 1) payments.value.splice(index, 1);
+function resetCashPayment(): void {
+    payments.value = [
+        { amount: '', method: 'cash', reference: '', cash_tendered: '' },
+    ];
 }
 function payRemaining(): void {
     payments.value = [
@@ -515,19 +796,16 @@ function cashReceived(payment: Payment): bigint {
         : minorUnits(payment.cash_tendered);
 }
 function changeDue(payment: Payment): bigint {
-    const change = cashReceived(payment) - minorUnits(appliedPaymentAmount(payment));
+    const change =
+        cashReceived(payment) - minorUnits(appliedPaymentAmount(payment));
 
     return change > 0n ? change : 0n;
 }
 function remainingCash(payment: Payment): bigint {
-    const remaining = minorUnits(appliedPaymentAmount(payment)) - cashReceived(payment);
+    const remaining =
+        minorUnits(appliedPaymentAmount(payment)) - cashReceived(payment);
 
     return remaining > 0n ? remaining : 0n;
-}
-function openCheckout(): void {
-    form.clearErrors();
-    payRemaining();
-    checkoutModalOpen.value = true;
 }
 function resetSale(): void {
     cart.value = [];
@@ -537,9 +815,8 @@ function resetSale(): void {
     customerEmail.value = '';
     saleSource.value = 'in_store_pos';
     notes.value = '';
-    payments.value = [
-        { amount: '', method: 'cash', reference: '', cash_tendered: '' },
-    ];
+    resetCashPayment();
+    clearActiveCart();
     form.clearErrors();
     form.operation_key = crypto.randomUUID();
 }
@@ -611,8 +888,59 @@ function scanSearch(): void {
         );
     }
 }
+function prepareAutoPrintWindow(): void {
+    if (!props.posSettings.auto_print_receipt) return;
+
+    closePendingReceiptWindow();
+    pendingReceiptWindow = window.open(
+        'about:blank',
+        'nalakamobile-receipt-print',
+        'popup,width=480,height=720',
+    );
+
+    if (pendingReceiptWindow) pendingReceiptWindow.opener = null;
+}
+function openReceiptForPrinting(saleId: number): boolean {
+    const receiptUrl = saleReceipt(saleId, {
+        query: { autoprint: 1 },
+    }).url;
+
+    if (pendingReceiptWindow && !pendingReceiptWindow.closed) {
+        pendingReceiptWindow.location.replace(receiptUrl);
+        pendingReceiptWindow = null;
+
+        return true;
+    }
+
+    const receiptWindow = window.open(
+        receiptUrl,
+        'nalakamobile-receipt-print',
+        'popup,width=480,height=720,noopener,noreferrer',
+    );
+
+    return receiptWindow !== null;
+}
+function closePendingReceiptWindow(): void {
+    if (pendingReceiptWindow && !pendingReceiptWindow.closed) {
+        pendingReceiptWindow.close();
+    }
+
+    pendingReceiptWindow = null;
+}
+function printCompletedSaleReceipt(): void {
+    if (!completedSale.value) {
+        return;
+    }
+
+    receiptPrintFrameKey.value += 1;
+    receiptPrintUrl.value = saleReceipt(completedSale.value.id, {
+        query: { autoprint: 1 },
+    }).url;
+    receiptModalOpen.value = false;
+}
 function submitCheckout(): void {
     if (cart.value.length === 0) return;
+    prepareAutoPrintWindow();
     form.location_id = Number(locationId.value);
     form.customer_name = props.posSettings.show_customer_name
         ? customerName.value
@@ -643,8 +971,8 @@ function submitCheckout(): void {
             method: payment.method,
             reference: payment.reference || undefined,
             cash_tendered:
-                payment.method === 'cash' && payment.cash_tendered !== ''
-                    ? payment.cash_tendered
+                payment.method === 'cash'
+                    ? formatMinor(cashReceived(payment))
                     : undefined,
         }));
 
@@ -659,13 +987,18 @@ function submitCheckout(): void {
 
             if (sale) {
                 completedSale.value = sale;
-                receiptModalOpen.value = true;
+                const printStarted = props.posSettings.auto_print_receipt
+                    ? openReceiptForPrinting(sale.id)
+                    : false;
+                receiptModalOpen.value =
+                    props.posSettings.show_receipt_after_sale || !printStarted;
             }
         },
         onSuccess: () => {
-            checkoutModalOpen.value = false;
             resetSale();
         },
+        onError: () => closePendingReceiptWindow(),
+        onFinish: () => closePendingReceiptWindow(),
     });
 }
 defineOptions({
@@ -734,14 +1067,12 @@ defineOptions({
             </div>
 
             <div
-                class="grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]"
+                class="grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.85fr)]"
             >
                 <div
                     class="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden"
                 >
-                    <div
-                        class="surface-panel flex flex-wrap gap-2 p-2"
-                    >
+                    <div class="surface-panel flex flex-wrap gap-2 p-2">
                         <div class="relative min-w-56 flex-1">
                             <Search
                                 class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground"
@@ -836,78 +1167,90 @@ defineOptions({
                             data="variants"
                             preserve-url
                             :buffer="320"
-                            class="grid gap-2 pb-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+                            class="grid gap-2 pb-2 sm:grid-cols-2 xl:grid-cols-3"
                         >
                             <button
                                 v-for="variant in variants.data"
                                 :key="variant.id"
                                 type="button"
-                                class="surface-panel group flex min-h-22 gap-2 p-2 text-left transition duration-150 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-                                :disabled="
-                                    !variant.is_virtual_combo &&
-                                    (variant.tracking_mode === 'serialized'
-                                        ? variant.devices_in_stock < 1
-                                        : thousandths(
-                                              variant.quantity_on_hand,
-                                          ) < 1000n)
+                                class="surface-panel group relative grid min-h-28 grid-cols-[3.5rem_minmax(0,1fr)] gap-2.5 overflow-hidden p-2.5 text-left transition duration-150 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-65 disabled:hover:translate-y-0 disabled:hover:border-border disabled:hover:shadow-xs"
+                                :disabled="!canAddVariant(variant)"
+                                :aria-label="
+                                    'Add ' +
+                                    variant.name +
+                                    ' ' +
+                                    variant.variant +
+                                    ' to the current order'
                                 "
                                 @click="addVariant(variant)"
                             >
-                                <img
-                                    v-if="variant.image_url"
-                                    :src="variant.image_url"
-                                    :alt="variant.name"
-                                    class="size-12 shrink-0 rounded-md border object-cover"
-                                />
                                 <div
-                                    v-else
-                                    class="grid size-12 shrink-0 place-items-center rounded-md bg-primary/8 text-primary"
+                                    class="relative size-14 overflow-hidden rounded-lg border bg-muted/30"
                                 >
-                                    <Barcode class="size-5" />
+                                    <img
+                                        v-if="variant.image_url"
+                                        :src="variant.image_url"
+                                        :alt="variant.name"
+                                        class="size-full object-cover transition duration-200 group-hover:scale-105"
+                                    />
+                                    <div
+                                        v-else
+                                        class="grid size-full place-items-center bg-primary/8 text-primary"
+                                    >
+                                        <Barcode class="size-5" />
+                                    </div>
                                 </div>
-                                <span class="min-w-0 flex-1">
+
+                                <span class="flex min-w-0 flex-col">
                                     <span
-                                        class="block truncate text-sm leading-4 font-semibold"
+                                        class="line-clamp-2 min-h-8 text-sm leading-4 font-semibold text-foreground"
                                         >{{ variant.name }}</span
                                     >
                                     <span
-                                        class="block truncate text-xs text-muted-foreground"
+                                        class="mt-0.5 block truncate text-[0.7rem] leading-4 text-muted-foreground"
                                         >{{ variant.variant }} ·
                                         {{ variant.sku }}</span
                                     >
+
                                     <span
-                                        class="mt-0.5 block text-xs font-semibold tabular-nums"
-                                        >{{
-                                            money(minorUnits(variant.price))
-                                        }}</span
+                                        class="mt-auto flex min-w-0 items-end justify-between gap-2 pt-1.5"
                                     >
-                                    <Badge
-                                        v-if="variant.is_virtual_combo"
-                                        variant="secondary"
-                                        class="mt-0.5 max-w-full text-[0.65rem] leading-3 whitespace-normal"
-                                        >Virtual bundle · components checked at
-                                        checkout</Badge
-                                    >
-                                    <span
-                                        v-else
-                                        class="mt-0.5 block text-[0.68rem] leading-3 text-muted-foreground"
-                                        >{{
-                                            variant.tracking_mode ===
-                                            'serialized'
-                                                ? variant.devices_in_stock === 0
-                                                    ? 'No devices at this location'
-                                                    : `${variant.devices_in_stock} devices at location`
-                                                : thousandths(
-                                                        variant.quantity_on_hand,
-                                                    ) === 0n
-                                                  ? 'No stock at this location'
-                                                  : `${variant.quantity_on_hand} in stock`
-                                        }}</span
-                                    >
+                                        <span class="min-w-0">
+                                            <span
+                                                class="block text-sm leading-4 font-bold tabular-nums"
+                                                >{{
+                                                    money(
+                                                        minorUnits(
+                                                            variant.price,
+                                                        ),
+                                                    )
+                                                }}</span
+                                            >
+                                            <span
+                                                class="mt-1 flex min-w-0 items-center gap-1 text-[0.68rem] leading-3"
+                                                :class="
+                                                    canAddVariant(variant)
+                                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                                        : 'text-destructive'
+                                                "
+                                            >
+                                                <span
+                                                    class="size-1.5 shrink-0 rounded-full bg-current"
+                                                />
+                                                <span class="truncate">{{
+                                                    variantStockLabel(variant)
+                                                }}</span>
+                                            </span>
+                                        </span>
+
+                                        <span
+                                            class="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground group-disabled:bg-muted group-disabled:text-muted-foreground"
+                                            aria-hidden="true"
+                                        >
+                                            <Plus class="size-4" />
+                                        </span>
+                                    </span>
                                 </span>
-                                <Plus
-                                    class="size-6 shrink-0 rounded-full bg-primary/10 p-1.5 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground"
-                                />
                             </button>
                             <div
                                 v-if="variants.data.length === 0"
@@ -964,11 +1307,12 @@ defineOptions({
                     <div
                         class="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto p-3"
                     >
-                        <div class="flex flex-wrap gap-2">
+                        <div class="grid grid-cols-4 gap-1.5">
                             <Button
                                 type="button"
                                 size="sm"
                                 variant="outline"
+                                class="min-w-0 px-2"
                                 :disabled="cart.length === 0"
                                 @click="holdCart"
                                 >Hold cart</Button
@@ -977,13 +1321,38 @@ defineOptions({
                                 type="button"
                                 size="sm"
                                 variant="ghost"
+                                class="px-2"
                                 :disabled="cart.length === 0"
                                 @click="clearCart"
                                 >Clear cart</Button
                             >
+                            <Button
+                                v-if="canDiscount"
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                class="px-2"
+                                :disabled="cart.length === 0"
+                                @click="openOrderDiscount"
+                            >
+                                Discount
+                            </Button>
+                            <Button
+                                v-if="showAnyCustomerDetails"
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                class="min-w-0 px-2"
+                                @click="customerModalOpen = true"
+                            >
+                                <span class="truncate">{{
+                                    customerName || 'Customer'
+                                }}</span>
+                            </Button>
+                        </div>
+                        <div v-if="heldCarts.length">
                             <select
-                                v-if="heldCarts.length"
-                                class="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                                class="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                                 aria-label="Held carts"
                                 @change="selectHeldCart"
                             >
@@ -1010,6 +1379,27 @@ defineOptions({
                             stock.
                         </p>
                         <div
+                            v-if="posSettings.show_sale_source"
+                            class="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2"
+                        >
+                            <Label for="sale-source" class="shrink-0"
+                                >Source</Label
+                            >
+                            <select
+                                id="sale-source"
+                                v-model="saleSource"
+                                class="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                            >
+                                <option
+                                    v-for="source in saleSources"
+                                    :key="source.value"
+                                    :value="source.value"
+                                >
+                                    {{ source.label }}
+                                </option>
+                            </select>
+                        </div>
+                        <div
                             v-if="cart.length === 0"
                             class="grid min-h-28 place-items-center rounded-xl border border-dashed bg-muted/20 p-4 text-center text-sm text-muted-foreground"
                         >
@@ -1027,32 +1417,139 @@ defineOptions({
                             <div
                                 v-for="(line, index) in cart"
                                 :key="`${line.variant.id}-${index}`"
-                                class="rounded-lg border bg-background p-2.5 shadow-xs"
+                                class="rounded-lg border bg-background p-2.5 shadow-xs transition-colors focus-within:border-primary/40"
                             >
-                                <div
-                                    class="flex items-start justify-between gap-2"
+                                <p
+                                    class="truncate leading-5"
+                                    :title="`${line.variant.name} · ${line.variant.variant} · ${line.variant.sku} · ${money(minorUnits(line.unit_price))} each`"
                                 >
-                                    <div class="min-w-0">
-                                        <p class="truncate text-sm font-medium">
-                                            {{ line.variant.name }} ·
-                                            {{ line.variant.variant }}
-                                        </p>
-                                        <p
+                                    <span class="text-sm font-semibold">
+                                        {{ line.variant.name }} ·
+                                        {{ line.variant.variant }}
+                                    </span>
+                                    <span class="text-xs text-muted-foreground">
+                                        · {{ line.variant.sku }} ·
+                                        {{ money(minorUnits(line.unit_price)) }}
+                                        each
+                                    </span>
+                                </p>
+
+                                <div
+                                    class="mt-2 flex min-w-0 flex-wrap items-center gap-2"
+                                >
+                                    <div
+                                        class="flex shrink-0 items-center gap-1.5"
+                                    >
+                                        <Label
+                                            :for="`qty-${index}`"
                                             class="text-xs text-muted-foreground"
+                                            >Qty</Label
                                         >
-                                            {{ line.variant.sku }} ·
-                                            {{
+                                        <Input
+                                            v-if="
+                                                !(
+                                                    line.variant
+                                                        .tracking_mode ===
+                                                        'serialized' &&
+                                                    !line.variant
+                                                        .is_virtual_combo
+                                                )
+                                            "
+                                            :id="`qty-${index}`"
+                                            v-model="line.quantity"
+                                            class="h-8 w-20 px-2 text-sm tabular-nums"
+                                            inputmode="decimal"
+                                            aria-label="Quantity"
+                                        />
+                                        <span
+                                            v-else
+                                            :id="`qty-${index}`"
+                                            class="flex h-8 w-20 items-center rounded-md border bg-muted/20 px-2 text-sm tabular-nums"
+                                        >
+                                            1.000
+                                        </span>
+                                    </div>
+
+                                    <div
+                                        v-if="canOverridePrice"
+                                        class="flex shrink-0 items-center gap-1.5"
+                                    >
+                                        <Label
+                                            :for="`price-${index}`"
+                                            class="text-xs text-muted-foreground"
+                                            >Price</Label
+                                        >
+                                        <Input
+                                            :id="`price-${index}`"
+                                            v-model="line.unit_price"
+                                            class="h-8 w-24 px-2 text-sm tabular-nums"
+                                            inputmode="decimal"
+                                            aria-label="Unit price"
+                                        />
+                                    </div>
+
+                                    <Button
+                                        v-if="canDiscount"
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        class="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
+                                        :class="
+                                            minorUnits(line.discount_amount) >
+                                            0n
+                                                ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                                : ''
+                                        "
+                                        :aria-label="`Discount ${line.variant.name}`"
+                                        @click="openLineDiscount(index)"
+                                    >
+                                        <Percent
+                                            class="size-3.5"
+                                            :class="
+                                                minorUnits(
+                                                    line.discount_amount,
+                                                ) > 0n
+                                                    ? 'text-primary'
+                                                    : ''
+                                            "
+                                        />
+                                        <span
+                                            v-if="
+                                                minorUnits(
+                                                    line.discount_amount,
+                                                ) > 0n
+                                            "
+                                        >
+                                            Line discount · −{{
                                                 money(
-                                                    minorUnits(line.unit_price),
+                                                    minorUnits(
+                                                        line.discount_amount,
+                                                    ),
                                                 )
                                             }}
-                                            each
-                                        </p>
+                                        </span>
+                                        <span v-else>Discount</span>
+                                    </Button>
+
+                                    <div
+                                        class="ml-auto flex min-w-0 items-baseline gap-1.5 text-right"
+                                    >
+                                        <span
+                                            class="shrink-0 text-xs text-muted-foreground"
+                                            >Line total</span
+                                        >
+                                        <strong
+                                            class="truncate text-sm font-bold tabular-nums"
+                                        >
+                                            {{ money(lineTotal(line)) }}
+                                        </strong>
                                     </div>
+
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon-sm"
+                                        class="size-8 shrink-0 text-muted-foreground hover:text-destructive"
                                         aria-label="Remove cart line"
                                         @click="removeLine(index)"
                                         ><Trash2 class="size-4"
@@ -1060,379 +1557,372 @@ defineOptions({
                                 </div>
                                 <div
                                     v-if="
+                                        posSettings.require_imei_on_sale &&
                                         line.variant.tracking_mode ===
                                             'serialized' &&
                                         !line.variant.is_virtual_combo
                                     "
-                                    class="mt-1.5 space-y-1"
+                                    class="mt-2 border-t pt-2"
                                 >
-                                    <Label :for="`imei-${index}`"
-                                        >IMEI / IMEI2</Label
-                                    ><Input
+                                    <Input
                                         :id="`imei-${index}`"
                                         v-model="line.device_identifier"
                                         autocomplete="off"
+                                        class="h-8 text-sm"
+                                        aria-label="IMEI or IMEI2"
                                         placeholder="Scan or enter device IMEI"
                                     />
-                                    <p class="text-xs text-muted-foreground">
-                                        The exact available device and its
-                                        actual cost will be verified at
-                                        checkout.
-                                    </p>
                                 </div>
-                                <div class="mt-2 grid gap-2 sm:grid-cols-3">
-                                    <div>
-                                        <Label :for="`qty-${index}`"
-                                            >Quantity</Label
-                                        >
-                                        <div
-                                            v-if="
-                                                line.variant.tracking_mode ===
-                                                    'serialized' &&
-                                                !line.variant.is_virtual_combo
-                                            "
-                                            class="flex h-9 items-center rounded-md border px-3 text-sm"
-                                        >
-                                            1 device
-                                        </div>
-                                        <Input
-                                            v-else
-                                            :id="`qty-${index}`"
-                                            v-model="line.quantity"
-                                            inputmode="decimal"
-                                        />
-                                    </div>
-                                    <div v-if="canOverridePrice">
-                                        <Label :for="`price-${index}`"
-                                            >Unit price</Label
-                                        ><Input
-                                            :id="`price-${index}`"
-                                            v-model="line.unit_price"
-                                            inputmode="decimal"
-                                        />
-                                    </div>
-                                    <div v-if="canDiscount">
-                                        <Label :for="`discount-${index}`"
-                                            >Discount</Label
-                                        ><Input
-                                            :id="`discount-${index}`"
-                                            v-model="line.discount_amount"
-                                            inputmode="decimal"
-                                        />
-                                    </div>
-                                </div>
-                                <p
-                                    class="mt-1.5 text-right text-sm font-semibold tabular-nums"
-                                >
-                                    {{ money(lineTotal(line)) }}
-                                </p>
                             </div>
                         </div>
                     </div>
 
-                    <div class="border-t bg-card p-3">
-                        <Button
-                            class="w-full justify-between px-4"
-                            size="lg"
-                            :disabled="form.processing || cart.length === 0"
-                            @click="openCheckout"
+                    <div class="space-y-2 border-t bg-card p-2.5">
+                        <div
+                            class="flex items-center justify-between gap-3 text-xs"
                         >
-                            <span>Pay</span>
-                            <span class="tabular-nums">{{
-                                money(cartTotal())
+                            <div
+                                class="flex flex-wrap items-center gap-x-3 gap-y-1"
+                            >
+                                <span class="text-muted-foreground">
+                                    Subtotal
+                                    <strong
+                                        class="font-medium text-foreground tabular-nums"
+                                        >{{ money(cartSubtotal()) }}</strong
+                                    >
+                                </span>
+                                <span
+                                    v-if="minorUnits(orderDiscount) > 0n"
+                                    class="text-primary"
+                                >
+                                    Discount
+                                    <strong class="font-semibold tabular-nums"
+                                        >-{{
+                                            money(minorUnits(orderDiscount))
+                                        }}</strong
+                                    >
+                                </span>
+                            </div>
+                            <span class="shrink-0 font-semibold">
+                                Due
+                                <strong
+                                    class="text-base font-bold tabular-nums"
+                                    >{{ money(cartTotal()) }}</strong
+                                >
+                            </span>
+                        </div>
+
+                        <div
+                            class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2"
+                        >
+                            <div class="min-w-0">
+                                <div
+                                    class="mb-1 flex items-center justify-between gap-2"
+                                >
+                                    <Label
+                                        for="cash-tendered"
+                                        class="text-xs font-medium"
+                                        >Cash received</Label
+                                    >
+                                    <Button
+                                        v-if="
+                                            posSettings.show_pay_exact &&
+                                            needsExactCashReset &&
+                                            payments[0].cash_tendered !== ''
+                                        "
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        class="h-5 px-1.5 text-[0.7rem]"
+                                        @click="payRemaining"
+                                    >
+                                        Use exact
+                                    </Button>
+                                </div>
+                                <Input
+                                    id="cash-tendered"
+                                    v-model="payments[0].cash_tendered"
+                                    inputmode="decimal"
+                                    :placeholder="money(cartTotal())"
+                                    class="h-10 border-primary/30 bg-background px-3 text-base font-semibold tabular-nums"
+                                />
+                            </div>
+
+                            <Button
+                                class="relative h-10 min-w-32 overflow-hidden px-3 transition-all duration-200 active:scale-[0.97]"
+                                :class="
+                                    form.processing
+                                        ? 'cursor-wait shadow-lg shadow-primary/25'
+                                        : 'justify-between gap-3'
+                                "
+                                :disabled="
+                                    form.processing ||
+                                    cart.length === 0 ||
+                                    hasInsufficientCash
+                                "
+                                @click="submitCheckout"
+                            >
+                                <span
+                                    v-if="form.processing"
+                                    class="absolute inset-0 animate-pulse bg-white/15"
+                                />
+                                <span
+                                    v-if="form.processing"
+                                    class="relative flex w-full items-center justify-center gap-2"
+                                >
+                                    <LoaderCircle class="size-4 animate-spin" />
+                                    Processing payment…
+                                </span>
+                                <template v-else>
+                                    <span>Pay cash</span>
+                                    <span class="tabular-nums">{{
+                                        money(cartTotal())
+                                    }}</span>
+                                </template>
+                            </Button>
+                        </div>
+
+                        <div
+                            v-if="
+                                payments[0].cash_tendered !== '' &&
+                                changeDue(payments[0]) > 0n
+                            "
+                            class="flex items-center justify-between gap-3 rounded-md bg-emerald-100 px-2.5 py-1.5 text-xs text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100"
+                        >
+                            <span class="font-medium">Change</span>
+                            <span class="font-bold tabular-nums">{{
+                                money(changeDue(payments[0]))
                             }}</span>
-                        </Button>
+                        </div>
+                        <div
+                            v-else-if="
+                                payments[0].cash_tendered !== '' &&
+                                remainingCash(payments[0]) > 0n
+                            "
+                            class="flex items-center justify-between gap-3 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100"
+                        >
+                            <span>Still needed</span>
+                            <span class="font-semibold tabular-nums">{{
+                                money(remainingCash(payments[0]))
+                            }}</span>
+                        </div>
+
+                        <div
+                            v-if="checkoutErrors.length > 0"
+                            role="alert"
+                            aria-live="assertive"
+                            class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                        >
+                            <p class="font-medium">Sale was not completed.</p>
+                            <ul class="mt-1 list-inside list-disc space-y-1">
+                                <li
+                                    v-for="[field, message] in checkoutErrors"
+                                    :key="field"
+                                >
+                                    {{ message }}
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </aside>
             </div>
         </section>
 
-        <Dialog v-model:open="checkoutModalOpen">
-            <DialogContent
-                class="grid max-h-[calc(100svh-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-0 p-0 shadow-2xl sm:max-w-xl sm:rounded-2xl"
-            >
-                <DialogHeader class="border-b bg-muted/30 px-5 py-4 text-left sm:px-6">
-                    <div class="flex flex-col gap-3 pr-6 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-                        <div class="grid gap-1">
-                            <DialogTitle class="text-xl tracking-tight">Take payment</DialogTitle>
-                            <DialogDescription>
-                                Select a payment type and enter the amount received.
-                            </DialogDescription>
-                        </div>
-                        <div class="shrink-0 text-left sm:text-right">
-                            <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Amount due</p>
-                            <p class="text-xl font-bold tabular-nums text-foreground">{{ money(cartTotal()) }}</p>
-                        </div>
-                    </div>
+        <Dialog v-model:open="discountModalOpen">
+            <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-md">
+                <DialogHeader class="border-b bg-muted/30 px-5 py-4 text-left">
+                    <DialogTitle>
+                        {{
+                            discountLineIndex === null
+                                ? 'Total discount'
+                                : 'Product discount'
+                        }}
+                    </DialogTitle>
+                    <DialogDescription>
+                        <template v-if="discountLineIndex === null">
+                            Apply a percentage or fixed amount to the whole
+                            order.
+                        </template>
+                        <template v-else>
+                            {{ cart[discountLineIndex]?.variant.name }} ·
+                            {{ cart[discountLineIndex]?.variant.variant }}
+                        </template>
+                    </DialogDescription>
                 </DialogHeader>
 
-                <div class="min-h-0 space-y-4 overflow-y-auto p-4 sm:p-5">
-                    <div
-                        class="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3"
-                    >
-                        <div>
-                            <p class="text-sm font-medium">Order summary</p>
-                            <p class="text-xs text-muted-foreground">{{ selectedLocation.name }}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm font-semibold tabular-nums">{{ money(cartTotal()) }}</p>
-                            <p class="text-xs text-muted-foreground">
-                                {{ cart.length }} item{{ cart.length === 1 ? '' : 's' }}
-                            </p>
-                        </div>
+                <div class="space-y-4 p-5">
+                    <div class="grid grid-cols-2 rounded-lg bg-muted p-1">
+                        <Button
+                            type="button"
+                            size="sm"
+                            :variant="
+                                discountMode === 'percentage'
+                                    ? 'default'
+                                    : 'ghost'
+                            "
+                            @click="discountMode = 'percentage'"
+                        >
+                            Percentage
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            :variant="
+                                discountMode === 'amount' ? 'default' : 'ghost'
+                            "
+                            @click="discountMode = 'amount'"
+                        >
+                            Fixed amount
+                        </Button>
                     </div>
 
-                    <details v-if="canDiscount" class="group rounded-xl border bg-background">
-                        <summary
-                            class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium"
+                    <div class="grid gap-1.5">
+                        <Label for="discount-value">
+                            {{
+                                discountMode === 'percentage'
+                                    ? 'Discount percentage'
+                                    : `Discount amount (${currency})`
+                            }}
+                        </Label>
+                        <div class="relative">
+                            <Input
+                                id="discount-value"
+                                v-model="discountValue"
+                                inputmode="decimal"
+                                class="h-12 pr-14 text-lg font-semibold tabular-nums"
+                                :placeholder="
+                                    discountMode === 'percentage' ? '0' : '0.00'
+                                "
+                            />
+                            <span
+                                class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-sm font-semibold text-muted-foreground"
+                            >
+                                {{
+                                    discountMode === 'percentage'
+                                        ? '%'
+                                        : currency
+                                }}
+                            </span>
+                        </div>
+                        <p
+                            v-if="
+                                discountMode === 'percentage' &&
+                                minorUnits(discountValue) > 10000n
+                            "
+                            class="text-xs text-destructive"
                         >
-                            Adjust discount
-                            <span class="text-xs font-normal text-muted-foreground">Optional</span>
-                        </summary>
-                        <div class="grid gap-3 border-t bg-muted/20 p-4 sm:grid-cols-2 sm:items-end">
-                            <div class="flex justify-between gap-3 text-sm sm:pb-2">
-                                <span class="text-muted-foreground">Subtotal</span>
-                                <span class="font-medium tabular-nums">{{ money(cartSubtotal()) }}</span>
-                            </div>
-                            <div class="grid gap-1.5">
-                                <Label for="order-discount">Discount amount</Label>
-                                <Input
-                                    id="order-discount"
-                                    v-model="orderDiscount"
-                                    inputmode="decimal"
-                                />
-                            </div>
-                        </div>
-                    </details>
-
-                    <div v-if="posSettings.show_sale_source" class="grid gap-1.5">
-                        <Label for="sale-source">Sale source</Label>
-                        <select
-                            id="sale-source"
-                            v-model="saleSource"
-                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                            <option
-                                v-for="source in saleSources"
-                                :key="source.value"
-                                :value="source.value"
-                            >
-                                {{ source.label }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <section
-                        class="space-y-3 rounded-xl border bg-card p-4 shadow-sm"
-                        aria-labelledby="payment-heading"
-                    >
-                        <div class="flex flex-wrap items-end justify-between gap-2">
-                            <div>
-                                <h3 id="payment-heading" class="text-base font-semibold tracking-tight">
-                                    Payment
-                                </h3>
-                                <p class="text-sm text-muted-foreground">
-                                    Choose how the customer is paying and enter the amount received.
-                                </p>
-                            </div>
-                            <Button
-                                v-if="posSettings.show_pay_exact && needsExactCashReset"
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                @click="payRemaining"
-                            >
-                                Reset to exact cash
-                            </Button>
-                        </div>
-
-                        <div
-                            v-for="(payment, index) in payments"
-                            :key="index"
-                            class="grid gap-4 rounded-lg border bg-muted/20 p-3 sm:grid-cols-2"
-                        >
-                            <div
-                                class="grid gap-1.5"
-                                :class="isExactCashPayment(payment) ? 'sm:col-span-2' : ''"
-                            >
-                                <div class="flex items-center justify-between gap-2">
-                                    <Label :for="'payment-method-' + index">Payment type</Label>
-                                    <Button
-                                        v-if="payments.length > 1"
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="h-7 px-2 text-xs text-muted-foreground"
-                                        @click="removePayment(index)"
-                                    >
-                                        <Trash2 class="size-3.5" />
-                                        Remove
-                                    </Button>
-                                </div>
-                                <select
-                                    :id="'payment-method-' + index"
-                                    v-model="payment.method"
-                                    class="h-11 w-full rounded-md border border-input bg-background px-3 text-base font-medium shadow-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20"
-                                >
-                                    <option value="cash">Cash</option>
-                                    <option value="card">Card</option>
-                                    <option value="bank_transfer">
-                                        Bank transfer
-                                    </option>
-                                    <option value="other">Other</option>
-                                </select>
-                            </div>
-                            <div
-                                v-if="!isExactCashPayment(payment)"
-                                class="grid gap-1.5"
-                            >
-                                <Label :for="'payment-amount-' + index">Amount applied</Label>
-                                <Input
-                                    :id="'payment-amount-' + index"
-                                    v-model="payment.amount"
-                                    inputmode="decimal"
-                                    :placeholder="money(cartTotal())"
-                                    class="h-11 font-medium tabular-nums"
-                                />
-                            </div>
-                            <div v-if="payment.method !== 'cash'" class="grid gap-1.5 sm:col-span-2">
-                                <Label :for="'payment-reference-' + index">Payment reference <span class="font-normal text-muted-foreground">(optional)</span></Label>
-                                <Input
-                                    :id="'payment-reference-' + index"
-                                    v-model="payment.reference"
-                                />
-                            </div>
-                            <div v-else class="grid gap-2.5 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:col-span-2">
-                                <Label :for="'cash-tendered-' + index" class="text-sm font-semibold">
-                                    {{ isExactCashPayment(payment) ? 'Cash received from customer' : 'Cash received for this payment' }}
-                                </Label>
-                                <Input
-                                    :id="'cash-tendered-' + index"
-                                    v-model="payment.cash_tendered"
-                                    inputmode="decimal"
-                                    :placeholder="money(minorUnits(appliedPaymentAmount(payment)))"
-                                    class="h-14 border-primary/30 bg-background px-4 text-2xl font-bold tabular-nums shadow-sm focus-visible:ring-primary/30"
-                                />
-                                <p v-if="!isExactCashPayment(payment)" class="text-xs text-muted-foreground">
-                                    Amount due for this payment: {{ money(minorUnits(appliedPaymentAmount(payment))) }}
-                                </p>
-                                <div
-                                    v-if="remainingCash(payment) === 0n"
-                                    role="status"
-                                    class="flex items-center justify-between gap-3 rounded-md bg-emerald-100 px-3 py-2.5 text-emerald-950 dark:bg-emerald-950/60 dark:text-emerald-100"
-                                >
-                                    <span class="text-sm font-medium">Change to return</span>
-                                    <span class="text-xl font-bold tabular-nums">{{ money(changeDue(payment)) }}</span>
-                                </div>
-                                <div
-                                    v-else
-                                    role="status"
-                                    class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
-                                >
-                                    Still needed to cover this payment:
-                                    <span class="font-semibold tabular-nums">{{ money(remainingCash(payment)) }}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                @click="addPayment"
-                            >
-                                Add another payment
-                            </Button>
-                        </div>
-                        <p v-if="canCredit" class="text-xs text-muted-foreground">
-                            To split payment, add another method. Any unpaid balance is recorded as due.
+                            Percentage is limited to 100%.
                         </p>
-                    </section>
-
-                    <section
-                        v-if="showAnyCustomerDetails"
-                        class="space-y-3 rounded-xl border bg-card p-4"
-                        aria-labelledby="customer-details-heading"
-                    >
-                        <div class="flex items-center justify-between gap-3">
-                            <div>
-                                <h3 id="customer-details-heading" class="text-sm font-semibold">Customer details &amp; notes</h3>
-                                <p class="text-xs text-muted-foreground">Add details for the receipt or future reference.</p>
-                            </div>
-                            <span class="text-xs text-muted-foreground">Optional</span>
-                        </div>
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            <Input
-                                v-if="posSettings.show_customer_name"
-                                v-model="customerName"
-                                aria-label="Customer name"
-                                placeholder="Customer name"
-                            />
-                            <Input
-                                v-if="posSettings.show_customer_phone"
-                                v-model="customerPhone"
-                                aria-label="Customer phone"
-                                placeholder="Customer phone"
-                            />
-                            <Input
-                                v-if="posSettings.show_customer_email"
-                                v-model="customerEmail"
-                                aria-label="Customer email"
-                                class="sm:col-span-2"
-                                placeholder="Customer email"
-                            />
-                            <textarea
-                                v-if="posSettings.show_sale_notes"
-                                v-model="notes"
-                                aria-label="Sale notes"
-                                class="min-h-16 rounded-md border border-input bg-background px-3 py-2 text-sm sm:col-span-2"
-                                placeholder="Sale notes"
-                            />
-                        </div>
-                    </section>
+                    </div>
 
                     <div
-                        v-if="checkoutErrors.length > 0"
-                        role="alert"
-                        aria-live="assertive"
-                        class="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                        class="space-y-2 rounded-lg border bg-muted/20 p-3 text-sm"
                     >
-                        <p class="font-medium">Sale was not completed.</p>
-                        <ul class="mt-1 list-inside list-disc space-y-1">
-                            <li
-                                v-for="[field, message] in checkoutErrors"
-                                :key="field"
+                        <div class="flex justify-between gap-3">
+                            <span class="text-muted-foreground"
+                                >Before discount</span
                             >
-                                {{ message }}
-                            </li>
-                        </ul>
+                            <span class="font-medium tabular-nums">{{
+                                money(discountBase)
+                            }}</span>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <span class="text-muted-foreground">Discount</span>
+                            <span class="font-medium text-primary tabular-nums"
+                                >-{{ money(discountPreview) }}</span
+                            >
+                        </div>
+                        <div class="flex justify-between gap-3 border-t pt-2">
+                            <span class="font-semibold">After discount</span>
+                            <span class="font-bold tabular-nums">{{
+                                money(discountBase - discountPreview)
+                            }}</span>
+                        </div>
                     </div>
                 </div>
 
                 <DialogFooter
-                    class="flex-col-reverse gap-2 border-t bg-background px-4 py-3 sm:flex-row sm:justify-between sm:px-5"
+                    class="flex-row justify-between border-t bg-muted/20 p-3"
                 >
                     <Button
                         type="button"
-                        variant="outline"
-                        class="w-full sm:w-auto"
-                        @click="checkoutModalOpen = false"
+                        variant="ghost"
+                        @click="clearDiscount"
                     >
-                        Back to order
+                        Clear
                     </Button>
-                    <Button
-                        type="button"
-                        class="h-11 w-full justify-between gap-4 px-5 text-base sm:w-auto sm:min-w-56"
-                        :disabled="form.processing || cart.length === 0 || hasInsufficientCash"
-                        @click="submitCheckout"
+                    <Button type="button" @click="applyDiscount">
+                        Apply discount
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="customerModalOpen">
+            <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-lg">
+                <DialogHeader class="border-b bg-muted/30 px-5 py-4 text-left">
+                    <DialogTitle>Customer details &amp; notes</DialogTitle>
+                    <DialogDescription>
+                        Optional details for the receipt and future reference.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div class="grid gap-3 p-5 sm:grid-cols-2">
+                    <div
+                        v-if="posSettings.show_customer_name"
+                        class="grid gap-1.5"
                     >
-                        <span>{{
-                            form.processing ? 'Processing…' : 'Complete sale'
-                        }}</span>
-                        <span class="tabular-nums">{{
-                            money(cartTotal())
-                        }}</span>
+                        <Label for="customer-name">Customer name</Label>
+                        <Input
+                            id="customer-name"
+                            v-model="customerName"
+                            autocomplete="name"
+                            placeholder="Walk-in customer"
+                        />
+                    </div>
+                    <div
+                        v-if="posSettings.show_customer_phone"
+                        class="grid gap-1.5"
+                    >
+                        <Label for="customer-phone">Phone</Label>
+                        <Input
+                            id="customer-phone"
+                            v-model="customerPhone"
+                            inputmode="tel"
+                            autocomplete="tel"
+                            placeholder="Customer phone"
+                        />
+                    </div>
+                    <div
+                        v-if="posSettings.show_customer_email"
+                        class="grid gap-1.5 sm:col-span-2"
+                    >
+                        <Label for="customer-email">Email</Label>
+                        <Input
+                            id="customer-email"
+                            v-model="customerEmail"
+                            type="email"
+                            autocomplete="email"
+                            placeholder="Customer email"
+                        />
+                    </div>
+                    <div
+                        v-if="posSettings.show_sale_notes"
+                        class="grid gap-1.5 sm:col-span-2"
+                    >
+                        <Label for="sale-notes">Sale notes</Label>
+                        <textarea
+                            id="sale-notes"
+                            v-model="notes"
+                            class="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            placeholder="Add a note about this sale"
+                        />
+                    </div>
+                </div>
+
+                <DialogFooter class="border-t bg-muted/20 p-3">
+                    <Button type="button" @click="customerModalOpen = false">
+                        Done
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -1440,7 +1930,9 @@ defineOptions({
 
         <Dialog v-model:open="receiptModalOpen">
             <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-sm">
-                <DialogHeader class="items-center border-b px-5 py-5 text-center">
+                <DialogHeader
+                    class="items-center border-b px-5 py-5 text-center"
+                >
                     <span
                         class="mb-1 grid size-12 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                     >
@@ -1472,7 +1964,9 @@ defineOptions({
                     <div
                         class="rounded-xl bg-primary px-4 py-4 text-center text-primary-foreground"
                     >
-                        <p class="text-xs font-medium text-primary-foreground/75">
+                        <p
+                            class="text-xs font-medium text-primary-foreground/75"
+                        >
                             Change to customer
                         </p>
                         <p class="mt-1 text-3xl font-bold tabular-nums">
@@ -1490,19 +1984,27 @@ defineOptions({
                     >
                         Next sale
                     </Button>
-                    <Button v-if="completedSale" as-child class="flex-1">
-                        <a
-                            :href="saleReceipt(completedSale.id).url"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            <Printer class="size-4" />
-                            Print receipt
-                        </a>
+                    <Button
+                        v-if="completedSale"
+                        type="button"
+                        class="flex-1"
+                        @click="printCompletedSaleReceipt"
+                    >
+                        <Printer class="size-4" />
+                        Print receipt
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <iframe
+            v-if="receiptPrintUrl"
+            :key="receiptPrintFrameKey"
+            :src="receiptPrintUrl"
+            title="Receipt print frame"
+            class="pointer-events-none fixed size-px opacity-0"
+            aria-hidden="true"
+        />
 
         <ConfirmActionDialog
             :open="confirmation.isOpen.value"

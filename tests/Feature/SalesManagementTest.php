@@ -119,6 +119,29 @@ test('cashier can record the source of a POS sale', function () {
     expect(Sale::query()->sole()->source->value)->toBe('whatsapp');
 });
 
+test('unit price overrides are blocked until enabled in POS settings', function () {
+    ['user' => $user, 'business' => $business, 'location' => $location, 'quantityVariant' => $variant] = salesFeatureContext(
+        'sales.pos', 'sales.create', 'sales.view', 'sales.price-override', 'inventory.opening',
+    );
+    receiveSaleTestStock($user, $location, $variant, '2.000');
+    $payload = saleCheckoutPayload($location, $variant, Str::uuid()->toString());
+    $payload['lines'][0]['unit_price'] = '90.00';
+    $payload['payments'][0]['amount'] = '90.00';
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), $payload)
+        ->assertSessionHasErrors('lines.0.unit_price');
+
+    $business->update(['pos_allow_price_override' => true]);
+    $payload['operation_key'] = Str::uuid()->toString();
+
+    $this->actingAs($user)
+        ->post(route('pos.checkout'), $payload)
+        ->assertSessionHasNoErrors();
+
+    expect(Sale::query()->sole()->lines()->sole()->unit_price)->toBe('90.00');
+});
+
 test('checkout rejects an unsupported sale source', function () {
     ['user' => $user, 'location' => $location, 'quantityVariant' => $variant] = salesFeatureContext(
         'sales.pos', 'sales.create', 'sales.view', 'inventory.opening',
@@ -278,6 +301,37 @@ test('serialized phone can only be sold once by its identifier', function () {
         ->and(Sale::query()->count())->toBe(1);
 });
 
+test('POS automatically selects an available serialized device when IMEI entry is disabled', function () {
+    ['user' => $user, 'business' => $business, 'category' => $category, 'location' => $location] = salesFeatureContext(
+        'sales.pos', 'sales.create', 'sales.view', 'inventory.receive',
+    );
+    $business->update(['pos_require_imei_on_sale' => false]);
+    $product = Product::factory()->serialized()->for($business)->for($category)->create(['name' => 'Auto-selected Phone']);
+    $variant = ProductVariant::factory()->serialized()->for($business)->for($product)->create([
+        'sku' => 'SALE-AUTO-IMEI-001',
+        'selling_price' => '500.00',
+    ]);
+    app(InventoryService::class)->receive($user, [
+        'operation_key' => Str::uuid()->toString(),
+        'location_id' => $location->id,
+        'product_variant_id' => $variant->id,
+        'mode' => 'serialized',
+        'devices' => [['imei' => '356789012345672', 'condition' => 'new', 'unit_cost' => '300.00']],
+    ]);
+
+    $response = $this->actingAs($user)->post(route('pos.checkout'), [
+        'operation_key' => Str::uuid()->toString(),
+        'location_id' => $location->id,
+        'source' => 'in_store_pos',
+        'lines' => [['product_variant_id' => $variant->id, 'quantity' => '1']],
+        'payments' => [['amount' => '500.00', 'method' => 'cash']],
+    ]);
+
+    $response->assertSessionHasNoErrors();
+    expect(Sale::query()->sole()->lines()->sole()->imei_snapshot)->toBe('356789012345672')
+        ->and(SerializedDevice::query()->sole()->status->value)->toBe('sold');
+});
+
 test('POS resolves an available serialized device by scanned IMEI in the selected location', function () {
     ['user' => $user, 'business' => $business, 'category' => $category, 'location' => $location] = salesFeatureContext(
         'sales.pos', 'sales.create', 'sales.view', 'inventory.receive',
@@ -310,6 +364,8 @@ test('POS exposes location stock and stock receiving access for eligible product
             ->component('sales/Pos')
             ->where('canReceiveStock', true)
             ->where('posSettings.show_receipt_after_sale', true)
+            ->where('posSettings.auto_print_receipt', false)
+            ->where('posSettings.require_imei_on_sale', true)
             ->where('posSettings.products_per_page', 24)
             ->where('variants.data.0.id', $variant->id)
             ->where('variants.data.0.quantity_on_hand', '0.000'));
@@ -391,8 +447,11 @@ test('sales details return only authorized sale records', function () {
     $business->update([
         'invoice_title' => 'Tax invoice',
         'invoice_paper_size' => 'thermal',
+        'invoice_thermal_width' => 58,
         'invoice_accent_color' => '#1464A5',
         'invoice_show_logo' => false,
+        'invoice_show_product_codes' => false,
+        'invoice_show_line_discounts' => true,
     ]);
     receiveSaleTestStock($user, $location, $variant, '2.000');
     $this->actingAs($user)->post(route('pos.checkout'), saleCheckoutPayload($location, $variant, Str::uuid()->toString()))->assertSessionHasNoErrors();
@@ -401,12 +460,16 @@ test('sales details return only authorized sale records', function () {
     $this->actingAs($user)->get(route('sales.show', $sale))->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('sales/Show')->where('sale.sale_number', $sale->sale_number));
 
-    $this->actingAs($user)->get(route('sales.receipt', $sale))->assertOk()
+    $this->actingAs($user)->get(route('sales.receipt', ['sale' => $sale, 'autoprint' => 1]))->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('sales/Receipt')
             ->where('business.invoice_title', 'Tax invoice')
             ->where('business.invoice_paper_size', 'thermal')
+            ->where('business.invoice_thermal_width', 58)
             ->where('business.invoice_accent_color', '#1464A5')
-            ->where('business.invoice_show_logo', false),
+            ->where('business.invoice_show_logo', false)
+            ->where('business.invoice_show_product_codes', false)
+            ->where('business.invoice_show_line_discounts', true)
+            ->where('autoPrint', true),
         );
 });

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Printer } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { Button } from '@/components/ui/button';
 import sales, { index, show } from '@/routes/sales';
 
@@ -56,6 +56,7 @@ type Business = {
     invoice_return_policy: string | null;
     invoice_title: string;
     invoice_paper_size: 'a4' | 'thermal';
+    invoice_thermal_width: 58 | 80;
     invoice_accent_color: string;
     invoice_show_logo: boolean;
     invoice_show_business_details: boolean;
@@ -63,9 +64,20 @@ type Business = {
     invoice_show_cashier: boolean;
     invoice_show_payment_details: boolean;
     invoice_show_tax: boolean;
+    invoice_show_product_codes: boolean;
+    invoice_show_line_discounts: boolean;
 };
-const props = defineProps<{ sale: ReceiptSale; business: Business }>();
-const thermal = ref(props.business.invoice_paper_size === 'thermal');
+const props = defineProps<{
+    sale: ReceiptSale;
+    business: Business;
+    autoPrint: boolean;
+}>();
+const thermal = computed(() => props.business.invoice_paper_size === 'thermal');
+const receiptStyle = computed(() => ({
+    '--invoice-accent': props.business.invoice_accent_color,
+    '--receipt-width': `${props.business.invoice_thermal_width}mm`,
+}));
+let printTimer: ReturnType<typeof setTimeout> | undefined;
 function money(value: string): string {
     const [whole = '0', fraction = '00'] = value.split('.', 2);
     return `${props.business.currency} ${BigInt(whole || '0').toLocaleString()}.${fraction.padEnd(2, '0').slice(0, 2)}`;
@@ -73,6 +85,25 @@ function money(value: string): string {
 function printReceipt(): void {
     window.print();
 }
+function closeAutoPrintWindow(): void {
+    if (props.autoPrint && window.self === window.top) {
+        window.close();
+    }
+}
+onMounted(async () => {
+    window.addEventListener('afterprint', closeAutoPrintWindow);
+
+    if (!props.autoPrint) {
+        return;
+    }
+
+    await document.fonts?.ready;
+    printTimer = setTimeout(printReceipt, 200);
+});
+onBeforeUnmount(() => {
+    if (printTimer) clearTimeout(printTimer);
+    window.removeEventListener('afterprint', closeAutoPrintWindow);
+});
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Sales history', href: index() }] },
 });
@@ -88,21 +119,30 @@ defineOptions({
                 ></Button
             >
             <div class="flex gap-2">
-                <label
-                    class="flex items-center gap-2 rounded-md border px-3 text-sm"
-                    ><input v-model="thermal" type="checkbox" /> Thermal
-                    width</label
-                ><Button @click="printReceipt"
-                    ><Printer /> Print receipt</Button
+                <span
+                    class="flex items-center rounded-md border bg-card px-3 text-sm text-muted-foreground"
                 >
+                    {{
+                        thermal
+                            ? `${business.invoice_thermal_width} mm thermal`
+                            : 'A4 invoice'
+                    }}
+                </span>
+                <Button @click="printReceipt"><Printer /> Print receipt</Button>
             </div>
         </div>
         <article
             id="sale-receipt"
-            :class="thermal ? 'receipt-thermal' : 'receipt-a4'"
-            class="mx-auto rounded-lg border bg-white p-6 text-slate-900 shadow-sm print:border-0 print:shadow-none"
-            :style="{ '--invoice-accent': business.invoice_accent_color }"
+            :class="[
+                thermal ? 'receipt-thermal' : 'receipt-a4',
+                thermal && business.invoice_thermal_width === 58
+                    ? 'receipt-thermal-compact'
+                    : '',
+            ]"
+            class="mx-auto overflow-hidden rounded-lg border border-slate-200 bg-white p-6 text-slate-900 shadow-sm print:border-0 print:shadow-none"
+            :style="receiptStyle"
         >
+            <div class="invoice-accent-bg mb-5 h-1.5 rounded-full" />
             <header class="space-y-1 text-center">
                 <img
                     v-if="business.invoice_show_logo && business.logo_url"
@@ -151,7 +191,67 @@ defineOptions({
                     {{ sale.customer.phone || '' }}
                 </p>
             </div>
-            <div class="mt-4 overflow-x-auto">
+            <div
+                v-if="thermal"
+                class="mt-4 divide-y divide-dashed border-y border-dashed text-xs"
+            >
+                <div
+                    v-for="line in sale.lines"
+                    :key="line.id"
+                    class="space-y-1 py-2.5"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <p class="min-w-0 font-semibold">
+                            {{ line.product_name }} · {{ line.variant_name }}
+                        </p>
+                        <p class="shrink-0 font-bold tabular-nums">
+                            {{ money(line.total) }}
+                        </p>
+                    </div>
+                    <p
+                        v-if="business.invoice_show_product_codes"
+                        class="text-[0.68rem] break-all text-slate-500"
+                    >
+                        {{ line.sku }}
+                        <span v-if="line.imei">· IMEI {{ line.imei }}</span>
+                    </p>
+                    <div
+                        class="flex items-center justify-between gap-3 text-slate-600"
+                    >
+                        <span>
+                            {{ line.quantity }} × {{ money(line.unit_price) }}
+                        </span>
+                        <span
+                            v-if="
+                                business.invoice_show_line_discounts &&
+                                line.discount_amount !== '0.00'
+                            "
+                            class="text-emerald-700"
+                        >
+                            Discount −{{ money(line.discount_amount) }}
+                        </span>
+                    </div>
+                    <div
+                        v-for="component in line.components"
+                        :key="component.name + (component.imei || '')"
+                        class="flex justify-between gap-2 pl-2 text-[0.68rem] text-slate-500"
+                    >
+                        <span>
+                            ↳ {{ component.name }}
+                            <template
+                                v-if="
+                                    business.invoice_show_product_codes &&
+                                    component.imei
+                                "
+                            >
+                                · {{ component.imei }}
+                            </template>
+                        </span>
+                        <span>{{ component.quantity }} · Included</span>
+                    </div>
+                </div>
+            </div>
+            <div v-else class="mt-4 overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-y text-left">
@@ -169,18 +269,27 @@ defineOptions({
                                         {{ line.product_name }} ·
                                         {{ line.variant_name }}
                                     </div>
-                                    <div class="text-xs">
+                                    <div
+                                        v-if="
+                                            business.invoice_show_product_codes
+                                        "
+                                        class="text-xs text-slate-500"
+                                    >
                                         {{ line.sku
                                         }}<span v-if="line.imei">
                                             · IMEI {{ line.imei }}</span
                                         >
                                     </div>
                                     <div
-                                        v-if="line.discount_amount !== '0.00'"
-                                        class="text-xs"
+                                        v-if="
+                                            business.invoice_show_line_discounts &&
+                                            line.discount_amount !== '0.00'
+                                        "
+                                        class="text-xs text-emerald-700"
                                     >
-                                        Discount:
-                                        {{ money(line.discount_amount) }}
+                                        Line discount: −{{
+                                            money(line.discount_amount)
+                                        }}
                                     </div>
                                 </td>
                                 <td class="px-2 py-2 text-right tabular-nums">
@@ -202,7 +311,12 @@ defineOptions({
                             >
                                 <td class="py-1 pl-3">
                                     Bundle · {{ component.name
-                                    }}<span v-if="component.imei">
+                                    }}<span
+                                        v-if="
+                                            business.invoice_show_product_codes &&
+                                            component.imei
+                                        "
+                                    >
                                         · IMEI {{ component.imei }}</span
                                     >
                                 </td>
@@ -221,7 +335,10 @@ defineOptions({
                 <div class="flex justify-between">
                     <span>Subtotal</span><span>{{ money(sale.subtotal) }}</span>
                 </div>
-                <div class="flex justify-between">
+                <div
+                    v-if="sale.discount_total !== '0.00'"
+                    class="flex justify-between text-emerald-700"
+                >
                     <span>Discount</span
                     ><span>−{{ money(sale.discount_total) }}</span>
                 </div>
@@ -310,26 +427,36 @@ defineOptions({
     max-width: 210mm;
 }
 .receipt-thermal {
-    width: 76mm;
+    width: var(--receipt-width);
     max-width: 100%;
     padding: 4mm;
+}
+.receipt-thermal-compact {
+    padding: 3mm;
+    font-size: 0.8rem;
 }
 .invoice-accent {
     color: var(--invoice-accent);
 }
+.invoice-accent-bg {
+    background-color: var(--invoice-accent);
+}
 @media print {
     @page {
         size: auto;
-        margin: 6mm;
+        margin: 4mm;
     }
     .receipt-a4 {
         width: 100%;
         max-width: none;
     }
     .receipt-thermal {
-        width: 72mm;
-        max-width: 72mm;
+        width: var(--receipt-width);
+        max-width: var(--receipt-width);
         padding: 0;
+    }
+    #sale-receipt {
+        print-color-adjust: exact;
     }
 }
 </style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
-import { LayoutDashboard, MonitorCog } from '@lucide/vue';
+import { LayoutDashboard, MonitorCog, Printer } from '@lucide/vue';
 import { reactive } from 'vue';
 import PosSettingsController from '@/actions/App/Http/Controllers/Settings/PosSettingsController';
 import Heading from '@/components/Heading.vue';
@@ -17,12 +17,17 @@ type PosSettings = {
     show_customer_email: boolean;
     show_sale_notes: boolean;
     show_pay_exact: boolean;
+    allow_price_override: boolean;
+    require_imei_on_sale: boolean;
     show_date_time: boolean;
     show_sales_history: boolean;
     show_category_filter: boolean;
     show_brand_filter: boolean;
     show_location_filter: boolean;
     show_receipt_after_sale: boolean;
+    auto_print_receipt: boolean;
+    receipt_paper_size: 'a4' | 'thermal';
+    receipt_thermal_width: 58 | 80;
     products_per_page: number;
 };
 
@@ -66,6 +71,20 @@ const toggles = [
         description: 'Show the shortcut that fills the exact cash total.',
     },
     {
+        key: 'allow_price_override',
+        name: 'pos_allow_price_override',
+        title: 'Allow unit price editing',
+        description:
+            'Let permitted cashiers change a product price in the cart.',
+    },
+    {
+        key: 'require_imei_on_sale',
+        name: 'pos_require_imei_on_sale',
+        title: 'Require IMEI when selling',
+        description:
+            'Ask the cashier to scan or enter an IMEI for serialized products. If unticked, the oldest available device is selected automatically.',
+    },
+    {
         key: 'show_date_time',
         name: 'pos_show_date_time',
         title: 'Date and time',
@@ -94,12 +113,6 @@ const toggles = [
         name: 'pos_show_location_filter',
         title: 'Location selector',
         description: 'Allow switching between accessible sales locations.',
-    },
-    {
-        key: 'show_receipt_after_sale',
-        name: 'pos_show_receipt_after_sale',
-        title: 'Completed-sale receipt',
-        description: 'Open a compact customer-facing receipt after checkout.',
     },
 ] as const;
 
@@ -167,8 +180,123 @@ defineOptions({
                 </div>
             </section>
 
+            <section class="surface-panel space-y-5 p-5 sm:p-6">
+                <div class="flex items-start gap-3">
+                    <span
+                        class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                    >
+                        <Printer class="size-5" />
+                    </span>
+                    <div>
+                        <h2 class="font-semibold">Receipt after sale</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">
+                            Control the cashier prompt and the printer format
+                            used immediately after checkout.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid gap-3 lg:grid-cols-2">
+                    <label
+                        for="pos_show_receipt_after_sale"
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                    >
+                        <Checkbox
+                            id="pos_show_receipt_after_sale"
+                            v-model="preferences.show_receipt_after_sale"
+                            name="pos_show_receipt_after_sale"
+                            value="1"
+                            class="mt-0.5"
+                        />
+                        <span>
+                            <span class="block text-sm font-medium"
+                                >Show sale-completed summary</span
+                            >
+                            <span
+                                class="mt-0.5 block text-xs leading-5 text-muted-foreground"
+                            >
+                                Show totals, cash received, change, and the
+                                manual print button after checkout.
+                            </span>
+                        </span>
+                    </label>
+
+                    <label
+                        for="pos_auto_print_receipt"
+                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                    >
+                        <Checkbox
+                            id="pos_auto_print_receipt"
+                            v-model="preferences.auto_print_receipt"
+                            name="pos_auto_print_receipt"
+                            value="1"
+                            class="mt-0.5"
+                        />
+                        <span>
+                            <span class="block text-sm font-medium"
+                                >Prompt to print automatically</span
+                            >
+                            <span
+                                class="mt-0.5 block text-xs leading-5 text-muted-foreground"
+                            >
+                                Open the browser print dialog as soon as a sale
+                                completes successfully.
+                            </span>
+                        </span>
+                    </label>
+                </div>
+
+                <div
+                    class="grid gap-4 border-t border-border/70 pt-5 sm:grid-cols-2"
+                >
+                    <div class="grid gap-2">
+                        <Label for="invoice_paper_size">Print format</Label>
+                        <select
+                            id="invoice_paper_size"
+                            v-model="preferences.receipt_paper_size"
+                            name="invoice_paper_size"
+                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option value="a4">A4 invoice</option>
+                            <option value="thermal">Thermal receipt</option>
+                        </select>
+                        <InputError :message="errors.invoice_paper_size" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="invoice_thermal_width"
+                            >Thermal paper width</Label
+                        >
+                        <select
+                            id="invoice_thermal_width"
+                            v-model="preferences.receipt_thermal_width"
+                            name="invoice_thermal_width"
+                            :disabled="
+                                preferences.receipt_paper_size !== 'thermal'
+                            "
+                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <option :value="58">58 mm</option>
+                            <option :value="80">80 mm</option>
+                        </select>
+                        <input
+                            v-if="preferences.receipt_paper_size !== 'thermal'"
+                            type="hidden"
+                            name="invoice_thermal_width"
+                            :value="preferences.receipt_thermal_width"
+                        />
+                        <p class="text-xs text-muted-foreground">
+                            Used only when the print format is Thermal receipt.
+                        </p>
+                        <InputError :message="errors.invoice_thermal_width" />
+                    </div>
+                </div>
+            </section>
+
             <section class="surface-panel p-5 sm:p-6">
-                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                    class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+                >
                     <div class="flex items-start gap-3">
                         <span
                             class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
@@ -180,8 +308,8 @@ defineOptions({
                                 >Products loaded per page</Label
                             >
                             <p class="mt-1 text-sm text-muted-foreground">
-                                More products reduce scrolling but take longer to
-                                load on slower devices.
+                                More products reduce scrolling but take longer
+                                to load on slower devices.
                             </p>
                         </div>
                     </div>

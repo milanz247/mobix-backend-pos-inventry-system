@@ -115,6 +115,7 @@ class SalePageData
             'invoice_return_policy' => $business->invoice_return_policy,
             'invoice_title' => $business->invoice_title,
             'invoice_paper_size' => $business->invoice_paper_size,
+            'invoice_thermal_width' => $business->invoice_thermal_width,
             'invoice_accent_color' => $business->invoice_accent_color,
             'invoice_show_logo' => $business->invoice_show_logo,
             'invoice_show_business_details' => $business->invoice_show_business_details,
@@ -122,6 +123,8 @@ class SalePageData
             'invoice_show_cashier' => $business->invoice_show_cashier,
             'invoice_show_payment_details' => $business->invoice_show_payment_details,
             'invoice_show_tax' => $business->invoice_show_tax,
+            'invoice_show_product_codes' => $business->invoice_show_product_codes,
+            'invoice_show_line_discounts' => $business->invoice_show_line_discounts,
         ];
     }
 }

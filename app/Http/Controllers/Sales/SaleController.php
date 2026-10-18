@@ -161,13 +161,14 @@ class SaleController extends Controller
         ]);
     }
 
-    public function receipt(Sale $sale, SaleService $sales, SalePageData $pageData): Response
+    public function receipt(Request $request, Sale $sale, SaleService $sales, SalePageData $pageData): Response
     {
         $sale = $sales->scoped(request()->user(), $sale);
 
         return Inertia::render('sales/Receipt', [
             'sale' => $pageData->sale($sale),
             'business' => $pageData->business($sale->business),
+            'autoPrint' => $request->boolean('autoprint'),
         ]);
     }
 

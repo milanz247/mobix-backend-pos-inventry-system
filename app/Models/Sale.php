@@ -25,9 +25,11 @@ use Illuminate\Support\Carbon;
  * @property numeric-string $tax_total
  * @property numeric-string $total
  * @property string $paid_total
+ * @property SaleSource $source
  * @property SaleStatus $status
  * @property SalePaymentStatus $payment_status
  * @property Carbon $posted_at
+ * @property int $lines_count
  * @property-read Collection<int, SaleLine> $lines
  * @property-read Collection<int, SalePayment> $payments
  * @property-read Collection<int, SaleReturn> $returns

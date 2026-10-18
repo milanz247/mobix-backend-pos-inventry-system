@@ -106,15 +106,17 @@ class PosController extends Controller
                 'show_customer_email' => $business->pos_show_customer_email,
                 'show_sale_notes' => $business->pos_show_sale_notes,
                 'show_pay_exact' => $business->pos_show_pay_exact,
+                'require_imei_on_sale' => $business->pos_require_imei_on_sale,
                 'show_date_time' => $business->pos_show_date_time,
                 'show_sales_history' => $business->pos_show_sales_history,
                 'show_category_filter' => $business->pos_show_category_filter,
                 'show_brand_filter' => $business->pos_show_brand_filter,
                 'show_location_filter' => $business->pos_show_location_filter,
                 'show_receipt_after_sale' => $business->pos_show_receipt_after_sale,
+                'auto_print_receipt' => $business->pos_auto_print_receipt,
                 'products_per_page' => $business->pos_products_per_page,
             ],
-            'canOverridePrice' => $user->can('sales.price-override'),
+            'canOverridePrice' => $business->pos_allow_price_override && $user->can('sales.price-override'),
             'canDiscount' => $user->can('sales.discount'),
             'canCredit' => $user->can('sales.credit'),
             'canReceiveStock' => $user->can('inventory.receive'),
@@ -129,7 +131,7 @@ class PosController extends Controller
 
         $business = $locationAccess->business();
 
-        if ($business->pos_show_receipt_after_sale) {
+        if ($business->pos_show_receipt_after_sale || $business->pos_auto_print_receipt) {
             $cashPayment = $sale->payments->firstWhere('method', 'cash');
 
             Inertia::flash('completedSale', [

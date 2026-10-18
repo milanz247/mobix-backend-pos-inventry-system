@@ -21,6 +21,7 @@ class InvoiceSettingsController extends Controller
                 'return_policy' => $business->invoice_return_policy,
                 'title' => $business->invoice_title,
                 'paper_size' => $business->invoice_paper_size,
+                'thermal_width' => $business->invoice_thermal_width,
                 'accent_color' => $business->invoice_accent_color,
                 'show_logo' => $business->invoice_show_logo,
                 'show_business_details' => $business->invoice_show_business_details,
@@ -28,6 +29,8 @@ class InvoiceSettingsController extends Controller
                 'show_cashier' => $business->invoice_show_cashier,
                 'show_payment_details' => $business->invoice_show_payment_details,
                 'show_tax' => $business->invoice_show_tax,
+                'show_product_codes' => $business->invoice_show_product_codes,
+                'show_line_discounts' => $business->invoice_show_line_discounts,
             ],
         ]);
     }

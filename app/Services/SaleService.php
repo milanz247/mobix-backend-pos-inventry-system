@@ -11,6 +11,7 @@ use App\Models\SaleLine;
 use App\Models\SalePayment;
 use App\Models\SaleReturn;
 use App\Models\SaleReturnLine;
+use App\Models\SerializedDevice;
 use App\Models\SerializedDeviceIdentifier;
 use App\Models\User;
 use App\ProductType;
@@ -336,11 +337,26 @@ class SaleService
             $costSnapshot = (string) $variant->cost_price;
             if (! $isCombo && $variant->tracking_mode === VariantTrackingMode::Serialized) {
                 $identifier = $this->normalizeIdentifier((string) ($item['device_identifier'] ?? ''));
-                $identifierRow = SerializedDeviceIdentifier::query()->where('business_id', $business->id)
-                    ->where('identifier', $identifier)->lockForUpdate()->first();
-                $device = $identifierRow?->device()->lockForUpdate()->first();
+                if ($identifier !== '') {
+                    $identifierRow = SerializedDeviceIdentifier::query()->where('business_id', $business->id)
+                        ->where('identifier', $identifier)->lockForUpdate()->first();
+                    $device = $identifierRow?->device()->lockForUpdate()->first();
+                } elseif (! $business->pos_require_imei_on_sale) {
+                    $device = SerializedDevice::query()
+                        ->where('business_id', $business->id)
+                        ->where('product_variant_id', $variant->id)
+                        ->where('location_id', $location->id)
+                        ->where('status', 'in_stock')
+                        ->oldest('id')
+                        ->lockForUpdate()
+                        ->first();
+                }
                 if ($device === null || $device->product_variant_id !== $variant->id || $device->location_id !== $location->id || $device->status->value !== 'in_stock') {
-                    throw ValidationException::withMessages(["lines.{$index}.device_identifier" => __('Enter an IMEI or IMEI2 for an available phone at this location.')]);
+                    $message = $business->pos_require_imei_on_sale
+                        ? __('Enter an IMEI or IMEI2 for an available phone at this location.')
+                        : __('No available phone is in stock at this location.');
+
+                    throw ValidationException::withMessages(["lines.{$index}.device_identifier" => $message]);
                 }
                 $basePrice = $device->unit_selling_price ?? $basePrice;
                 $costSnapshot = $device->unit_cost;
@@ -352,6 +368,9 @@ class SaleService
             $requestedPrice = filled($item['unit_price'] ?? null) ? $this->money((string) $item['unit_price']) : $basePrice;
             if (BigDecimal::of($requestedPrice)->isNegative()) {
                 throw ValidationException::withMessages(["lines.{$index}.unit_price" => __('Price cannot be negative.')]);
+            }
+            if (BigDecimal::of($requestedPrice)->compareTo($basePrice) !== 0 && ! $business->pos_allow_price_override) {
+                throw ValidationException::withMessages(["lines.{$index}.unit_price" => __('Unit price editing is disabled in POS settings.')]);
             }
             if (BigDecimal::of($requestedPrice)->compareTo($basePrice) !== 0 && ! $user->can('sales.price-override')) {
                 throw ValidationException::withMessages(["lines.{$index}.unit_price" => __('Price override permission is required.')]);

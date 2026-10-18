@@ -20,6 +20,7 @@ class UpdateInvoiceSettingsRequest extends FormRequest
         return [
             'invoice_title' => ['required', 'string', 'max:100'],
             'invoice_paper_size' => ['required', Rule::in(['a4', 'thermal'])],
+            'invoice_thermal_width' => ['required', 'integer', Rule::in([58, 80])],
             'invoice_accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'invoice_footer' => ['nullable', 'string', 'max:2000'],
             'invoice_return_policy' => ['nullable', 'string', 'max:2000'],
@@ -29,6 +30,8 @@ class UpdateInvoiceSettingsRequest extends FormRequest
             'invoice_show_cashier' => ['required', 'boolean'],
             'invoice_show_payment_details' => ['required', 'boolean'],
             'invoice_show_tax' => ['required', 'boolean'],
+            'invoice_show_product_codes' => ['required', 'boolean'],
+            'invoice_show_line_discounts' => ['required', 'boolean'],
         ];
     }
 
@@ -41,6 +44,8 @@ class UpdateInvoiceSettingsRequest extends FormRequest
             'invoice_show_cashier',
             'invoice_show_payment_details',
             'invoice_show_tax',
+            'invoice_show_product_codes',
+            'invoice_show_line_discounts',
         ];
 
         $unchecked = [];
