@@ -83,10 +83,7 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
                     >
                         Workspace
                     </p>
-                    <p class="mt-2 text-sm leading-6 text-muted-foreground">
-                        Keep the details behind your day-to-day operations up to
-                        date.
-                    </p>
+                   
                 </div>
                 <nav
                     class="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:sticky xl:top-20 xl:grid-cols-1"
