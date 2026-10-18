@@ -2,10 +2,13 @@
 
 use App\Actions\Catalog\SaveProduct;
 use App\Models\Brand;
+use App\Models\BundleComponent;
 use App\Models\Business;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Sale;
+use App\Models\SaleLine;
 use App\Models\User;
 use Database\Seeders\CatalogDefaultsSeeder;
 use Illuminate\Database\QueryException;
@@ -489,10 +492,152 @@ test('product and variants roll back together when a database write fails', func
 test('catalog management routes reject users without the matching permissions', function () {
     $owner = User::factory()->create();
     $user = User::factory()->create();
-    Business::factory()->for($owner, 'owner')->create();
+    $business = Business::factory()->for($owner, 'owner')->create();
+    $category = Category::factory()->for($business)->create();
+    $brand = Brand::factory()->for($business)->create();
+    $product = Product::factory()->for($business)->for($category)->create(['status' => 'inactive']);
 
     $this->actingAs($user)->get(route('products.index'))->assertForbidden();
     $this->actingAs($user)->post(route('categories.store'), ['name' => 'Unauthorized'])->assertForbidden();
+    $this->actingAs($user)->delete(route('categories.destroy', $category))->assertForbidden();
+    $this->actingAs($user)->delete(route('brands.destroy', $brand))->assertForbidden();
+    $this->actingAs($user)->delete(route('products.destroy', $product))->assertForbidden();
+});
+
+test('unused inactive products are deleted with their variants bundle definitions and image', function () {
+    Storage::fake('public');
+    $user = catalogManager('products.deactivate');
+    $business = Business::query()->sole();
+    $category = Category::factory()->for($business)->create();
+    $componentProduct = Product::factory()->for($business)->for($category)->create();
+    $componentVariant = ProductVariant::factory()->for($business)->for($componentProduct)->create();
+    $imagePath = 'product-images/delete-me.png';
+    Storage::disk('public')->put($imagePath, 'image');
+    $product = Product::factory()->for($business)->for($category)->combo()->create([
+        'image_path' => $imagePath,
+        'status' => 'inactive',
+    ]);
+    $variant = ProductVariant::factory()->for($business)->for($product)->create();
+    BundleComponent::query()->create([
+        'business_id' => $business->id,
+        'bundle_variant_id' => $variant->id,
+        'component_variant_id' => $componentVariant->id,
+        'quantity' => '1.000',
+    ]);
+
+    $this->actingAs($user)->delete(route('products.destroy', $product))
+        ->assertRedirect(route('products.index'))
+        ->assertSessionHasNoErrors();
+
+    $this->assertModelMissing($product);
+    $this->assertModelMissing($variant);
+    $this->assertModelExists($componentProduct);
+    $this->assertModelExists($componentVariant);
+    $this->assertDatabaseMissing('bundle_components', ['bundle_variant_id' => $variant->id]);
+    Storage::disk('public')->assertMissing($imagePath);
+});
+
+test('active products must be deactivated before deletion', function () {
+    $user = catalogManager('products.deactivate');
+    $business = Business::query()->sole();
+    $category = Category::factory()->for($business)->create();
+    $product = Product::factory()->for($business)->for($category)->create();
+    $variant = ProductVariant::factory()->for($business)->for($product)->create();
+
+    $this->actingAs($user)->delete(route('products.destroy', $product))
+        ->assertSessionHasErrors([
+            'product' => 'Deactivate the product before permanently deleting it.',
+        ]);
+
+    $this->assertModelExists($product);
+    $this->assertModelExists($variant);
+});
+
+test('products with transaction history cannot be deleted', function () {
+    $user = catalogManager('products.deactivate');
+    $business = Business::query()->sole();
+    $category = Category::factory()->for($business)->create();
+    $product = Product::factory()->for($business)->for($category)->create(['status' => 'inactive']);
+    $variant = ProductVariant::factory()->for($business)->for($product)->create();
+    $sale = Sale::factory()->for($business)->create();
+    $saleLine = SaleLine::factory()->for($sale)->create([
+        'business_id' => $business->id,
+        'product_variant_id' => $variant->id,
+    ]);
+
+    $this->actingAs($user)->delete(route('products.destroy', $product))
+        ->assertSessionHasErrors([
+            'product' => 'This product cannot be deleted because it has transaction or inventory history. Keep it inactive instead.',
+        ]);
+
+    $this->assertModelExists($product);
+    $this->assertModelExists($variant);
+    $this->assertModelExists($saleLine);
+});
+
+test('products used by another bundle cannot be deleted', function () {
+    $user = catalogManager('products.deactivate');
+    $business = Business::query()->sole();
+    $category = Category::factory()->for($business)->create();
+    $product = Product::factory()->for($business)->for($category)->create(['status' => 'inactive']);
+    $variant = ProductVariant::factory()->for($business)->for($product)->create();
+    $bundleProduct = Product::factory()->for($business)->for($category)->combo()->create();
+    $bundleVariant = ProductVariant::factory()->for($business)->for($bundleProduct)->create();
+    BundleComponent::query()->create([
+        'business_id' => $business->id,
+        'bundle_variant_id' => $bundleVariant->id,
+        'component_variant_id' => $variant->id,
+        'quantity' => '1.000',
+    ]);
+
+    $this->actingAs($user)->delete(route('products.destroy', $product))
+        ->assertSessionHasErrors([
+            'product' => 'This product cannot be deleted because another bundle uses one of its variants.',
+        ]);
+
+    $this->assertModelExists($product);
+    $this->assertModelExists($variant);
+});
+
+test('unused categories and brands can be deleted', function () {
+    Storage::fake('public');
+    $user = catalogManager('categories.deactivate', 'brands.deactivate');
+    $business = Business::query()->sole();
+    $category = Category::factory()->for($business)->create();
+    $logoPath = 'brand-logos/delete-me.png';
+    Storage::disk('public')->put($logoPath, 'logo');
+    $brand = Brand::factory()->for($business)->create(['logo_path' => $logoPath]);
+
+    $this->actingAs($user)->delete(route('categories.destroy', $category))
+        ->assertRedirect(route('categories.index'))
+        ->assertSessionHasNoErrors();
+    $this->actingAs($user)->delete(route('brands.destroy', $brand))
+        ->assertRedirect(route('brands.index'))
+        ->assertSessionHasNoErrors();
+
+    $this->assertModelMissing($category);
+    $this->assertModelMissing($brand);
+    Storage::disk('public')->assertMissing($logoPath);
+});
+
+test('categories and brands assigned to products cannot be deleted', function () {
+    $user = catalogManager('categories.deactivate', 'brands.deactivate');
+    $business = Business::query()->sole();
+    $category = Category::factory()->for($business)->create();
+    $brand = Brand::factory()->for($business)->create();
+    Product::factory()->for($business)->for($category)->withBrand($brand)->create();
+
+    $this->actingAs($user)->delete(route('categories.destroy', $category))
+        ->assertSessionHasErrors([
+            'category' => 'This category cannot be deleted because it is assigned to products.',
+        ]);
+    $this->actingAs($user)->delete(route('brands.destroy', $brand))
+        ->assertSessionHasErrors([
+            'brand' => 'This brand cannot be deleted because it is assigned to products.',
+        ]);
+
+    $this->assertModelExists($category);
+    $this->assertModelExists($brand);
 });
 
 test('category and brand deactivation is blocked while active products use them', function () {

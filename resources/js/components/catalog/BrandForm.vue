@@ -19,6 +19,11 @@ defineProps<{
     method: 'post' | 'put';
     statuses: Option[];
     brand?: Brand;
+    embedded?: boolean;
+}>();
+const emit = defineEmits<{
+    cancel: [];
+    success: [];
 }>();
 </script>
 
@@ -27,6 +32,7 @@ defineProps<{
         :action="action"
         :method="method"
         class="form-section space-y-7"
+        @success="emit('success')"
         v-slot="{ errors, processing, progress }"
     >
         <div class="grid gap-5 sm:grid-cols-2">
@@ -111,8 +117,15 @@ defineProps<{
             <Button :disabled="processing">{{
                 brand ? 'Save changes' : 'Create brand'
             }}</Button>
-            <Button variant="outline" as-child
+            <Button v-if="!embedded" variant="outline" as-child
                 ><Link :href="index()">Cancel</Link></Button
+            >
+            <Button
+                v-else
+                type="button"
+                variant="outline"
+                @click="emit('cancel')"
+                >Cancel</Button
             >
         </div>
     </Form>

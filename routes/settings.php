@@ -5,6 +5,7 @@ use App\Http\Controllers\Settings\InvoiceSettingsController;
 use App\Http\Controllers\Settings\LocationController;
 use App\Http\Controllers\Settings\LocationStatusController;
 use App\Http\Controllers\Settings\LocationUserController;
+use App\Http\Controllers\Settings\PosSettingsController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\PermissionName;
 use Illuminate\Http\RedirectResponse;
@@ -31,6 +32,14 @@ Route::middleware(['auth'])->group(function () {
     Route::put('settings/invoices', [InvoiceSettingsController::class, 'update'])
         ->middleware('can:'.PermissionName::BusinessSettingsUpdate->value)
         ->name('invoice-settings.update');
+
+    Route::get('settings/pos', [PosSettingsController::class, 'edit'])
+        ->middleware('can:'.PermissionName::BusinessSettingsView->value)
+        ->name('pos-settings.edit');
+
+    Route::put('settings/pos', [PosSettingsController::class, 'update'])
+        ->middleware('can:'.PermissionName::BusinessSettingsUpdate->value)
+        ->name('pos-settings.update');
 
     Route::get('settings/locations', [LocationController::class, 'index'])->name('locations.index');
     Route::get('settings/locations/create', [LocationController::class, 'create'])->name('locations.create');

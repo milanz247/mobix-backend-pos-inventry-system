@@ -6,7 +6,6 @@ import {
     Package,
     ShoppingCart,
     Settings,
-    ShieldCheck,
     Users,
     Warehouse,
 } from '@lucide/vue';
@@ -37,10 +36,10 @@ import { edit as editInvoices } from '@/routes/invoice-settings';
 import { dashboard } from '@/routes';
 import { index as brandsIndex } from '@/routes/brands';
 import { index as categoriesIndex } from '@/routes/categories';
-import { index as productsIndex } from '@/routes/products';
-import { create as createRole, index as rolesIndex } from '@/routes/roles';
 import { index as permissionsIndex } from '@/routes/permissions';
-import { create as createUser, index as usersIndex } from '@/routes/users';
+import { index as productsIndex } from '@/routes/products';
+import { index as rolesIndex } from '@/routes/roles';
+import { index as usersIndex } from '@/routes/users';
 import { index as locationsIndex } from '@/routes/locations';
 import { index as inventoryIndex } from '@/routes/inventory';
 import { index as inventoryLocations } from '@/routes/inventory/locations';
@@ -80,15 +79,7 @@ const can = (permission: string): boolean =>
     auth.permissions.includes(permission);
 const userNavItems = computed<NavItem[]>(() => [
     ...(can('users.view') ? [{ title: 'All users', href: usersIndex() }] : []),
-    ...(can('users.create')
-        ? [{ title: 'Invite user', href: createUser() }]
-        : []),
-]);
-const roleNavItems = computed<NavItem[]>(() => [
-    ...(can('roles.view') ? [{ title: 'All roles', href: rolesIndex() }] : []),
-    ...(can('roles.create')
-        ? [{ title: 'Create role', href: createRole() }]
-        : []),
+    ...(can('roles.view') ? [{ title: 'Roles', href: rolesIndex() }] : []),
     ...(can('permissions.view')
         ? [{ title: 'Permissions', href: permissionsIndex() }]
         : []),
@@ -171,9 +162,6 @@ const settingsAreActive = computed(() =>
 const usersAreActive = computed(() =>
     userNavItems.value.some((item) => isCurrentUrl(item.href)),
 );
-const rolesAreActive = computed(() =>
-    roleNavItems.value.some((item) => isCurrentUrl(item.href)),
-);
 const catalogIsActive = computed(() =>
     catalogNavItems.value.some((item) => isCurrentUrl(item.href)),
 );
@@ -189,7 +177,6 @@ const salesIsActive = computed(() =>
 
 type SidebarSection =
     | 'users'
-    | 'roles'
     | 'catalog'
     | 'inventory'
     | 'purchasing'
@@ -199,19 +186,17 @@ type SidebarSection =
 const openSection = ref<SidebarSection | null>(
     usersAreActive.value
         ? 'users'
-        : rolesAreActive.value
-          ? 'roles'
-          : catalogIsActive.value
-            ? 'catalog'
-            : inventoryIsActive.value
-              ? 'inventory'
-              : purchasingIsActive.value
-                ? 'purchasing'
-                : salesIsActive.value
-                  ? 'sales'
-                  : settingsAreActive.value
-                    ? 'settings'
-                    : null,
+        : catalogIsActive.value
+          ? 'catalog'
+          : inventoryIsActive.value
+            ? 'inventory'
+            : purchasingIsActive.value
+              ? 'purchasing'
+              : salesIsActive.value
+                ? 'sales'
+                : settingsAreActive.value
+                  ? 'settings'
+                  : null,
 );
 
 const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
@@ -275,42 +260,6 @@ const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
                             >
                         </SidebarMenuItem>
                     </Collapsible>
-
-                    <Collapsible
-                        v-if="roleNavItems.length"
-                        as-child
-                        :open="openSection === 'roles'"
-                        class="group/collapsible"
-                        @update:open="updateOpenSection('roles', $event)"
-                    >
-                        <SidebarMenuItem>
-                            <CollapsibleTrigger as-child
-                                ><SidebarMenuButton
-                                    tooltip="Role Management"
-                                    :is-active="rolesAreActive"
-                                    ><ShieldCheck /><span>Role Management</span
-                                    ><ChevronRight
-                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" /></SidebarMenuButton
-                            ></CollapsibleTrigger>
-                            <CollapsibleContent
-                                ><SidebarMenuSub
-                                    ><SidebarMenuSubItem
-                                        v-for="item in roleNavItems"
-                                        :key="item.title"
-                                        ><SidebarMenuSubButton
-                                            as-child
-                                            :is-active="isCurrentUrl(item.href)"
-                                            ><Link :href="item.href"
-                                                ><span>{{
-                                                    item.title
-                                                }}</span></Link
-                                            ></SidebarMenuSubButton
-                                        ></SidebarMenuSubItem
-                                    ></SidebarMenuSub
-                                ></CollapsibleContent
-                            >
-                        </SidebarMenuItem>
-                    </Collapsible>
                 </SidebarMenu>
             </SidebarGroup>
 
@@ -325,11 +274,11 @@ const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
                         <SidebarMenuItem>
                             <CollapsibleTrigger as-child>
                                 <SidebarMenuButton
-                                    tooltip="Product Management"
+                                    tooltip="Products"
                                     :is-active="catalogIsActive"
                                 >
                                     <Package />
-                                    <span>Product Management</span>
+                                    <span>Products</span>
                                     <ChevronRight
                                         class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
                                     />

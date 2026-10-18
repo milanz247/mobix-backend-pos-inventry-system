@@ -89,7 +89,7 @@ class SaleService
                     'payload_hash' => $payloadHash,
                     'cashier_id' => $user->id,
                     'source' => $data['source'],
-                    'customer_name' => filled($data['customer_name'] ?? null) ? trim((string) $data['customer_name']) : null,
+                    'customer_name' => filled($data['customer_name'] ?? null) ? trim((string) $data['customer_name']) : __('Walk-in customer'),
                     'customer_phone' => filled($data['customer_phone'] ?? null) ? trim((string) $data['customer_phone']) : null,
                     'customer_email' => filled($data['customer_email'] ?? null) ? Str::lower(trim((string) $data['customer_email'])) : null,
                     'subtotal' => $subtotal->toScale(2, RoundingMode::HalfUp)->__toString(),

@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Pencil, Power, Trash2 } from '@lucide/vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Pencil, Plus, Power, Trash2 } from '@lucide/vue';
+import { onBeforeUnmount, reactive, ref, watch } from 'vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import RowActions from '@/components/management/RowActions.vue';
+import UserForm from '@/components/management/UserForm.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
-import { create, destroy, edit, index } from '@/routes/users';
+import { destroy, edit, index, store } from '@/routes/users';
 import { update as updateStatus } from '@/routes/users/status';
 import type { Auth } from '@/types';
 
@@ -23,7 +32,7 @@ type User = {
 };
 type LinkItem = { url: string | null; label: string; active: boolean };
 
-defineProps<{
+const props = defineProps<{
     users: { data: User[]; links: LinkItem[] };
     roles: Role[];
     statuses: { value: string; label: string }[];
@@ -32,6 +41,14 @@ defineProps<{
 
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string) => auth.permissions.includes(permission);
+const canAddUser = can('users.create') && can('users.assign-roles');
+const addUserOpen = ref(false);
+const searchText = ref(props.filters.search ?? '');
+const activeFilters = reactive({
+    role: props.filters.role ?? '',
+    status: props.filters.status ?? '',
+});
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const {
     isOpen: confirmationOpen,
     title: confirmationTitle,
@@ -42,6 +59,72 @@ const {
     setOpen: setConfirmationOpen,
     confirm: confirmAction,
 } = useConfirmationDialog();
+
+const queryFilters = (): Record<string, string | number> => {
+    const query: Record<string, string | number> = {};
+
+    if (searchText.value.trim()) {
+        query.search = searchText.value.trim();
+    }
+    if (activeFilters.role) {
+        query.role = activeFilters.role;
+    }
+    if (activeFilters.status) {
+        query.status = activeFilters.status;
+    }
+
+    return query;
+};
+
+const visitUsers = (): void => {
+    router.get(index.url(), queryFilters(), {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+        only: ['users', 'filters'],
+    });
+};
+
+watch(searchText, () => {
+    if (searchTimer) {
+        clearTimeout(searchTimer);
+    }
+
+    searchTimer = setTimeout(visitUsers, 250);
+});
+
+watch(
+    () => props.filters,
+    (filters) => {
+        searchText.value = filters.search ?? '';
+        activeFilters.role = filters.role ?? '';
+        activeFilters.status = filters.status ?? '';
+    },
+    { deep: true },
+);
+
+onBeforeUnmount(() => {
+    if (searchTimer) {
+        clearTimeout(searchTimer);
+    }
+});
+
+const filterChanged = (event: Event): void => {
+    const target = event.target;
+
+    if (!(target instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    if (searchTimer) {
+        clearTimeout(searchTimer);
+    }
+
+    const key = target.name as keyof typeof activeFilters;
+    activeFilters[key] = target.value;
+    visitUsers();
+};
+
 const changeStatus = (user: User) => {
     const status = user.status === 'active' ? 'inactive' : 'active';
     const action = status === 'inactive' ? 'Deactivate' : 'Activate';
@@ -62,6 +145,7 @@ const changeStatus = (user: User) => {
             ),
     });
 };
+
 const remove = (user: User) => {
     request({
         title: `Delete ${user.name}?`,
@@ -74,39 +158,48 @@ const remove = (user: User) => {
     });
 };
 
-defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
+defineOptions({
+    layout: { breadcrumbs: [{ title: 'User management', href: index() }] },
+});
 </script>
 
 <template>
-    <Head title="Users" />
+    <Head title="User management" />
     <section class="page-shell">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
-                title="Users"
-                description="Invite teammates and manage roles and account status."
+                title="User management"
+                description="Invite teammates and manage their roles and account status."
             />
-            <Button v-if="can('users.create')" as-child
-                ><Link :href="create()">Invite user</Link></Button
-            >
+            <Button v-if="canAddUser" type="button" @click="addUserOpen = true">
+                <Plus aria-hidden="true" />
+                Add user
+            </Button>
         </div>
 
-        <Form
-            :action="index.url()"
-            method="get"
-            class="filter-panel grid gap-3 sm:grid-cols-4"
-        >
+        <div class="filter-panel grid gap-3 sm:grid-cols-3">
             <Input
+                v-model="searchText"
                 name="search"
                 placeholder="Search users"
-                :default-value="filters.search"
             />
-            <select name="role" :value="filters.role ?? ''" class="w-full">
+            <select
+                name="role"
+                :value="activeFilters.role"
+                class="w-full"
+                @change="filterChanged"
+            >
                 <option value="">All roles</option>
                 <option v-for="role in roles" :key="role.id" :value="role.id">
                     {{ role.name }}
                 </option>
             </select>
-            <select name="status" :value="filters.status ?? ''" class="w-full">
+            <select
+                name="status"
+                :value="activeFilters.status"
+                class="w-full"
+                @change="filterChanged"
+            >
                 <option value="">All statuses</option>
                 <option
                     v-for="status in statuses"
@@ -116,8 +209,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                     {{ status.label }}
                 </option>
             </select>
-            <Button variant="outline">Filter</Button>
-        </Form>
+        </div>
 
         <div class="table-panel">
             <table class="data-table">
@@ -132,7 +224,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                     <tr>
                         <th scope="col">User</th>
                         <th scope="col">Contact</th>
-                        <th scope="col">Roles</th>
+                        <th scope="col">Role</th>
                         <th scope="col">Status</th>
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
@@ -152,8 +244,9 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                                     v-for="role in user.roles"
                                     :key="role.id"
                                     variant="secondary"
-                                    >{{ role.name }}</Badge
                                 >
+                                    {{ role.name }}
+                                </Badge>
                             </div>
                         </td>
                         <td>
@@ -163,8 +256,9 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                                         ? 'success'
                                         : 'secondary'
                                 "
-                                >{{ user.status }}</Badge
                             >
+                                {{ user.status }}
+                            </Badge>
                         </td>
                         <td class="text-right">
                             <RowActions
@@ -226,6 +320,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                 </tbody>
             </table>
         </div>
+
         <nav class="flex flex-wrap gap-2" aria-label="Pagination">
             <Button
                 v-for="link in users.links"
@@ -242,6 +337,28 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Users', href: index() }] } });
                 />
             </Button>
         </nav>
+
+        <Dialog v-model:open="addUserOpen">
+            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>Add user</DialogTitle>
+                    <DialogDescription>
+                        Add account details, choose a role, and optionally email
+                        a password setup link.
+                    </DialogDescription>
+                </DialogHeader>
+                <UserForm
+                    embedded
+                    :action="store.url()"
+                    method="post"
+                    :roles="roles"
+                    :statuses="statuses"
+                    @cancel="addUserOpen = false"
+                    @success="addUserOpen = false"
+                />
+            </DialogContent>
+        </Dialog>
+
         <ConfirmActionDialog
             :open="confirmationOpen"
             :title="confirmationTitle"

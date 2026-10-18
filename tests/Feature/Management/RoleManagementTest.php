@@ -6,6 +6,7 @@ use App\Models\User;
 use App\PermissionName;
 use App\SystemRole;
 use Database\Seeders\RolePermissionSeeder;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 
 function roleManagementOwner(): User
@@ -28,9 +29,22 @@ test('owner can create and update a role with permissions', function () {
     $role = Role::findByName('Supervisor');
     $this->actingAs($owner)->put(route('roles.update', $role), [
         'name' => 'Floor Supervisor', 'description' => 'Updated', 'permission_ids' => [$permission->id],
-    ])->assertSessionHasNoErrors();
+    ])->assertRedirect(route('roles.index'))->assertSessionHasNoErrors();
 
     expect($role->refresh()->name)->toBe('Floor Supervisor')->and($role->hasPermissionTo($permission))->toBeTrue();
+});
+
+test('roles page includes permissions for the create role dialog', function () {
+    $owner = roleManagementOwner();
+
+    $this->actingAs($owner)
+        ->get(route('roles.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('management/roles/Index')
+            ->has('roles')
+            ->has('permissionGroups')
+            ->etc());
 });
 
 test('system and assigned roles cannot be deleted', function () {

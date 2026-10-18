@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { Pencil, Power } from '@lucide/vue';
+import { Pencil, Plus, Power, Trash2 } from '@lucide/vue';
+import { toast } from 'vue-sonner';
+import BrandForm from '@/components/catalog/BrandForm.vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import RowActions from '@/components/management/RowActions.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
-import { create, edit, index } from '@/routes/brands';
+import { destroy, edit, index, store } from '@/routes/brands';
 import { update as updateStatus } from '@/routes/brands/status';
 import type { Auth } from '@/types';
 
@@ -32,6 +41,7 @@ const props = defineProps<{
 
 const search = ref(props.filters.search ?? '');
 const selectedStatus = ref(props.filters.status ?? '');
+const createBrandOpen = ref(false);
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 watch([search, selectedStatus], () => {
     if (filterTimer) clearTimeout(filterTimer);
@@ -92,6 +102,23 @@ const changeStatus = (brand: Brand): void => {
     });
 };
 
+const remove = (brand: Brand): void => {
+    request({
+        title: `Delete ${brand.name}?`,
+        description:
+            'This brand will be permanently deleted. Brands assigned to products cannot be deleted.',
+        confirmLabel: 'Delete brand',
+        destructive: true,
+        onConfirm: () =>
+            router.delete(destroy.url(brand.id), {
+                preserveScroll: true,
+                onError: (errors) => {
+                    if (errors.brand) toast.error(errors.brand);
+                },
+            }),
+    });
+};
+
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Brands', href: index() }] },
 });
@@ -105,8 +132,13 @@ defineOptions({
                 title="Brands"
                 description="Manage the manufacturers and labels associated with products."
             />
-            <Button v-if="can('brands.create')" as-child>
-                <Link :href="create()">Create brand</Link>
+            <Button
+                v-if="can('brands.create')"
+                type="button"
+                @click="createBrandOpen = true"
+            >
+                <Plus aria-hidden="true" />
+                Create brand
             </Button>
         </div>
 
@@ -226,6 +258,18 @@ defineOptions({
                                 >
                                     <Power aria-hidden="true" />
                                 </Button>
+                                <Button
+                                    v-if="can('brands.deactivate')"
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action text-destructive hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                                    :aria-label="`Delete ${brand.name}`"
+                                    :title="`Delete ${brand.name}`"
+                                    @click="remove(brand)"
+                                >
+                                    <Trash2 aria-hidden="true" />
+                                </Button>
                             </RowActions>
                         </td>
                     </tr>
@@ -258,6 +302,24 @@ defineOptions({
                 />
             </Button>
         </nav>
+        <Dialog v-model:open="createBrandOpen">
+            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Create brand</DialogTitle>
+                    <DialogDescription>
+                        Add a manufacturer or brand to the product catalogue.
+                    </DialogDescription>
+                </DialogHeader>
+                <BrandForm
+                    embedded
+                    :action="store.url()"
+                    method="post"
+                    :statuses="statuses"
+                    @cancel="createBrandOpen = false"
+                    @success="createBrandOpen = false"
+                />
+            </DialogContent>
+        </Dialog>
         <ConfirmActionDialog
             :open="confirmationOpen"
             :title="confirmationTitle"

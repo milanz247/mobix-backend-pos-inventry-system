@@ -1,15 +1,25 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Pencil, Trash2 } from '@lucide/vue';
+import { Pencil, Plus, Trash2 } from '@lucide/vue';
+import { ref } from 'vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
+import RoleForm from '@/components/management/RoleForm.vue';
 import RowActions from '@/components/management/RowActions.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
-import { create, destroy, edit, index } from '@/routes/roles';
+import { destroy, edit, index, store } from '@/routes/roles';
 import type { Auth } from '@/types';
 
+type Permission = { id: number; name: string; label: string };
 type Role = {
     id: number;
     name: string;
@@ -18,9 +28,13 @@ type Role = {
     users_count: number;
     permissions_count: number;
 };
-defineProps<{ roles: Role[] }>();
+defineProps<{
+    roles: Role[];
+    permissionGroups: Record<string, Permission[]>;
+}>();
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string) => auth.permissions.includes(permission);
+const createRoleOpen = ref(false);
 const {
     isOpen: confirmationOpen,
     title: confirmationTitle,
@@ -53,9 +67,14 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                 title="Roles"
                 description="Manage reusable permission sets for user accounts."
             />
-            <Button v-if="can('roles.create')" as-child
-                ><Link :href="create()">Create role</Link></Button
+            <Button
+                v-if="can('roles.create')"
+                type="button"
+                @click="createRoleOpen = true"
             >
+                <Plus aria-hidden="true" />
+                Create role
+            </Button>
         </div>
         <div class="table-panel">
             <table class="data-table">
@@ -141,6 +160,25 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                 </tbody>
             </table>
         </div>
+        <Dialog v-model:open="createRoleOpen">
+            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
+                <DialogHeader>
+                    <DialogTitle>Create role</DialogTitle>
+                    <DialogDescription>
+                        Name the role and select the access permissions it
+                        needs.
+                    </DialogDescription>
+                </DialogHeader>
+                <RoleForm
+                    embedded
+                    :action="store.url()"
+                    method="post"
+                    :permission-groups="permissionGroups"
+                    @cancel="createRoleOpen = false"
+                    @success="createRoleOpen = false"
+                />
+            </DialogContent>
+        </Dialog>
         <ConfirmActionDialog
             :open="confirmationOpen"
             :title="confirmationTitle"

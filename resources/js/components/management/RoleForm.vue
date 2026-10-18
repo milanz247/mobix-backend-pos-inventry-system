@@ -22,6 +22,11 @@ const props = defineProps<{
     method: 'post' | 'put';
     permissionGroups: Record<string, Permission[]>;
     role?: Role;
+    embedded?: boolean;
+}>();
+const emit = defineEmits<{
+    cancel: [];
+    success: [];
 }>();
 
 const selectedPermissions = ref<Record<number, boolean>>(
@@ -57,6 +62,7 @@ const setGroupPermissions = (
         :action="action"
         :method="method"
         class="form-section space-y-7"
+        @success="emit('success')"
         v-slot="{ errors, processing }"
     >
         <div class="grid gap-5 sm:grid-cols-2">
@@ -167,8 +173,15 @@ const setGroupPermissions = (
             <Button :disabled="processing">{{
                 role ? 'Save changes' : 'Create role'
             }}</Button>
-            <Button variant="outline" as-child
+            <Button v-if="!embedded" variant="outline" as-child
                 ><Link :href="index()">Cancel</Link></Button
+            >
+            <Button
+                v-else
+                type="button"
+                variant="outline"
+                @click="emit('cancel')"
+                >Cancel</Button
             >
         </div>
     </Form>

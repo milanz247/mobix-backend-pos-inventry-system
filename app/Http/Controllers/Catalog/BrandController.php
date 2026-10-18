@@ -12,7 +12,9 @@ use App\Models\Business;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -46,13 +48,6 @@ class BrandController extends Controller
         return Inertia::render('catalog/brands/Index', [
             'brands' => $brands,
             'filters' => ['search' => $search, 'status' => $status->value ?? ''],
-            'statuses' => $this->statuses(),
-        ]);
-    }
-
-    public function create(): Response
-    {
-        return Inertia::render('catalog/brands/Create', [
             'statuses' => $this->statuses(),
         ]);
     }
@@ -138,6 +133,34 @@ class BrandController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Brand status updated.')]);
 
         return back();
+    }
+
+    public function destroy(Brand $brand): RedirectResponse
+    {
+        $logoPath = DB::transaction(function () use ($brand): ?string {
+            $managedBrand = Business::query()->sole()->brands()
+                ->lockForUpdate()
+                ->findOrFail($brand->id);
+
+            if ($managedBrand->products()->exists()) {
+                throw ValidationException::withMessages([
+                    'brand' => __('This brand cannot be deleted because it is assigned to products.'),
+                ]);
+            }
+
+            $logoPath = $managedBrand->logo_path;
+            $managedBrand->delete();
+
+            return $logoPath;
+        });
+
+        if ($logoPath !== null && ! Brand::query()->where('logo_path', $logoPath)->exists()) {
+            Storage::disk('public')->delete($logoPath);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Brand deleted.')]);
+
+        return to_route('brands.index');
     }
 
     /** @return list<array{value: string, label: string}> */

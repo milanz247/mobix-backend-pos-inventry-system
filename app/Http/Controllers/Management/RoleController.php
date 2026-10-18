@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\PermissionName;
 use App\Services\RoleAdministrationService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\Permission\Models\Permission;
@@ -18,10 +19,13 @@ class RoleController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('management/roles/Index', [
             'roles' => Role::query()->withCount(['users', 'permissions'])->orderByDesc('is_system')->orderBy('name')->get(),
+            'permissionGroups' => $request->user()->can(PermissionName::RolesCreate->value)
+                ? $this->permissionGroups()
+                : [],
         ]);
     }
 

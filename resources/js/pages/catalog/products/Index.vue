@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ChevronDown, Eye, Pencil, Power, Search, X } from '@lucide/vue';
+import { ChevronDown, Eye, Pencil, Power, Search, Trash2, X } from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import RowActions from '@/components/management/RowActions.vue';
@@ -9,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
-import { create, edit, index, show } from '@/routes/products';
+import { create, destroy, edit, index, show } from '@/routes/products';
 import { update as updateStatus } from '@/routes/products/status';
 import type { Auth } from '@/types';
 
@@ -242,6 +243,23 @@ function changeStatus(product: Product): void {
                 { status },
                 { preserveScroll: true },
             ),
+    });
+}
+
+function remove(product: Product): void {
+    request({
+        title: `Delete ${product.name}?`,
+        description:
+            'This permanently deletes the product and its variants. Products with transaction, inventory, or bundle history cannot be deleted.',
+        confirmLabel: 'Delete product',
+        destructive: true,
+        onConfirm: () =>
+            router.delete(destroy.url(product.id), {
+                preserveScroll: true,
+                onError: (errors) => {
+                    if (errors.product) toast.error(errors.product);
+                },
+            }),
     });
 }
 
@@ -591,6 +609,21 @@ defineOptions({
                                     @click="changeStatus(product)"
                                     ><Power aria-hidden="true"
                                 /></Button>
+                                <Button
+                                    v-if="
+                                        can('products.deactivate') &&
+                                        product.status === 'inactive'
+                                    "
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action text-destructive hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                                    :aria-label="`Delete ${product.name}`"
+                                    :title="`Delete ${product.name}`"
+                                    @click="remove(product)"
+                                >
+                                    <Trash2 aria-hidden="true" />
+                                </Button>
                             </RowActions>
                         </td>
                     </tr>

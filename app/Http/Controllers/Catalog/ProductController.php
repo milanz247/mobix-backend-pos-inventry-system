@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Catalog;
 
+use App\Actions\Catalog\DeleteProduct;
 use App\Actions\Catalog\SaveProduct;
 use App\CatalogStatus;
 use App\Http\Controllers\Controller;
@@ -270,6 +271,20 @@ class ProductController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Product status updated.')]);
 
         return back();
+    }
+
+    public function destroy(Product $product, DeleteProduct $deleteProduct): RedirectResponse
+    {
+        $business = Business::query()->sole();
+        $imagePath = $deleteProduct->handle($business, $product);
+
+        if ($imagePath !== null && ! Product::query()->where('image_path', $imagePath)->exists()) {
+            Storage::disk('public')->delete($imagePath);
+        }
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Product deleted.')]);
+
+        return to_route('products.index');
     }
 
     /**

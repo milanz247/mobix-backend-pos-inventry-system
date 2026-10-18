@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { Pencil, Power } from '@lucide/vue';
+import { Pencil, Plus, Power, Trash2 } from '@lucide/vue';
+import { toast } from 'vue-sonner';
+import CategoryForm from '@/components/catalog/CategoryForm.vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import RowActions from '@/components/management/RowActions.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
-import { create, edit, index } from '@/routes/categories';
+import { destroy, edit, index, store } from '@/routes/categories';
 import { update as updateStatus } from '@/routes/categories/status';
 import type { Auth } from '@/types';
 
@@ -31,6 +40,7 @@ const props = defineProps<{
 
 const search = ref(props.filters.search ?? '');
 const selectedStatus = ref(props.filters.status ?? '');
+const createCategoryOpen = ref(false);
 let filterTimer: ReturnType<typeof setTimeout> | undefined;
 watch([search, selectedStatus], () => {
     if (filterTimer) clearTimeout(filterTimer);
@@ -91,6 +101,23 @@ const changeStatus = (category: Category): void => {
     });
 };
 
+const remove = (category: Category): void => {
+    request({
+        title: `Delete ${category.name}?`,
+        description:
+            'This category will be permanently deleted. Categories assigned to products cannot be deleted.',
+        confirmLabel: 'Delete category',
+        destructive: true,
+        onConfirm: () =>
+            router.delete(destroy.url(category.id), {
+                preserveScroll: true,
+                onError: (errors) => {
+                    if (errors.category) toast.error(errors.category);
+                },
+            }),
+    });
+};
+
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Categories', href: index() }] },
 });
@@ -104,8 +131,13 @@ defineOptions({
                 title="Categories"
                 description="Organize phones, accessories, spare parts, and other products."
             />
-            <Button v-if="can('categories.create')" as-child>
-                <Link :href="create()">Create category</Link>
+            <Button
+                v-if="can('categories.create')"
+                type="button"
+                @click="createCategoryOpen = true"
+            >
+                <Plus aria-hidden="true" />
+                Create category
             </Button>
         </div>
 
@@ -204,6 +236,18 @@ defineOptions({
                                 >
                                     <Power aria-hidden="true" />
                                 </Button>
+                                <Button
+                                    v-if="can('categories.deactivate')"
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    class="row-action text-destructive hover:border-destructive/30 hover:bg-destructive/5 hover:text-destructive"
+                                    :aria-label="`Delete ${category.name}`"
+                                    :title="`Delete ${category.name}`"
+                                    @click="remove(category)"
+                                >
+                                    <Trash2 aria-hidden="true" />
+                                </Button>
                             </RowActions>
                         </td>
                     </tr>
@@ -236,6 +280,24 @@ defineOptions({
                 />
             </Button>
         </nav>
+        <Dialog v-model:open="createCategoryOpen">
+            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Create category</DialogTitle>
+                    <DialogDescription>
+                        Group products into a clear catalogue category.
+                    </DialogDescription>
+                </DialogHeader>
+                <CategoryForm
+                    embedded
+                    :action="store.url()"
+                    method="post"
+                    :statuses="statuses"
+                    @cancel="createCategoryOpen = false"
+                    @success="createCategoryOpen = false"
+                />
+            </DialogContent>
+        </Dialog>
         <ConfirmActionDialog
             :open="confirmationOpen"
             :title="confirmationTitle"

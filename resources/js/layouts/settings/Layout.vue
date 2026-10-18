@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import { Building2, FileText, MapPin, ShieldCheck } from '@lucide/vue';
+import {
+    Building2,
+    FileText,
+    MapPin,
+    MonitorCog,
+    ShieldCheck,
+} from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { edit as editBusiness } from '@/routes/business-settings';
 import { edit as editSecurity } from '@/routes/security';
 import { edit as editInvoices } from '@/routes/invoice-settings';
+import { edit as editPos } from '@/routes/pos-settings';
 import { index as locationsIndex } from '@/routes/locations';
 import type { Auth, NavItem } from '@/types';
 
@@ -27,6 +34,12 @@ const sidebarNavItems = computed<SettingsNavItem[]>(() => [
                   description: 'Receipt design and print details',
                   href: editInvoices(),
                   icon: FileText,
+              },
+              {
+                  title: 'POS screen',
+                  description: 'Checkout layout and controls',
+                  href: editPos(),
+                  icon: MonitorCog,
               },
           ]
         : []),

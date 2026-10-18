@@ -24,11 +24,15 @@ const props = defineProps<{
     roles: Role[];
     statuses: Option[];
     managedUser?: ManagedUser;
+    embedded?: boolean;
+}>();
+const emit = defineEmits<{
+    cancel: [];
+    success: [];
 }>();
 const sendInvite = ref(!props.managedUser);
 
-const hasRole = (roleId: number): boolean =>
-    props.managedUser?.roles.some((role) => role.id === roleId) ?? false;
+const selectedRoleId = props.managedUser?.roles[0]?.id;
 </script>
 
 <template>
@@ -39,6 +43,7 @@ const hasRole = (roleId: number): boolean =>
         :reset-on-success="
             method === 'post' ? ['password', 'password_confirmation'] : []
         "
+        @success="emit('success')"
         v-slot="{ errors, processing }"
     >
         <div class="grid gap-5 sm:grid-cols-2">
@@ -138,26 +143,22 @@ const hasRole = (roleId: number): boolean =>
             </div>
         </div>
 
-        <fieldset class="space-y-3 rounded-xl border border-border/80 p-4">
-            <legend class="px-1 text-sm font-medium">Roles</legend>
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <label
-                    v-for="role in roles"
-                    :key="role.id"
-                    class="choice-card items-center"
-                >
-                    <input
-                        type="checkbox"
-                        name="role_ids[]"
-                        :value="role.id"
-                        :checked="hasRole(role.id)"
-                        class="size-4 rounded border-input"
-                    />
+        <div class="grid gap-2">
+            <Label for="role_id">Role</Label>
+            <select
+                id="role_id"
+                name="role_ids[]"
+                required
+                :value="selectedRoleId ?? ''"
+                class="w-full"
+            >
+                <option value="" disabled>Select a role</option>
+                <option v-for="role in roles" :key="role.id" :value="role.id">
                     {{ role.name }}
-                </label>
-            </div>
+                </option>
+            </select>
             <InputError :message="errors.role_ids" />
-        </fieldset>
+        </div>
 
         <div class="flex flex-wrap gap-3 border-t border-border/70 pt-6">
             <Button :disabled="processing">{{
@@ -167,8 +168,15 @@ const hasRole = (roleId: number): boolean =>
                       ? 'Send invitation'
                       : 'Create user'
             }}</Button>
-            <Button variant="outline" as-child
+            <Button v-if="!embedded" variant="outline" as-child
                 ><Link :href="index()">Cancel</Link></Button
+            >
+            <Button
+                v-else
+                type="button"
+                variant="outline"
+                @click="emit('cancel')"
+                >Cancel</Button
             >
         </div>
     </Form>

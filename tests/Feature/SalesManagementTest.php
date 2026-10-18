@@ -82,7 +82,7 @@ test('cashier can post a paid sale and quantity movement references the sale', f
     $response = $this->actingAs($user)->post(route('pos.checkout'), $payload);
     $response->assertSessionHasNoErrors();
     $sale = Sale::query()->sole();
-    $response->assertRedirect(route('sales.show', $sale));
+    $response->assertRedirect(route('pos.index', ['location_id' => $location->id]));
     $movement = StockMovement::query()->where('movement_type', 'sale')->sole();
     expect($sale->total)->toBe('100.00')
         ->and($sale->paid_total)->toBe('100.00')
@@ -91,6 +91,19 @@ test('cashier can post a paid sale and quantity movement references the sale', f
         ->and($movement->quantity_delta)->toBe('-1.000')
         ->and($movement->reference_type)->toBe(Sale::class)
         ->and((int) $movement->reference_id)->toBe($sale->id);
+});
+
+test('checkout uses a walk-in customer when no customer name is entered', function () {
+    ['user' => $user, 'location' => $location, 'quantityVariant' => $variant] = salesFeatureContext(
+        'sales.pos', 'sales.create', 'sales.view', 'inventory.opening',
+    );
+    receiveSaleTestStock($user, $location, $variant, '1.000');
+    $payload = saleCheckoutPayload($location, $variant, Str::uuid()->toString());
+    $payload['customer_name'] = '';
+
+    $this->actingAs($user)->post(route('pos.checkout'), $payload)->assertSessionHasNoErrors();
+
+    expect(Sale::query()->sole()->customer_name)->toBe('Walk-in customer');
 });
 
 test('cashier can record the source of a POS sale', function () {
@@ -296,6 +309,8 @@ test('POS exposes location stock and stock receiving access for eligible product
         ->assertInertia(fn (Assert $page) => $page
             ->component('sales/Pos')
             ->where('canReceiveStock', true)
+            ->where('posSettings.show_receipt_after_sale', true)
+            ->where('posSettings.products_per_page', 24)
             ->where('variants.data.0.id', $variant->id)
             ->where('variants.data.0.quantity_on_hand', '0.000'));
 });
@@ -304,7 +319,8 @@ test('POS exposes the next product page for infinite scrolling', function () {
     ['user' => $user, 'business' => $business, 'location' => $location, 'category' => $category] = salesFeatureContext(
         'sales.pos',
     );
-    Product::factory()->count(24)->for($business)->for($category)->create()
+    $business->update(['pos_products_per_page' => 12]);
+    Product::factory()->count(12)->for($business)->for($category)->create()
         ->each(fn (Product $product) => ProductVariant::factory()->for($business)->for($product)->create());
 
     $this->actingAs($user)
@@ -312,7 +328,7 @@ test('POS exposes the next product page for infinite scrolling', function () {
         ->withHeader('X-Inertia-Version', app(HandleInertiaRequests::class)->version(request()))
         ->get(route('pos.index', ['location_id' => $location->id]))
         ->assertOk()
-        ->assertJsonCount(24, 'props.variants.data')
+        ->assertJsonCount(12, 'props.variants.data')
         ->assertJsonPath('mergeProps.0', 'variants.data')
         ->assertJsonPath('scrollProps.variants.nextPage', 2);
 });

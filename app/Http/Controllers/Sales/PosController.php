@@ -26,11 +26,13 @@ class PosController extends Controller
         $business = $locationAccess->business();
         $locations = $locationAccess->accessibleQuery($user)->where('status', 'active')->orderByDesc('is_main')->orderBy('name')->get(['id', 'name', 'code']);
         abort_if($locations->isEmpty(), 403);
-        $locationId = $request->integer('location_id') ?: (int) $locations->first()->id;
+        $locationId = $business->pos_show_location_filter
+            ? ($request->integer('location_id') ?: (int) $locations->first()->id)
+            : (int) $locations->first()->id;
         $location = $locationAccess->accessibleQuery($user)->where('status', 'active')->findOrFail($locationId);
         $search = mb_substr($request->string('search')->trim()->toString(), 0, 100);
-        $categoryId = $request->integer('category_id') ?: null;
-        $brandId = $request->integer('brand_id') ?: null;
+        $categoryId = $business->pos_show_category_filter ? ($request->integer('category_id') ?: null) : null;
+        $brandId = $business->pos_show_brand_filter ? ($request->integer('brand_id') ?: null) : null;
         $matchingDevice = null;
 
         if ($search !== '') {
@@ -65,7 +67,7 @@ class PosController extends Controller
             }))
             ->when($categoryId !== null, fn (Builder $query): Builder => $query->whereHas('product', fn (Builder $query): Builder => $query->where('category_id', $categoryId)))
             ->when($brandId !== null, fn (Builder $query): Builder => $query->whereHas('product', fn (Builder $query): Builder => $query->where('brand_id', $brandId)))
-            ->orderBy('sku')->paginate(24)->withQueryString()->through(fn (ProductVariant $variant): array => [
+            ->orderBy('sku')->paginate($business->pos_products_per_page)->withQueryString()->through(fn (ProductVariant $variant): array => [
                 'id' => $variant->id,
                 'name' => $variant->product->name,
                 'variant' => $variant->name,
@@ -97,6 +99,21 @@ class PosController extends Controller
                 'value' => $source->value,
                 'label' => $source->label(),
             ], SaleSource::cases()),
+            'posSettings' => [
+                'show_sale_source' => $business->pos_show_sale_source,
+                'show_customer_name' => $business->pos_show_customer_name,
+                'show_customer_phone' => $business->pos_show_customer_phone,
+                'show_customer_email' => $business->pos_show_customer_email,
+                'show_sale_notes' => $business->pos_show_sale_notes,
+                'show_pay_exact' => $business->pos_show_pay_exact,
+                'show_date_time' => $business->pos_show_date_time,
+                'show_sales_history' => $business->pos_show_sales_history,
+                'show_category_filter' => $business->pos_show_category_filter,
+                'show_brand_filter' => $business->pos_show_brand_filter,
+                'show_location_filter' => $business->pos_show_location_filter,
+                'show_receipt_after_sale' => $business->pos_show_receipt_after_sale,
+                'products_per_page' => $business->pos_products_per_page,
+            ],
             'canOverridePrice' => $user->can('sales.price-override'),
             'canDiscount' => $user->can('sales.discount'),
             'canCredit' => $user->can('sales.credit'),
@@ -105,11 +122,26 @@ class PosController extends Controller
         ]);
     }
 
-    public function checkout(CheckoutRequest $request, SaleService $sales): RedirectResponse
+    public function checkout(CheckoutRequest $request, SaleService $sales, LocationAccessService $locationAccess): RedirectResponse
     {
         $sale = $sales->checkout($request->user(), $request->validated());
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Sale :number completed.', ['number' => $sale->sale_number])]);
 
-        return to_route('sales.show', $sale);
+        $business = $locationAccess->business();
+
+        if ($business->pos_show_receipt_after_sale) {
+            $cashPayment = $sale->payments->firstWhere('method', 'cash');
+
+            Inertia::flash('completedSale', [
+                'id' => $sale->id,
+                'sale_number' => $sale->sale_number,
+                'customer' => $sale->customer_name ?: __('Walk-in customer'),
+                'total' => $sale->total,
+                'cash_tendered' => $cashPayment === null ? null : $cashPayment->cash_tendered,
+                'change_given' => $cashPayment === null ? '0.00' : $cashPayment->change_given,
+            ]);
+        }
+
+        return to_route('pos.index', ['location_id' => $sale->location_id]);
     }
 }

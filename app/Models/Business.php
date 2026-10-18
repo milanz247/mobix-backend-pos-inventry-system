@@ -39,11 +39,24 @@ use Illuminate\Support\Carbon;
  * @property bool $invoice_show_cashier
  * @property bool $invoice_show_payment_details
  * @property bool $invoice_show_tax
+ * @property bool $pos_show_sale_source
+ * @property bool $pos_show_customer_name
+ * @property bool $pos_show_customer_phone
+ * @property bool $pos_show_customer_email
+ * @property bool $pos_show_sale_notes
+ * @property bool $pos_show_pay_exact
+ * @property bool $pos_show_date_time
+ * @property bool $pos_show_sales_history
+ * @property bool $pos_show_category_filter
+ * @property bool $pos_show_brand_filter
+ * @property bool $pos_show_location_filter
+ * @property bool $pos_show_receipt_after_sale
+ * @property int $pos_products_per_page
  * @property BusinessStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'business_type', 'email', 'phone', 'address', 'city', 'country', 'currency', 'timezone', 'time_format', 'logo_path', 'invoice_footer', 'invoice_return_policy', 'invoice_title', 'invoice_paper_size', 'invoice_accent_color', 'invoice_show_logo', 'invoice_show_business_details', 'invoice_show_customer', 'invoice_show_cashier', 'invoice_show_payment_details', 'invoice_show_tax', 'status'])]
+#[Fillable(['name', 'business_type', 'email', 'phone', 'address', 'city', 'country', 'currency', 'timezone', 'time_format', 'logo_path', 'invoice_footer', 'invoice_return_policy', 'invoice_title', 'invoice_paper_size', 'invoice_accent_color', 'invoice_show_logo', 'invoice_show_business_details', 'invoice_show_customer', 'invoice_show_cashier', 'invoice_show_payment_details', 'invoice_show_tax', 'pos_show_sale_source', 'pos_show_customer_name', 'pos_show_customer_phone', 'pos_show_customer_email', 'pos_show_sale_notes', 'pos_show_pay_exact', 'pos_show_date_time', 'pos_show_sales_history', 'pos_show_category_filter', 'pos_show_brand_filter', 'pos_show_location_filter', 'pos_show_receipt_after_sale', 'pos_products_per_page', 'status'])]
 class Business extends Model
 {
     /** @use HasFactory<BusinessFactory> */
@@ -52,7 +65,7 @@ class Business extends Model
     /**
      * The model's default attributes.
      *
-     * @var array<string, string>
+     * @var array<string, bool|int|string>
      */
     protected $attributes = [
         'country' => 'Sri Lanka',
@@ -69,6 +82,19 @@ class Business extends Model
         'invoice_show_cashier' => true,
         'invoice_show_payment_details' => true,
         'invoice_show_tax' => true,
+        'pos_show_sale_source' => true,
+        'pos_show_customer_name' => true,
+        'pos_show_customer_phone' => true,
+        'pos_show_customer_email' => true,
+        'pos_show_sale_notes' => true,
+        'pos_show_pay_exact' => true,
+        'pos_show_date_time' => true,
+        'pos_show_sales_history' => true,
+        'pos_show_category_filter' => true,
+        'pos_show_brand_filter' => true,
+        'pos_show_location_filter' => true,
+        'pos_show_receipt_after_sale' => true,
+        'pos_products_per_page' => 24,
     ];
 
     /**
@@ -155,6 +181,19 @@ class Business extends Model
             'invoice_show_cashier' => 'boolean',
             'invoice_show_payment_details' => 'boolean',
             'invoice_show_tax' => 'boolean',
+            'pos_show_sale_source' => 'boolean',
+            'pos_show_customer_name' => 'boolean',
+            'pos_show_customer_phone' => 'boolean',
+            'pos_show_customer_email' => 'boolean',
+            'pos_show_sale_notes' => 'boolean',
+            'pos_show_pay_exact' => 'boolean',
+            'pos_show_date_time' => 'boolean',
+            'pos_show_sales_history' => 'boolean',
+            'pos_show_category_filter' => 'boolean',
+            'pos_show_brand_filter' => 'boolean',
+            'pos_show_location_filter' => 'boolean',
+            'pos_show_receipt_after_sale' => 'boolean',
+            'pos_products_per_page' => 'integer',
             'business_type' => BusinessType::class,
             'time_format' => TimeFormat::class,
             'status' => BusinessStatus::class,

@@ -11,6 +11,8 @@ use App\Models\Business;
 use App\Models\Category;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,13 +43,6 @@ class CategoryController extends Controller
         return Inertia::render('catalog/categories/Index', [
             'categories' => $categories,
             'filters' => ['search' => $search, 'status' => $status->value ?? ''],
-            'statuses' => $this->statuses(),
-        ]);
-    }
-
-    public function create(): Response
-    {
-        return Inertia::render('catalog/categories/Create', [
             'statuses' => $this->statuses(),
         ]);
     }
@@ -94,6 +89,27 @@ class CategoryController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Category status updated.')]);
 
         return back();
+    }
+
+    public function destroy(Category $category): RedirectResponse
+    {
+        DB::transaction(function () use ($category): void {
+            $managedCategory = Business::query()->sole()->categories()
+                ->lockForUpdate()
+                ->findOrFail($category->id);
+
+            if ($managedCategory->products()->exists()) {
+                throw ValidationException::withMessages([
+                    'category' => __('This category cannot be deleted because it is assigned to products.'),
+                ]);
+            }
+
+            $managedCategory->delete();
+        });
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Category deleted.')]);
+
+        return to_route('categories.index');
     }
 
     /** @return list<array{value: string, label: string}> */
