@@ -23,6 +23,11 @@ const props = defineProps<{
     action: string;
     method: 'post' | 'put';
     supplier?: Supplier;
+    embedded?: boolean;
+}>();
+const emit = defineEmits<{
+    cancel: [];
+    success: [];
 }>();
 
 const form = useForm({
@@ -38,13 +43,21 @@ const form = useForm({
 const errors = computed(() => form.errors as Record<string, string>);
 
 function submit(): void {
-    if (props.method === 'post') form.post(props.action);
-    else form.put(props.action);
+    const options = { onSuccess: () => emit('success') };
+
+    if (props.method === 'post') {
+        form.post(props.action, options);
+    } else {
+        form.put(props.action, options);
+    }
 }
 </script>
 
 <template>
-    <form class="surface-panel space-y-6 p-5 sm:p-6" @submit.prevent="submit">
+    <form
+        :class="embedded ? 'space-y-5' : 'surface-panel space-y-6 p-5 sm:p-6'"
+        @submit.prevent="submit"
+    >
         <section class="grid gap-4 md:grid-cols-2">
             <div class="grid gap-2">
                 <Label for="supplier-name"
@@ -136,9 +149,17 @@ function submit(): void {
         <div
             class="flex flex-wrap justify-end gap-2 border-t border-border/70 pt-4"
         >
-            <Button as-child variant="outline"
-                ><Link :href="suppliersIndex()">Cancel</Link></Button
+            <Button
+                v-if="embedded"
+                type="button"
+                variant="outline"
+                @click="emit('cancel')"
             >
+                Cancel
+            </Button>
+            <Button v-else as-child variant="outline">
+                <Link :href="suppliersIndex()">Cancel</Link>
+            </Button>
             <Button type="submit" :disabled="form.processing">{{
                 form.processing ? 'Saving…' : 'Save supplier'
             }}</Button>

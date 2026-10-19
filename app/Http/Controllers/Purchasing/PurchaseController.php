@@ -116,6 +116,14 @@ class PurchaseController extends Controller
         return to_route('purchases.show', $purchase);
     }
 
+    public function destroy(Request $request, Purchase $purchase, PurchaseService $purchases): RedirectResponse
+    {
+        $purchases->deleteDraft($request->user(), $purchase);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Purchase draft deleted.')]);
+
+        return to_route('purchases.index');
+    }
+
     public function post(Request $request, Purchase $purchase, PurchaseService $purchases): RedirectResponse
     {
         $purchase = $purchases->post($request->user(), $purchase);

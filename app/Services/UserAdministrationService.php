@@ -10,6 +10,7 @@ use App\UserStatus;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class UserAdministrationService
@@ -76,7 +77,7 @@ class UserAdministrationService
 
     public function delete(User $actor, User $managedUser): void
     {
-        DB::transaction(function () use ($actor, $managedUser): void {
+        $profilePhotoPath = DB::transaction(function () use ($actor, $managedUser): ?string {
             $managedUser = User::query()->lockForUpdate()->findOrFail($managedUser->id);
             $this->ensureUserMayBeManaged($actor, $managedUser);
 
@@ -88,8 +89,15 @@ class UserAdministrationService
                 $this->ensureOwnerMayBeChanged($managedUser);
             }
 
+            $profilePhotoPath = $managedUser->profile_photo_path;
             $managedUser->delete();
+
+            return $profilePhotoPath;
         });
+
+        if ($profilePhotoPath !== null) {
+            Storage::delete($profilePhotoPath);
+        }
     }
 
     /**

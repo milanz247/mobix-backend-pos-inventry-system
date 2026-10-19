@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import AuthBackground from '@/components/AuthBackground.vue';
+import { ShieldCheck } from '@lucide/vue';
 import { home } from '@/routes';
 
 const page = usePage();
@@ -23,8 +25,9 @@ const {
 
 <template>
     <div
-        class="flex min-h-svh items-center justify-center bg-white px-5 py-12 text-slate-900 dark:bg-slate-950 dark:text-white"
+        class="relative isolate flex min-h-svh items-center justify-center px-5 py-12 text-slate-900 dark:text-white"
     >
+        <AuthBackground />
         <main :class="wide ? 'max-w-3xl' : 'max-w-md'" class="w-full">
             <Link
                 :href="home()"
@@ -38,7 +41,7 @@ const {
                 />
                 <span
                     v-else
-                    class="flex size-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-white"
+                    class="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/15"
                 >
                     <AppLogoIcon class="size-6 fill-current" />
                 </span>
@@ -47,7 +50,7 @@ const {
                 }}</span>
             </Link>
             <div
-                class="rounded-2xl border border-slate-200 bg-white p-7 sm:p-9 dark:border-slate-800 dark:bg-slate-900"
+                class="rounded-3xl border border-white bg-white/90 p-7 shadow-xl shadow-slate-200/40 backdrop-blur-sm sm:p-9 dark:border-slate-800 dark:bg-slate-900/90 dark:shadow-none"
             >
                 <div class="mb-8 space-y-2">
                     <h1 class="text-2xl font-semibold tracking-tight">
@@ -62,8 +65,9 @@ const {
                 <slot />
             </div>
             <p
-                class="mt-6 text-center text-xs text-slate-500 dark:text-slate-400"
+                class="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400"
             >
+                <ShieldCheck class="size-3.5" aria-hidden="true" />
                 Secure access for your team
             </p>
         </main>

@@ -166,6 +166,41 @@ test('the owner can customize the invoice template and hide optional details', f
         ->and($business->invoice_footer)->toBe('Thank you, come again!');
 });
 
+test('the invoice designer loads the persisted template and business details', function () {
+    $owner = User::factory()->create();
+    Business::factory()->for($owner, 'owner')->create([
+        'name' => 'Nalaka Mobile Centre',
+        'address' => 'A deliberately long business address for receipt wrapping',
+        'phone' => '+94 11 234 5678',
+        'email' => 'sales@example.com',
+        'invoice_title' => 'Tax invoice',
+        'invoice_paper_size' => 'thermal',
+        'invoice_thermal_width' => 58,
+        'invoice_accent_color' => '#1464A5',
+        'invoice_show_customer' => false,
+        'invoice_show_product_codes' => false,
+        'invoice_footer' => 'Thank you, come again!',
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('invoice-settings.edit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('settings/Invoices')
+            ->where('invoice.title', 'Tax invoice')
+            ->where('invoice.paper_size', 'thermal')
+            ->where('invoice.thermal_width', 58)
+            ->where('invoice.accent_color', '#1464A5')
+            ->where('invoice.show_customer', false)
+            ->where('invoice.show_product_codes', false)
+            ->where('invoice.footer', 'Thank you, come again!')
+            ->where('business.name', 'Nalaka Mobile Centre')
+            ->where('business.address', 'A deliberately long business address for receipt wrapping')
+            ->where('business.phone', '+94 11 234 5678')
+            ->where('business.email', 'sales@example.com'),
+        );
+});
+
 test('invoice template rejects an invalid paper format or accent color', function () {
     $owner = User::factory()->create();
     $business = Business::factory()->for($owner, 'owner')->create();

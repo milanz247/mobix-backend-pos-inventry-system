@@ -73,6 +73,23 @@ class PurchaseService
         }, 3);
     }
 
+    public function deleteDraft(User $user, Purchase $purchase): void
+    {
+        DB::transaction(function () use ($user, $purchase): void {
+            $business = $this->locationAccess->business();
+            $purchase = $business->purchases()->lockForUpdate()->findOrFail($purchase->id);
+            $this->assertPurchaseLocation($user, $purchase);
+
+            if ($purchase->status !== PurchaseStatus::Draft) {
+                throw ValidationException::withMessages([
+                    'purchase' => __('Only draft purchase invoices can be deleted. Use a purchase return for received stock.'),
+                ]);
+            }
+
+            $purchase->delete();
+        }, 3);
+    }
+
     public function post(User $user, Purchase $purchase): Purchase
     {
         return DB::transaction(function () use ($user, $purchase): Purchase {

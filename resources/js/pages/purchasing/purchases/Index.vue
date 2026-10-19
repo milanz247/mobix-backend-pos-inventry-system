@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { Eye, Pencil } from '@lucide/vue';
+import { Eye, Pencil, Trash2 } from '@lucide/vue';
+import { toast } from 'vue-sonner';
+import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import RowActions from '@/components/management/RowActions.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
 import { create, index, show, edit } from '@/routes/purchases';
+import purchaseRoutes from '@/routes/purchases';
 import type { Auth } from '@/types';
 
 type Purchase = {
@@ -76,6 +80,23 @@ onBeforeUnmount(() => {
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string): boolean =>
     auth.permissions.includes(permission);
+const confirmation = useConfirmationDialog();
+function deletePurchase(purchase: Purchase): void {
+    confirmation.request({
+        title: `Delete ${purchase.invoice_number}?`,
+        description:
+            'This permanently deletes the draft invoice and its lines. Received or posted purchases must be handled with a purchase return.',
+        confirmLabel: 'Delete draft',
+        destructive: true,
+        onConfirm: () =>
+            router.delete(purchaseRoutes.destroy(purchase.id).url, {
+                preserveScroll: true,
+                onError: (errors) => {
+                    if (errors.purchase) toast.error(errors.purchase);
+                },
+            }),
+    });
+}
 function money(value: string): string {
     const [whole = '0', fraction = '00'] = value.split('.', 2);
     return `${props.currency} ${BigInt(whole || '0').toLocaleString()}.${fraction.padEnd(2, '0').slice(0, 2)}`;
@@ -222,6 +243,17 @@ defineOptions({
                                             :href="edit(purchase.id)"
                                             :aria-label="`Edit ${purchase.invoice_number}`"
                                             ><Pencil /></Link></Button
+                                    ><Button
+                                        v-if="
+                                            can('purchases.update') &&
+                                            purchase.status === 'draft'
+                                        "
+                                        variant="destructive"
+                                        size="icon-sm"
+                                        class="row-action"
+                                        :aria-label="`Delete ${purchase.invoice_number}`"
+                                        @click="deletePurchase(purchase)"
+                                        ><Trash2 /></Button
                                 ></RowActions>
                             </td>
                         </tr>
@@ -258,5 +290,14 @@ defineOptions({
                     v-html="link.label"
             /></template>
         </nav>
+        <ConfirmActionDialog
+            :open="confirmation.isOpen.value"
+            :title="confirmation.title.value"
+            :description="confirmation.description.value"
+            :confirm-label="confirmation.confirmLabel.value"
+            :destructive="confirmation.destructive.value"
+            @update:open="confirmation.setOpen"
+            @confirm="confirmation.confirm"
+        />
     </section>
 </template>

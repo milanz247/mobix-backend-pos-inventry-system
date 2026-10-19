@@ -46,12 +46,12 @@ test('authenticated users can open their security settings without a recent pass
         ->assertInertia(fn (Assert $page) => $page->component('settings/Security'));
 });
 
-test('settings entry redirects users without business settings permission to security', function () {
+test('settings entry redirects users without business settings permission to their profile', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
         ->get('/settings')
-        ->assertRedirect(route('security.edit'));
+        ->assertRedirect(route('profile-settings.edit'));
 });
 
 test('security page renders without two factor when feature is disabled', function () {

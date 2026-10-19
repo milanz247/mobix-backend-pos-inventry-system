@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { Eye, Pencil, Power } from '@lucide/vue';
+import { Eye, Pencil, Power, Trash2 } from '@lucide/vue';
+import { toast } from 'vue-sonner';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
@@ -72,6 +73,22 @@ function changeStatus(): void {
     });
 }
 
+function deleteSupplier(): void {
+    request({
+        title: `Delete ${props.supplier.name}?`,
+        description:
+            'This permanently deletes the supplier. Deletion is allowed only when the supplier has no purchase history.',
+        confirmLabel: 'Delete supplier',
+        destructive: true,
+        onConfirm: () =>
+            router.delete(suppliers.destroy(props.supplier.id).url, {
+                onError: (errors) => {
+                    if (errors.supplier) toast.error(errors.supplier);
+                },
+            }),
+    });
+}
+
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Suppliers', href: suppliersIndex() }] },
 });
@@ -115,6 +132,15 @@ defineOptions({
                     {{
                         supplier.status === 'active' ? 'Deactivate' : 'Activate'
                     }}</Button
+                >
+                <Button
+                    v-if="
+                        can('suppliers.deactivate') &&
+                        supplier.status === 'inactive'
+                    "
+                    variant="destructive"
+                    @click="deleteSupplier"
+                    ><Trash2 /> Delete supplier</Button
                 >
             </div>
         </div>

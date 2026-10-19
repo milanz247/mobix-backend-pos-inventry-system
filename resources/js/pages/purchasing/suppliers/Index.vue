@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { Eye, Pencil } from '@lucide/vue';
+import { Eye, Pencil, Plus } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import RowActions from '@/components/management/RowActions.vue';
+import SupplierForm from '@/components/purchasing/SupplierForm.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { index, create, show, edit } from '@/routes/suppliers';
+import { edit, index, show, store } from '@/routes/suppliers';
 import type { Auth } from '@/types';
 
 type Supplier = {
@@ -29,6 +37,7 @@ const props = defineProps<{
 }>();
 const search = ref(props.filters.search ?? '');
 const status = ref(props.filters.status ?? '');
+const addSupplierOpen = ref(false);
 let timer: ReturnType<typeof setTimeout> | undefined;
 watch([search, status], () => {
     if (timer) clearTimeout(timer);
@@ -69,9 +78,13 @@ defineOptions({
                 title="Suppliers"
                 description="Manage supplier contacts and review their purchase history."
             />
-            <Button v-if="can('suppliers.create')" as-child
-                ><Link :href="create()">Add supplier</Link></Button
+            <Button
+                v-if="can('suppliers.create')"
+                type="button"
+                @click="addSupplierOpen = true"
             >
+                <Plus /> Add supplier
+            </Button>
         </div>
         <div
             class="surface-panel grid gap-2 p-2 sm:grid-cols-[minmax(0,1fr)_14rem]"
@@ -200,5 +213,23 @@ defineOptions({
                 />
             </template>
         </nav>
+        <Dialog v-model:open="addSupplierOpen">
+            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>Add supplier</DialogTitle>
+                    <DialogDescription>
+                        Save supplier contact information for future purchase
+                        invoices.
+                    </DialogDescription>
+                </DialogHeader>
+                <SupplierForm
+                    embedded
+                    :action="store().url"
+                    method="post"
+                    @cancel="addSupplierOpen = false"
+                    @success="addSupplierOpen = false"
+                />
+            </DialogContent>
+        </Dialog>
     </section>
 </template>

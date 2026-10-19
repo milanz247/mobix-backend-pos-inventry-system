@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { Form, Head, usePage } from '@inertiajs/vue3';
+import { Form, Head } from '@inertiajs/vue3';
 import { Eye, FileText, Printer } from '@lucide/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import InvoiceSettingsController from '@/actions/App/Http/Controllers/Settings/InvoiceSettingsController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import InvoiceDocument from '@/components/sales/InvoiceDocument.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/invoice-settings';
+import type { InvoiceBusiness, InvoiceSale } from '@/types/invoice';
 
 const props = defineProps<{
     invoice: {
@@ -28,12 +30,9 @@ const props = defineProps<{
         show_product_codes: boolean;
         show_line_discounts: boolean;
     };
+    business: InvoiceBusiness;
 }>();
 
-const page = usePage();
-const businessName =
-    (page.props.businessPreferences as { name?: string } | null)?.name ??
-    page.props.name;
 const title = ref(props.invoice.title);
 const paperSize = ref(props.invoice.paper_size);
 const thermalWidth = ref(props.invoice.thermal_width);
@@ -48,6 +47,68 @@ const showPaymentDetails = ref(props.invoice.show_payment_details);
 const showTax = ref(props.invoice.show_tax);
 const showProductCodes = ref(props.invoice.show_product_codes);
 const showLineDiscounts = ref(props.invoice.show_line_discounts);
+
+const previewBusiness = computed<InvoiceBusiness>(() => ({
+    ...props.business,
+    invoice_footer: footerMessage.value || null,
+    invoice_return_policy: returnPolicy.value || null,
+    invoice_title: title.value,
+    invoice_paper_size: paperSize.value,
+    invoice_thermal_width: thermalWidth.value,
+    invoice_accent_color: accentColor.value,
+    invoice_show_logo: showLogo.value,
+    invoice_show_business_details: showBusinessDetails.value,
+    invoice_show_customer: showCustomer.value,
+    invoice_show_cashier: showCashier.value,
+    invoice_show_payment_details: showPaymentDetails.value,
+    invoice_show_tax: showTax.value,
+    invoice_show_product_codes: showProductCodes.value,
+    invoice_show_line_discounts: showLineDiscounts.value,
+}));
+
+const previewSale: InvoiceSale = {
+    id: 0,
+    sale_number: 'PREVIEW-000123',
+    posted_at: '2026-10-16 14:30:00',
+    cashier: 'Staff member',
+    location: { name: 'Main Shop', code: 'MAIN' },
+    customer: {
+        name: 'Walk-in customer',
+        phone: null,
+        email: null,
+    },
+    subtotal: '5000.00',
+    discount_total: '500.00',
+    tax_total: '90.00',
+    total: '4590.00',
+    paid_total: '4590.00',
+    returned_total: '0.00',
+    refund_total: '0.00',
+    lines: [
+        {
+            id: 1,
+            product_name: 'USB-C Fast Charger with Extra-Long Product Name',
+            variant_name: '33W · New',
+            sku: 'DEMO-CHG-33W',
+            quantity: '1.000',
+            unit_price: '5000.00',
+            discount_amount: '500.00',
+            total: '4500.00',
+            imei: '352099001761481',
+            is_combo: false,
+            components: [],
+        },
+    ],
+    payments: [
+        {
+            amount: '4590.00',
+            cash_tendered: '5000.00',
+            change_given: '410.00',
+            method: 'cash',
+            reference: null,
+        },
+    ],
+};
 
 const layoutOptions = [
     { value: 'a4', label: 'A4 invoice', description: 'Full-page print layout' },
@@ -417,123 +478,18 @@ defineOptions({
                     <Eye class="size-4 text-primary" /> Live preview
                 </div>
                 <div
-                    class="rounded-2xl border border-border/70 bg-muted/30 p-4 sm:p-5"
+                    class="max-h-[calc(100vh-10rem)] overflow-auto rounded-2xl border border-border/70 bg-muted/30 p-4 sm:p-5"
                 >
-                    <article
-                        :class="
-                            paperSize === 'thermal'
-                                ? 'mx-auto max-w-[260px]'
-                                : 'mx-auto max-w-sm'
-                        "
-                        class="space-y-4 rounded-xl border bg-white p-5 text-slate-800 shadow-sm transition-all"
-                        :style="{
-                            borderTopColor: accentColor,
-                            borderTopWidth: '4px',
-                        }"
+                    <div
+                        class="mb-3 rounded-md bg-amber-100 px-2 py-1 text-center text-[10px] font-semibold tracking-wide text-amber-900 uppercase"
                     >
-                        <header class="space-y-1 text-center">
-                            <div
-                                v-if="showLogo"
-                                class="mx-auto mb-2 flex size-10 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-bold text-slate-400"
-                            >
-                                LOGO
-                            </div>
-                            <p
-                                class="text-base font-bold"
-                                :style="{ color: accentColor }"
-                            >
-                                {{ businessName }}
-                            </p>
-                            <div
-                                v-if="showBusinessDetails"
-                                class="text-[10px] leading-4 text-slate-500"
-                            >
-                                12 Main Street · Colombo<br />+94 11 234 5678 ·
-                                hello@example.com
-                            </div>
-                            <div class="my-3 border-t border-dashed" />
-                            <p class="font-semibold">
-                                {{ title || 'Sales receipt' }}
-                            </p>
-                            <p class="text-[10px] text-slate-500">
-                                SAL-2026-0000123 · 16 Oct 2026
-                            </p>
-                        </header>
-                        <div
-                            class="space-y-2 border-y border-slate-200 py-3 text-[11px]"
-                        >
-                            <div class="flex justify-between font-medium">
-                                <span>USB-C Fast Charger</span
-                                ><span>LKR 4,500.00</span>
-                            </div>
-                            <p class="text-slate-500">
-                                1 × LKR 5,000.00
-                                <span v-if="showProductCodes"
-                                    >· DEMO-CHG-33W</span
-                                >
-                            </p>
-                            <p
-                                v-if="showLineDiscounts"
-                                class="text-emerald-700"
-                            >
-                                Line discount · −LKR 500.00
-                            </p>
-                        </div>
-                        <div class="space-y-1 text-xs">
-                            <p class="flex justify-between">
-                                <span>Subtotal</span><span>LKR 4,500.00</span>
-                            </p>
-                            <p
-                                v-if="showTax"
-                                class="flex justify-between text-slate-500"
-                            >
-                                <span>Tax</span><span>LKR 0.00</span>
-                            </p>
-                            <p
-                                class="flex justify-between border-t border-slate-200 pt-2 text-sm font-bold"
-                                :style="{ color: accentColor }"
-                            >
-                                <span>Total</span><span>LKR 4,500.00</span>
-                            </p>
-                        </div>
-                        <div
-                            v-if="showCustomer || showCashier"
-                            class="space-y-1 border-t border-dashed pt-3 text-[10px] text-slate-500"
-                        >
-                            <p v-if="showCustomer">
-                                Customer · Walk-in customer
-                            </p>
-                            <p v-if="showCashier">
-                                Location · Main Shop
-                                <span class="float-right"
-                                    >Cashier · Staff member</span
-                                >
-                            </p>
-                        </div>
-                        <p
-                            v-if="showPaymentDetails"
-                            class="text-[10px] text-slate-500"
-                        >
-                            Payment · Cash
-                            <span class="float-right">LKR 4,500.00</span>
-                        </p>
-                        <footer
-                            class="border-t border-dashed pt-3 text-center text-[10px] text-slate-500"
-                        >
-                            <p>
-                                {{
-                                    footerMessage ||
-                                    'Thank you for your purchase.'
-                                }}
-                            </p>
-                            <p class="mt-1">
-                                {{
-                                    returnPolicy ||
-                                    'Keep this receipt for service and return reference.'
-                                }}
-                            </p>
-                        </footer>
-                    </article>
+                        Preview data — not a completed sale
+                    </div>
+                    <InvoiceDocument
+                        :sale="previewSale"
+                        :business="previewBusiness"
+                        preview
+                    />
                 </div>
                 <p class="text-xs leading-5 text-muted-foreground">
                     Preview uses sample sale data. Your saved template will be

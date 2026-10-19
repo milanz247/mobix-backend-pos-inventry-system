@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, CreditCard, Pencil, RotateCcw } from '@lucide/vue';
+import { ArrowLeft, CreditCard, Pencil, RotateCcw, Trash2 } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -137,6 +138,21 @@ function postInvoice(): void {
         },
     });
 }
+function deletePurchase(): void {
+    confirmation.request({
+        title: `Delete ${props.purchase.invoice_number}?`,
+        description:
+            'This permanently deletes the draft invoice and its lines. This action cannot be undone.',
+        confirmLabel: 'Delete draft',
+        destructive: true,
+        onConfirm: () =>
+            router.delete(purchases.destroy(props.purchase.id).url, {
+                onError: (errors) => {
+                    if (errors.purchase) toast.error(errors.purchase);
+                },
+            }),
+    });
+}
 function recordPayment(): void {
     form.post(purchases.payments.store(props.purchase.id).url, {
         preserveScroll: true,
@@ -197,6 +213,13 @@ defineOptions({
                     ><Link :href="edit(purchase.id)"
                         ><Pencil /> Edit draft</Link
                     ></Button
+                ><Button
+                    v-if="
+                        purchase.status === 'draft' && can('purchases.update')
+                    "
+                    variant="destructive"
+                    @click="deletePurchase"
+                    ><Trash2 /> Delete draft</Button
                 ><Button
                     v-if="
                         purchase.status === 'draft' &&

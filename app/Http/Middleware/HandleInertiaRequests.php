@@ -43,7 +43,12 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $user,
+                'user' => $user === null ? null : [
+                    ...$user->toArray(),
+                    'avatar' => $user->profile_photo_path === null
+                        ? null
+                        : route('profile-photo.show', ['v' => $user->updated_at?->getTimestamp()]),
+                ],
                 'roles' => fn (): array => $user?->getRoleNames()->values()->all() ?? [],
                 'permissions' => fn (): array => $this->permissionsFor($user),
             ],

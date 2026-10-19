@@ -6,6 +6,8 @@ use App\Http\Controllers\Settings\LocationController;
 use App\Http\Controllers\Settings\LocationStatusController;
 use App\Http\Controllers\Settings\LocationUserController;
 use App\Http\Controllers\Settings\PosSettingsController;
+use App\Http\Controllers\Settings\ProfilePhotoController;
+use App\Http\Controllers\Settings\ProfileSettingsController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\PermissionName;
 use Illuminate\Http\RedirectResponse;
@@ -15,7 +17,16 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth'])->group(function () {
     Route::get('settings', fn (Request $request): RedirectResponse => $request->user()->can(PermissionName::BusinessSettingsView->value)
         ? to_route('business-settings.edit')
-        : to_route('security.edit'));
+        : to_route('profile-settings.edit'));
+
+    Route::get('settings/profile', [ProfileSettingsController::class, 'edit'])
+        ->name('profile-settings.edit');
+    Route::put('settings/profile', [ProfileSettingsController::class, 'update'])
+        ->name('profile-settings.update');
+    Route::get('settings/profile/photo', [ProfilePhotoController::class, 'show'])
+        ->name('profile-photo.show');
+    Route::delete('settings/profile/photo', [ProfilePhotoController::class, 'destroy'])
+        ->name('profile-photo.destroy');
 
     Route::get('settings/business', [BusinessSettingsController::class, 'edit'])
         ->middleware('can:'.PermissionName::BusinessSettingsView->value)

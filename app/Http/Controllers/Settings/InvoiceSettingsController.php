@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\UpdateInvoiceSettingsRequest;
 use App\Models\Business;
+use App\Support\SalePageData;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class InvoiceSettingsController extends Controller
 {
-    public function edit(): Response
+    public function edit(SalePageData $pageData): Response
     {
         $business = Business::query()->sole();
 
@@ -32,6 +33,7 @@ class InvoiceSettingsController extends Controller
                 'show_product_codes' => $business->invoice_show_product_codes,
                 'show_line_discounts' => $business->invoice_show_line_discounts,
             ],
+            'business' => $pageData->business($business),
         ]);
     }
 

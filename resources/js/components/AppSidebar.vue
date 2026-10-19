@@ -33,6 +33,8 @@ import {
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { edit as editBusiness } from '@/routes/business-settings';
 import { edit as editInvoices } from '@/routes/invoice-settings';
+import { edit as editPosSettings } from '@/routes/pos-settings';
+import { edit as editProfile } from '@/routes/profile-settings';
 import { dashboard } from '@/routes';
 import { index as brandsIndex } from '@/routes/brands';
 import { index as categoriesIndex } from '@/routes/categories';
@@ -49,10 +51,7 @@ import { create as adjustmentsCreate } from '@/routes/inventory/adjustments';
 import { create as transfersCreate } from '@/routes/inventory/transfers';
 import { index as devicesIndex } from '@/routes/inventory/devices';
 import { index as movementsIndex } from '@/routes/inventory/movements';
-import {
-    index as suppliersIndex,
-    create as supplierCreate,
-} from '@/routes/suppliers';
+import { index as suppliersIndex } from '@/routes/suppliers';
 import {
     index as purchasesIndex,
     create as purchaseCreate,
@@ -123,9 +122,6 @@ const purchasingNavItems = computed<NavItem[]>(() => [
     ...(can('suppliers.view')
         ? [{ title: 'Suppliers', href: suppliersIndex() }]
         : []),
-    ...(can('suppliers.create')
-        ? [{ title: 'Create supplier', href: supplierCreate() }]
-        : []),
     ...(can('purchases.view')
         ? [{ title: 'Purchase invoices', href: purchasesIndex() }]
         : []),
@@ -147,11 +143,13 @@ const settingsNavItems = computed<NavItem[]>(() => [
         ? [
               { title: 'Business settings', href: editBusiness() },
               { title: 'Invoice settings', href: editInvoices() },
+              { title: 'POS screen settings', href: editPosSettings() },
           ]
         : []),
     ...(can('locations.view')
         ? [{ title: 'Locations', href: locationsIndex() }]
         : []),
+    { title: 'My profile', href: editProfile() },
     { title: 'Security', href: editSecurity() },
 ]);
 

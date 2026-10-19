@@ -69,6 +69,85 @@ function quantityPurchasePayload(Supplier $supplier, Location $location, Product
     ];
 }
 
+test('a draft purchase invoice can be deleted without changing inventory', function () {
+    ['user' => $user, 'supplier' => $supplier, 'location' => $location, 'quantity_variant' => $variant] = purchaseTestContext(
+        'purchases.create', 'purchases.update',
+    );
+
+    $this->actingAs($user)->post(route('purchases.store'), quantityPurchasePayload($supplier, $location, $variant));
+    $purchase = Purchase::query()->sole();
+
+    $this->actingAs($user)
+        ->delete(route('purchases.destroy', $purchase))
+        ->assertRedirect(route('purchases.index'))
+        ->assertSessionHasNoErrors();
+
+    $this->assertModelMissing($purchase);
+    expect(InventoryOperation::query()->count())->toBe(0)
+        ->and(InventoryStock::query()->count())->toBe(0)
+        ->and(StockMovement::query()->count())->toBe(0);
+});
+
+test('a posted purchase invoice cannot be deleted and its stock is preserved', function () {
+    ['user' => $user, 'supplier' => $supplier, 'location' => $location, 'quantity_variant' => $variant] = purchaseTestContext(
+        'purchases.create', 'purchases.update', 'purchases.post', 'inventory.receive',
+    );
+
+    $this->actingAs($user)->post(route('purchases.store'), quantityPurchasePayload($supplier, $location, $variant));
+    $purchase = Purchase::query()->sole();
+    $this->actingAs($user)->post(route('purchases.post', $purchase));
+
+    $this->actingAs($user)
+        ->from(route('purchases.show', $purchase))
+        ->delete(route('purchases.destroy', $purchase))
+        ->assertRedirect(route('purchases.show', $purchase))
+        ->assertSessionHasErrors(['purchase' => 'Only draft purchase invoices can be deleted. Use a purchase return for received stock.']);
+
+    $this->assertModelExists($purchase);
+    expect(InventoryStock::query()->sole()->quantity_on_hand)->toBe('5.000');
+});
+
+test('an inactive supplier without purchase history can be deleted', function () {
+    ['user' => $user, 'supplier' => $supplier] = purchaseTestContext('suppliers.deactivate');
+    $supplier->update(['status' => 'inactive']);
+
+    $this->actingAs($user)
+        ->delete(route('suppliers.destroy', $supplier))
+        ->assertRedirect(route('suppliers.index'))
+        ->assertSessionHasNoErrors();
+
+    $this->assertModelMissing($supplier);
+});
+
+test('an active supplier must be deactivated before deletion', function () {
+    ['user' => $user, 'supplier' => $supplier] = purchaseTestContext('suppliers.deactivate');
+
+    $this->actingAs($user)
+        ->from(route('suppliers.show', $supplier))
+        ->delete(route('suppliers.destroy', $supplier))
+        ->assertRedirect(route('suppliers.show', $supplier))
+        ->assertSessionHasErrors(['supplier' => 'Deactivate this supplier before deleting it.']);
+
+    $this->assertModelExists($supplier);
+});
+
+test('a supplier with purchase history cannot be deleted after deactivation', function () {
+    ['user' => $user, 'supplier' => $supplier, 'location' => $location, 'quantity_variant' => $variant] = purchaseTestContext(
+        'purchases.create', 'suppliers.deactivate',
+    );
+    $this->actingAs($user)->post(route('purchases.store'), quantityPurchasePayload($supplier, $location, $variant));
+    $supplier->update(['status' => 'inactive']);
+
+    $this->actingAs($user)
+        ->from(route('suppliers.show', $supplier))
+        ->delete(route('suppliers.destroy', $supplier))
+        ->assertRedirect(route('suppliers.show', $supplier))
+        ->assertSessionHasErrors(['supplier' => 'This supplier cannot be deleted because it has purchase history. Keep it inactive instead.']);
+
+    $this->assertModelExists($supplier);
+    expect(Purchase::query()->count())->toBe(1);
+});
+
 test('purchase draft stores actual line costs and posting receives quantity stock exactly once', function () {
     ['user' => $user, 'supplier' => $supplier, 'location' => $location, 'quantity_variant' => $variant] = purchaseTestContext(
         'purchases.view', 'purchases.create', 'purchases.post', 'inventory.receive',

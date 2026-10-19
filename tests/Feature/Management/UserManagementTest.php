@@ -7,6 +7,7 @@ use App\SystemRole;
 use App\UserStatus;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 function managementOwner(): User
 {
@@ -72,4 +73,21 @@ test('registered owner cannot be deactivated or deleted', function () {
     $this->actingAs($owner)->delete(route('users.destroy', $owner))->assertSessionHasErrors('user');
 
     expect($owner->refresh()->status)->toBe(UserStatus::Active);
+});
+
+test('deleting a managed user also removes their private profile photo', function () {
+    Storage::fake(config('filesystems.default'));
+    $owner = managementOwner();
+    $user = User::factory()->create();
+    $photoPath = "profile-photos/{$user->id}/avatar.jpg";
+    Storage::put($photoPath, 'profile photo');
+    $user->update(['profile_photo_path' => $photoPath]);
+
+    $this->actingAs($owner)
+        ->delete(route('users.destroy', $user))
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('users.index'));
+
+    $this->assertModelMissing($user);
+    Storage::disk(config('filesystems.default'))->assertMissing($photoPath);
 });

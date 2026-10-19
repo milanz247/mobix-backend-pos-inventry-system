@@ -13,7 +13,9 @@ use App\Services\LocationAccessService;
 use App\SupplierStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -124,5 +126,30 @@ class SupplierController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Supplier status updated.')]);
 
         return back();
+    }
+
+    public function destroy(Supplier $supplier): RedirectResponse
+    {
+        DB::transaction(function () use ($supplier): void {
+            $supplier = Business::query()->sole()->suppliers()->lockForUpdate()->findOrFail($supplier->id);
+
+            if ($supplier->getAttribute('status') !== SupplierStatus::Inactive) {
+                throw ValidationException::withMessages([
+                    'supplier' => __('Deactivate this supplier before deleting it.'),
+                ]);
+            }
+
+            if ($supplier->purchases()->exists()) {
+                throw ValidationException::withMessages([
+                    'supplier' => __('This supplier cannot be deleted because it has purchase history. Keep it inactive instead.'),
+                ]);
+            }
+
+            $supplier->delete();
+        }, 3);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Supplier deleted.')]);
+
+        return to_route('suppliers.index');
     }
 }
