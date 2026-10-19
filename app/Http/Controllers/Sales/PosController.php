@@ -9,8 +9,10 @@ use App\Models\ProductVariant;
 use App\Models\SerializedDeviceIdentifier;
 use App\ProductType;
 use App\SaleSource;
+use App\Services\CashierShiftService;
 use App\Services\LocationAccessService;
 use App\Services\SaleService;
+use App\Services\StockAvailabilityService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,16 +22,16 @@ use Inertia\Response;
 
 class PosController extends Controller
 {
-    public function index(Request $request, LocationAccessService $locationAccess): Response
+    public function index(Request $request, LocationAccessService $locationAccess, CashierShiftService $shifts, StockAvailabilityService $availability): Response
     {
         $user = $request->user();
         $business = $locationAccess->business();
         $locations = $locationAccess->accessibleQuery($user)->where('status', 'active')->orderByDesc('is_main')->orderBy('name')->get(['id', 'name', 'code']);
-        abort_if($locations->isEmpty(), 403);
-        $locationId = $business->pos_show_location_filter
-            ? ($request->integer('location_id') ?: (int) $locations->first()->id)
-            : (int) $locations->first()->id;
-        $location = $locationAccess->accessibleQuery($user)->where('status', 'active')->findOrFail($locationId);
+        abort_if($locations->isEmpty(), 403, __('No active locations are assigned to your account. Contact an administrator.'));
+        $locationId = $request->integer('location_id')
+            ?: ($locationAccess->selectedLocationId($request) ?? $shifts->activeQuery($user)->whereIn('location_id', $locations->modelKeys())->value('location_id') ?? (int) $locations->first()->id);
+        $location = $locationAccess->accessibleQuery($user)->where('status', 'active')->whereKey($locationId)->firstOrFail();
+        $request->session()->put('active_location_id', $location->id);
         $search = mb_substr($request->string('search')->trim()->toString(), 0, 100);
         $categoryId = $business->pos_show_category_filter ? ($request->integer('category_id') ?: null) : null;
         $brandId = $business->pos_show_brand_filter ? ($request->integer('brand_id') ?: null) : null;
@@ -38,6 +40,7 @@ class PosController extends Controller
         if ($search !== '') {
             $normalizedSearch = mb_strtoupper(preg_replace('/\s+/', '', $search) ?? $search);
             $identifier = SerializedDeviceIdentifier::query()->where('business_id', $business->id)
+                ->whereHas('device', fn (Builder $query): Builder => $query->where('location_id', $location->id)->where('business_id', $business->id))
                 ->where('identifier', $normalizedSearch)->with(['device.variant.product'])->first();
             $device = $identifier?->device;
             if ($device !== null && $device->location_id === $location->id && $device->status->value === 'in_stock'
@@ -55,10 +58,8 @@ class PosController extends Controller
             }
         }
 
-        $variants = $business->productVariants()
+        $variants = fn () => $availability->query($business, $location)
             ->with(['product:id,name,product_type,image_path,category_id,brand_id,status', 'product.category:id,name', 'product.brand:id,name'])
-            ->withSum(['inventoryStocks as quantity_on_hand' => fn (Builder $query): Builder => $query->where('location_id', $location->id)], 'quantity_on_hand')
-            ->withCount(['serializedDevices as devices_in_stock' => fn (Builder $query): Builder => $query->where('location_id', $location->id)->where('status', 'in_stock')])
             ->where('status', CatalogStatus::Active->value)
             ->whereHas('product', fn (Builder $query): Builder => $query->where('status', CatalogStatus::Active->value))
             ->when($search !== '', fn (Builder $query): Builder => $query->where(function (Builder $query) use ($search): void {
@@ -68,6 +69,7 @@ class PosController extends Controller
             ->when($categoryId !== null, fn (Builder $query): Builder => $query->whereHas('product', fn (Builder $query): Builder => $query->where('category_id', $categoryId)))
             ->when($brandId !== null, fn (Builder $query): Builder => $query->whereHas('product', fn (Builder $query): Builder => $query->where('brand_id', $brandId)))
             ->orderBy('sku')->paginate($business->pos_products_per_page)->withQueryString()->through(fn (ProductVariant $variant): array => [
+                ...$availability->describe($variant),
                 'id' => $variant->id,
                 'name' => $variant->product->name,
                 'variant' => $variant->name,
@@ -95,6 +97,7 @@ class PosController extends Controller
             'filters' => ['search' => $search, 'category_id' => $categoryId, 'brand_id' => $brandId, 'location_id' => $location->id],
             'currency' => $business->currency,
             'cashierId' => $user->id,
+            'drawer' => fn (): array => $shifts->posState($user, $location->id),
             'saleSources' => array_map(fn (SaleSource $source): array => [
                 'value' => $source->value,
                 'label' => $source->label(),
@@ -119,14 +122,12 @@ class PosController extends Controller
             'canOverridePrice' => $business->pos_allow_price_override && $user->can('sales.price-override'),
             'canDiscount' => $user->can('sales.discount'),
             'canCredit' => $user->can('sales.credit'),
-            'canReceiveStock' => $user->can('inventory.receive'),
-            'canOpenStock' => $user->can('inventory.opening'),
         ]);
     }
 
     public function checkout(CheckoutRequest $request, SaleService $sales, LocationAccessService $locationAccess): RedirectResponse
     {
-        $sale = $sales->checkout($request->user(), $request->validated());
+        $sale = $sales->checkout($request->user(), $request->validated(), requireActiveShift: true);
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Sale :number completed.', ['number' => $sale->sale_number])]);
 
         $business = $locationAccess->business();

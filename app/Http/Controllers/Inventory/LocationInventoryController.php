@@ -20,7 +20,8 @@ class LocationInventoryController extends Controller
         $user = $request->user();
         $business = $locationAccess->business();
         $locations = $pageData->locations($user);
-        $locationId = $request->integer('location_id') ?: ($locations[0]['id'] ?? 0);
+        abort_if($locations === [], 403, __('No active locations are assigned to your account. Contact an administrator.'));
+        $locationId = $request->integer('location_id') ?: ($locationAccess->selectedLocationId($request) ?? $locations[0]['id']);
         $location = $locationAccess->accessibleQuery($user)->findOrFail($locationId);
         $search = $request->string('search')->trim()->toString();
         $tracking = VariantTrackingMode::tryFrom($request->string('tracking_mode')->toString());
@@ -30,9 +31,12 @@ class LocationInventoryController extends Controller
         $variants = $business->productVariants()->with(['product.category:id,name', 'product.brand:id,name'])
             ->withSum(['inventoryStocks as quantity_on_hand' => fn (Builder $query) => $query->where('location_id', $location->id)], 'quantity_on_hand')
             ->withCount(['serializedDevices as serialized_in_stock' => fn (Builder $query) => $query->where('location_id', $location->id)->where('status', SerializedDeviceStatus::InStock->value)])
-            ->where(function (Builder $query) use ($location): void {
+            ->where(function (Builder $query) use ($location, $search): void {
                 $query->whereHas('inventoryStocks', fn (Builder $query) => $query->where('location_id', $location->id))
                     ->orWhereHas('serializedDevices', fn (Builder $query) => $query->where('location_id', $location->id));
+                if ($search !== '') {
+                    $query->orWhere('sku', $search)->orWhere('barcode', $search);
+                }
             })
             ->when($search !== '', fn (Builder $query) => $query->where(function (Builder $query) use ($search): void {
                 $query->where('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")

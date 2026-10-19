@@ -57,6 +57,13 @@ class RolePermissionSeeder extends Seeder
         return match ($role) {
             SystemRole::Owner, SystemRole::Admin => array_column(PermissionName::cases(), 'value'),
             SystemRole::Manager => [
+                PermissionName::ShiftsView->value,
+                PermissionName::ShiftsOpen->value,
+                PermissionName::ShiftsMovements->value,
+                PermissionName::ShiftsClose->value,
+                PermissionName::ShiftsViewAll->value,
+                PermissionName::ShiftsApprove->value,
+                PermissionName::ShiftsCorrect->value,
                 PermissionName::DashboardView->value,
                 PermissionName::UsersView->value,
                 PermissionName::BusinessSettingsView->value,
@@ -72,6 +79,10 @@ class RolePermissionSeeder extends Seeder
                 PermissionName::SalesReportsView->value,
             ],
             SystemRole::Cashier => [
+                PermissionName::ShiftsView->value,
+                PermissionName::ShiftsOpen->value,
+                PermissionName::ShiftsMovements->value,
+                PermissionName::ShiftsClose->value,
                 PermissionName::DashboardView->value,
                 PermissionName::PosAccess->value,
                 PermissionName::SalesCreate->value,

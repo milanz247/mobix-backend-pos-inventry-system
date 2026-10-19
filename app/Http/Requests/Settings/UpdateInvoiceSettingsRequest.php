@@ -61,6 +61,6 @@ class UpdateInvoiceSettingsRequest extends FormRequest
 
     public function business(): Business
     {
-        return Business::query()->sole();
+        return Business::query()->where('setup_key', 'initial')->sole();
     }
 }

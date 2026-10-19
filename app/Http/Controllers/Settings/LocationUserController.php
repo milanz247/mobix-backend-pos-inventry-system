@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\UpdateLocationUsersRequest;
 use App\Models\Location;
-use App\Models\User;
 use App\Services\LocationAccessService;
 use App\Services\LocationAdministrationService;
 use Illuminate\Http\RedirectResponse;
@@ -23,7 +22,7 @@ class LocationUserController extends Controller
 
         return Inertia::render('settings/locations/Users', [
             'location' => $location,
-            'users' => User::query()
+            'users' => $locationAccess->manageableUsersQuery(request()->user())
                 ->with('roles:id,name')
                 ->whereDoesntHave('ownedBusiness', fn ($query) => $query->whereKeyNot($business->id))
                 ->orderBy('name')
@@ -35,7 +34,7 @@ class LocationUserController extends Controller
 
     public function update(UpdateLocationUsersRequest $request, Location $location, LocationAdministrationService $service): RedirectResponse
     {
-        $service->syncUsers($location, $request->validated('user_ids'));
+        $service->syncUsers($location, $request->validated('user_ids'), $request->user());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Location access updated.')]);
 

@@ -63,9 +63,10 @@ class LocationAdministrationService
     }
 
     /** @param list<int> $userIds */
-    public function syncUsers(Location $location, array $userIds): void
+    public function syncUsers(Location $location, array $userIds, User $actor): void
     {
-        DB::transaction(function () use ($location, $userIds): void {
+        abort_unless($actor->can('assignUsers', $location), 403);
+        DB::transaction(function () use ($location, $userIds, $actor): void {
             $location = Location::query()->lockForUpdate()->findOrFail($location->id);
             $business = $this->ensureCurrentBusiness($location);
 
@@ -73,7 +74,8 @@ class LocationAdministrationService
                 $this->fail('user_ids', __('Users can only be assigned to active locations.'));
             }
 
-            $userIds = array_values(array_unique([...$userIds, $business->owner_id]));
+            $retainedIds = $location->users()->whereNotIn('users.id', $this->locationAccess->manageableUsersQuery($actor)->select('users.id'))->pluck('users.id')->all();
+            $userIds = array_values(array_unique([...$userIds, ...$retainedIds, $business->owner_id]));
             $users = User::query()->whereKey($userIds)->with('ownedBusiness:id,owner_id,setup_key')->get();
 
             if ($users->count() !== count($userIds)) {
@@ -85,6 +87,17 @@ class LocationAdministrationService
 
             if ($hasUnrelatedOwner) {
                 $this->fail('user_ids', __('Users from another business cannot be assigned.'));
+            }
+
+            $currentlyAssigned = $location->users()->pluck('users.id')->all();
+            $changedIds = array_values(array_unique([...array_diff($currentlyAssigned, $userIds), ...array_diff($userIds, $currentlyAssigned)]));
+            if (in_array($actor->id, $changedIds, true) && ! $this->locationAccess->hasAllLocationAccess($actor, $business)) {
+                $this->fail('user_ids', __('You cannot change your own location assignments.'));
+            }
+            foreach (User::query()->whereKey($changedIds)->get() as $user) {
+                if (! $this->locationAccess->manageableUsersQuery($actor)->whereKey($user->id)->exists()) {
+                    $this->fail('user_ids', __('You cannot change assignments for users outside your authorized locations.'));
+                }
             }
 
             $location->users()->sync($userIds);

@@ -17,7 +17,7 @@ class ApplyBusinessPreferences
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $business = Business::query()->first(['name', 'logo_path', 'timezone', 'time_format']);
+        $business = Business::query()->where('setup_key', 'initial')->first(['name', 'logo_path', 'timezone', 'time_format']);
         $businessName = null;
         $businessLogoUrl = null;
         $timezone = config()->string('app.timezone');

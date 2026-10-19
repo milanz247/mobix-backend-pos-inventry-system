@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\PermissionName;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (User $user, string $ability): ?bool {
             $isRegisteredOwner = $user->ownedBusiness()->where('setup_key', 'initial')->exists();
 
-            return $isRegisteredOwner && str_contains($ability, '.') ? true : null;
+            return $isRegisteredOwner && PermissionName::tryFrom($ability) !== null ? true : null;
         });
 
         $this->configureDefaults();

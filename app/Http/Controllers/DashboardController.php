@@ -21,12 +21,15 @@ class DashboardController extends Controller
     public function __invoke(Request $request, LocationAccessService $locationAccess): Response
     {
         $business = $locationAccess->business();
+        $locationId = $request->integer('location_id') ?: null;
+        $showCosts = $request->user()->can('sales.costs.view');
         $businessNow = Carbon::now($business->timezone);
         $todayStart = $businessNow->copy()->startOfDay()->utc();
         $todayEnd = $businessNow->copy()->endOfDay()->utc();
         $trendStart = $businessNow->copy()->subDays(29)->startOfDay()->utc();
         $timezoneOffset = $businessNow->format('P');
-        $accessibleLocationIds = $locationAccess->accessibleQuery($request->user())->select('locations.id');
+        $accessibleLocationIds = $locationAccess->accessibleQuery($request->user())
+            ->when($locationId !== null, fn ($query) => $query->whereKey($locationId))->select('locations.id');
         $accessibleSales = Sale::query()
             ->where('sales.business_id', $business->id)
             ->whereIn('sales.location_id', clone $accessibleLocationIds);
@@ -76,7 +79,7 @@ class DashboardController extends Controller
             ->groupBy('day')
             ->get()
             ->keyBy(fn (SaleReturn $return): string => (string) $return->getAttribute('day'));
-        $dailySaleProfit = SaleLine::query()
+        $dailySaleProfit = $showCosts ? SaleLine::query()
             ->join('sales', 'sales.id', '=', 'sale_lines.sale_id')
             ->where('sales.business_id', $business->id)
             ->whereIn('sales.location_id', clone $accessibleLocationIds)
@@ -84,8 +87,8 @@ class DashboardController extends Controller
             ->selectRaw("DATE(CONVERT_TZ(sales.posted_at, '+00:00', ?)) as day, SUM(sale_lines.total - (sale_lines.cost_snapshot * sale_lines.quantity)) as gross_profit", [$timezoneOffset])
             ->groupBy('day')
             ->get()
-            ->keyBy(fn (SaleLine $line): string => (string) $line->getAttribute('day'));
-        $dailyReturnedProfit = SaleReturnLine::query()
+            ->keyBy(fn (SaleLine $line): string => (string) $line->getAttribute('day')) : collect();
+        $dailyReturnedProfit = $showCosts ? SaleReturnLine::query()
             ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_lines.sale_return_id')
             ->where('sale_returns.business_id', $business->id)
             ->whereIn('sale_returns.location_id', clone $accessibleLocationIds)
@@ -94,7 +97,7 @@ class DashboardController extends Controller
             ->selectRaw("DATE(CONVERT_TZ(sale_returns.processed_at, '+00:00', ?)) as day, SUM(sale_return_lines.total - (sale_return_lines.unit_cost_snapshot * sale_return_lines.quantity)) as returned_profit", [$timezoneOffset])
             ->groupBy('day')
             ->get()
-            ->keyBy(fn (SaleReturnLine $line): string => (string) $line->getAttribute('day'));
+            ->keyBy(fn (SaleReturnLine $line): string => (string) $line->getAttribute('day')) : collect();
 
         $netSalesThirtyDays = BigDecimal::zero();
         $grossProfitThirtyDays = BigDecimal::zero();
@@ -130,9 +133,12 @@ class DashboardController extends Controller
             ],
             'performance' => [
                 'net_sales_30_days' => $this->money($netSalesThirtyDays),
-                'gross_profit_30_days' => $this->money($grossProfitThirtyDays),
+                'gross_profit_30_days' => $showCosts ? $this->money($grossProfitThirtyDays) : null,
             ],
-            'trend' => $trend,
+            'trend' => $trend->map(fn (array $row): array => [...$row, 'gross_profit' => $showCosts ? $row['gross_profit'] : null]),
+            'canViewCosts' => $showCosts,
+            'locations' => $locationAccess->accessibleQuery($request->user())->orderBy('name')->get(['id', 'name']),
+            'filters' => ['location_id' => $locationId ?? ''],
             'currency' => $business->currency,
             'generatedAt' => $businessNow->toIso8601String(),
         ]);

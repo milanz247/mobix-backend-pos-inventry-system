@@ -5,6 +5,13 @@ namespace App;
 enum PermissionName: string
 {
     case DashboardView = 'dashboard.view';
+    case ShiftsView = 'shifts.view';
+    case ShiftsOpen = 'shifts.open';
+    case ShiftsMovements = 'shifts.movements';
+    case ShiftsClose = 'shifts.close';
+    case ShiftsViewAll = 'shifts.view-all';
+    case ShiftsApprove = 'shifts.approve';
+    case ShiftsCorrect = 'shifts.correct';
     case UsersView = 'users.view';
     case UsersCreate = 'users.create';
     case UsersUpdate = 'users.update';
@@ -69,6 +76,8 @@ enum PermissionName: string
     {
         return match ($this) {
             self::DashboardView => 'Dashboard',
+            self::ShiftsView, self::ShiftsOpen, self::ShiftsMovements, self::ShiftsClose,
+            self::ShiftsViewAll, self::ShiftsApprove, self::ShiftsCorrect => 'Cashier Shifts',
             self::UsersView,
             self::UsersCreate,
             self::UsersUpdate,

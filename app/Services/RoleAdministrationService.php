@@ -12,9 +12,13 @@ use Spatie\Permission\Models\Permission;
 
 class RoleAdministrationService
 {
+    public function __construct(private readonly LocationAccessService $locations) {}
+
     /** @param array<string, mixed> $attributes */
     public function create(User $actor, array $attributes): Role
     {
+        abort_unless($actor->can('roles.create'), 403);
+
         return DB::transaction(function () use ($actor, $attributes): Role {
             $permissions = $this->permissions($attributes['permission_ids']);
             $this->ensurePermissionsMayBeAssigned($actor, $permissions);
@@ -33,6 +37,8 @@ class RoleAdministrationService
     /** @param array<string, mixed> $attributes */
     public function update(User $actor, Role $role, array $attributes): Role
     {
+        abort_unless($actor->can('roles.update'), 403);
+
         return DB::transaction(function () use ($actor, $role, $attributes): Role {
             $role = Role::query()->lockForUpdate()->findOrFail($role->id);
 
@@ -42,6 +48,11 @@ class RoleAdministrationService
 
             $permissions = $this->permissions($attributes['permission_ids']);
             $this->ensurePermissionsMayBeAssigned($actor, $permissions);
+            $this->ensurePermissionsMayBeAssigned($actor, $role->permissions);
+
+            if ($actor->hasRole($role->name) && $permissions->pluck('id')->diff($role->permissions->pluck('id'))->isNotEmpty()) {
+                $this->fail(__('You cannot add permissions to your own role.'));
+            }
             $role->forceFill([
                 'name' => $role->is_system ? $role->name : $attributes['name'],
                 'description' => $attributes['description'] ?? null,
@@ -81,7 +92,7 @@ class RoleAdministrationService
     /** @param Collection<int, Permission> $permissions */
     private function ensurePermissionsMayBeAssigned(User $actor, Collection $permissions): void
     {
-        if ($actor->hasRole(SystemRole::Owner->value)) {
+        if ($this->locations->hasAllLocationAccess($actor, $this->locations->business())) {
             return;
         }
 

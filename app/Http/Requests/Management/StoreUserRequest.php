@@ -17,7 +17,8 @@ class StoreUserRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->user()->can(PermissionName::UsersCreate->value)
-            && $this->user()->can(PermissionName::UsersAssignRoles->value);
+            && $this->user()->can(PermissionName::UsersAssignRoles->value)
+            && (! $this->exists('location_ids') || $this->user()->can(PermissionName::LocationsAssignUsers->value));
     }
 
     /**
@@ -36,6 +37,8 @@ class StoreUserRequest extends FormRequest
             'status' => ['required', Rule::enum(UserStatus::class)],
             'role_ids' => ['required', 'array', 'min:1'],
             'role_ids.*' => ['integer', 'distinct', Rule::exists('roles', 'id')->where('guard_name', 'web')],
+            'location_ids' => ['sometimes', 'array'],
+            'location_ids.*' => ['integer', 'distinct', Rule::exists('locations', 'id')],
         ];
     }
 }

@@ -7,6 +7,7 @@ import { create, store } from '@/routes/users';
 defineProps<{
     roles: { id: number; name: string }[];
     statuses: { value: string; label: string }[];
+    locations: { id: number; name: string; code: string; status: string }[];
 }>();
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Invite team member', href: create() }] },
@@ -25,6 +26,7 @@ defineOptions({
             method="post"
             :roles="roles"
             :statuses="statuses"
+            :locations="locations"
         />
     </section>
 </template>

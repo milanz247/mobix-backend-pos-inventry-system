@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Printer, RotateCcw } from '@lucide/vue';
 import { computed } from 'vue';
 import Heading from '@/components/Heading.vue';
@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import sales, { index, receipt } from '@/routes/sales';
+import { shiftDate } from '@/lib/shift';
+
+const page = usePage();
 
 type Method = { value: string; label: string };
 type SaleData = {
@@ -55,6 +58,7 @@ type SaleData = {
         }[];
     }[];
     payments: {
+        id: number;
         amount: string;
         cash_tendered: string | null;
         change_given: string;
@@ -71,6 +75,22 @@ type SaleData = {
         reason: string;
         processed_at: string;
         processed_by: string;
+        notes: string | null;
+        lines: {
+            id: number;
+            product: string;
+            quantity: string;
+            total: string;
+            restock: boolean;
+        }[];
+        refunds: {
+            id: number;
+            amount: string;
+            method: string;
+            reference: string | null;
+            refunded_at: string;
+            processed_by: string;
+        }[];
     }[];
 };
 const props = defineProps<{
@@ -444,13 +464,17 @@ defineOptions({
                 <div class="surface-panel space-y-3 p-4">
                     <h2 class="font-semibold">Payment history</h2>
                     <div
-                        v-for="(payment, index) in sale.payments"
-                        :key="index"
+                        v-for="payment in sale.payments"
+                        :id="`payment-${payment.id}`"
+                        :key="payment.id"
                         class="flex justify-between gap-3 border-b pb-2 text-sm last:border-0"
                     >
                         <div>
                             <p class="font-medium">
                                 {{ payment.method.replaceAll('_', ' ') }}
+                                <span class="text-xs text-muted-foreground">
+                                    · PAY-{{ payment.id }} · posted</span
+                                >
                             </p>
                             <p class="text-xs text-muted-foreground">
                                 {{ payment.paid_at }} · {{ payment.received_by
@@ -501,6 +525,48 @@ defineOptions({
                         <p class="text-xs text-muted-foreground">
                             Refund {{ money(item.refund_total) }}
                         </p>
+                        <p
+                            v-if="item.notes"
+                            class="mt-2 text-sm whitespace-pre-wrap"
+                        >
+                            {{ item.notes }}
+                        </p>
+                        <ul
+                            class="mt-2 space-y-1 text-xs text-muted-foreground"
+                        >
+                            <li v-for="line in item.lines" :key="line.id">
+                                {{ line.product }} · {{ line.quantity }} ·
+                                {{ money(line.total) }} ·
+                                {{
+                                    line.restock ? 'Restocked' : 'Not restocked'
+                                }}
+                            </li>
+                        </ul>
+                        <div
+                            v-for="refund in item.refunds"
+                            :id="`refund-${refund.id}`"
+                            :key="refund.id"
+                            class="mt-3 rounded-lg border bg-background p-3 text-xs"
+                        >
+                            <p class="font-semibold">
+                                REF-{{ refund.id }} ·
+                                {{ refund.method.replaceAll('_', ' ') }} ·
+                                {{ money(refund.amount) }} · posted
+                            </p>
+                            <p class="mt-1 text-muted-foreground">
+                                {{
+                                    shiftDate(
+                                        refund.refunded_at,
+                                        page.props.businessPreferences.timezone,
+                                    )
+                                }}
+                                ·
+                                {{ refund.processed_by }}
+                            </p>
+                            <p v-if="refund.reference" class="mt-1">
+                                Reference: {{ refund.reference }}
+                            </p>
+                        </div>
                     </div>
                 </div>
                 <p v-if="sale.notes" class="surface-panel p-4 text-sm">

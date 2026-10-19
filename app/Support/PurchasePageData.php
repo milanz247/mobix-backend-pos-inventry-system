@@ -56,9 +56,10 @@ class PurchasePageData
     }
 
     /** @return array<string, mixed> */
-    public function purchase(Purchase $purchase): array
+    public function purchase(Purchase $purchase, User $user): array
     {
         $purchase->loadMissing(['lines.variant.product', 'lines.devices.serializedDevice.location']);
+        $locationIds = $this->locationAccess->accessibleQuery($user)->pluck('id');
 
         return [
             'id' => $purchase->id,
@@ -92,10 +93,10 @@ class PurchasePageData
                     'condition' => $device->condition->value,
                     'unit_cost' => $device->unit_cost,
                     'unit_selling_price' => $device->unit_selling_price,
-                    'serialized_device_id' => $device->serialized_device_id,
-                    'status' => $device->serializedDevice?->status->value,
-                    'location_id' => $device->serializedDevice?->location_id,
-                    'location_name' => $device->serializedDevice?->location?->name,
+                    'serialized_device_id' => $locationIds->contains($device->serializedDevice?->location_id) ? $device->serialized_device_id : null,
+                    'status' => $locationIds->contains($device->serializedDevice?->location_id) ? $device->serializedDevice?->status->value : null,
+                    'location_id' => $locationIds->contains($device->serializedDevice?->location_id) ? $device->serializedDevice?->location_id : null,
+                    'location_name' => $locationIds->contains($device->serializedDevice?->location_id) ? $device->serializedDevice?->location?->name : null,
                 ])->values()->all(),
             ])->values()->all(),
             'payments' => $purchase->payments()->with('recorder:id,name')->orderBy('payment_date')->get()->map(fn ($payment): array => [
@@ -106,7 +107,7 @@ class PurchasePageData
                 'reference' => $payment->reference,
                 'recorded_by' => $payment->recorder->name,
             ])->values()->all(),
-            'returns' => $purchase->returns()->with(['location:id,name,code', 'lines.variant.product'])->latest('return_date')->get()->map(fn ($return): array => [
+            'returns' => $purchase->returns()->whereIn('location_id', $locationIds)->with(['location:id,name,code', 'lines.variant.product'])->latest('return_date')->get()->map(fn ($return): array => [
                 'id' => $return->id,
                 'return_number' => $return->return_number,
                 'return_date' => $return->return_date->toDateString(),

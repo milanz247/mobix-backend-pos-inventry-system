@@ -35,7 +35,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, SaleReturn> $returns
  * @property-read Collection<int, SaleRefund> $refunds
  */
-#[Fillable(['business_id', 'location_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
+#[Fillable(['cashier_shift_id', 'business_id', 'location_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
 class Sale extends Model
 {
     /** @use HasFactory<SaleFactory> */

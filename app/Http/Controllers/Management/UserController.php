@@ -7,6 +7,7 @@ use App\Http\Requests\Management\StoreUserRequest;
 use App\Http\Requests\Management\UpdateUserRequest;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\LocationAccessService;
 use App\Services\UserAdministrationService;
 use App\UserStatus;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +21,8 @@ use Throwable;
 
 class UserController extends Controller
 {
+    public function __construct(private readonly LocationAccessService $locations, private readonly UserAdministrationService $users) {}
+
     /**
      * Display a listing of the resource.
      */
@@ -31,8 +34,8 @@ class UserController extends Controller
             'status' => ['nullable', Rule::enum(UserStatus::class)],
         ]);
 
-        $users = User::query()
-            ->with('roles:id,name')
+        $users = $this->locations->manageableUsersQuery($request->user())
+            ->with(['roles.permissions', 'permissions', 'ownedBusiness', 'locations:id,name,code,status'])
             ->when($filters['search'] ?? null, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")
@@ -44,11 +47,17 @@ class UserController extends Controller
             ->when($filters['status'] ?? null, fn ($query, string $status) => $query->where('status', $status))
             ->orderBy('name')
             ->paginate(15)
-            ->withQueryString();
+            ->withQueryString()
+            ->through(fn (User $user): array => [
+                ...$user->only(['id', 'name', 'email', 'phone', 'status']),
+                'roles' => $user->roles->map(fn ($role): array => $role->only(['id', 'name'])),
+                'locations' => $user->locations->map(fn ($location): array => $location->only(['id', 'name', 'code', 'status'])),
+                'can_manage' => $this->users->canManagePrivileges($request->user(), $user),
+            ]);
 
         return Inertia::render('management/users/Index', [
             'users' => $users,
-            'roles' => Role::query()->orderBy('name')->get(['id', 'name']),
+            ...$this->formOptions($request->user()),
             'statuses' => $this->statuses(),
             'filters' => $filters,
         ]);
@@ -57,10 +66,10 @@ class UserController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         return Inertia::render('management/users/Create', [
-            'roles' => Role::query()->orderBy('name')->get(['id', 'name']),
+            ...$this->formOptions($request->user()),
             'statuses' => $this->statuses(),
         ]);
     }
@@ -105,13 +114,14 @@ class UserController extends Controller
     /**
      * Display the specified resource.
      */
-    public function edit(User $user): Response
+    public function edit(Request $request, User $user): Response
     {
-        $user->load('roles:id,name');
+        $this->users->ensureUserMayBeManaged($request->user(), $user);
+        $user->load(['roles:id,name', 'locations:id,name,code,status']);
 
         return Inertia::render('management/users/Edit', [
             'managedUser' => $user,
-            'roles' => Role::query()->orderBy('name')->get(['id', 'name']),
+            ...$this->formOptions($request->user()),
             'statuses' => $this->statuses(),
         ]);
     }
@@ -147,5 +157,20 @@ class UserController extends Controller
             fn (UserStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
             UserStatus::cases(),
         );
+    }
+
+    /** @return array<string, mixed> */
+    private function formOptions(User $actor): array
+    {
+        $isOwner = $this->locations->hasAllLocationAccess($actor, $this->locations->business());
+
+        return [
+            'roles' => Role::query()->where('guard_name', 'web')->with('permissions:id,name')->orderBy('name')->get()
+                ->filter(fn (Role $role): bool => $isOwner || ($role->name !== 'Owner' && $role->permissions->every(fn ($permission): bool => $actor->can($permission->name))))
+                ->map(fn (Role $role): array => ['id' => $role->id, 'name' => $role->name])->values(),
+            'locations' => $actor->can('locations.assign-users')
+                ? $this->locations->accessibleQuery($actor)->orderBy('name')->get(['id', 'name', 'code', 'status'])
+                : [],
+        ];
     }
 }

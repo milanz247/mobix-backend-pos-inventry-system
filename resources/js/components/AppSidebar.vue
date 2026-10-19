@@ -8,6 +8,8 @@ import {
     Settings,
     Users,
     Warehouse,
+    Wallet,
+    ChartNoAxesCombined,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
@@ -59,23 +61,25 @@ import {
 import { index as posIndex } from '@/routes/pos';
 import { index as salesIndex, reports as salesReports } from '@/routes/sales';
 import { edit as editSecurity } from '@/routes/security';
+import { index as shiftsIndex } from '@/routes/shifts';
+import { outOfStock, expenses, currentShift } from '@/routes/reports';
 import type { Auth, NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+const mainNavItems = computed<NavItem[]>(() => [
+    ...(can('dashboard.view')
+        ? [{ title: 'Dashboard', href: dashboard(), icon: LayoutGrid }]
+        : []),
+    ...(can('shifts.view')
+        ? [{ title: 'Cashier Shifts', href: shiftsIndex(), icon: Wallet }]
+        : []),
+]);
 
 const page = usePage<{ auth: Auth }>();
-const auth = page.props.auth;
 const appName = page.props.name;
 const appVersion = '1.0.0';
 const currentYear = new Date().getFullYear();
 const can = (permission: string): boolean =>
-    auth.permissions.includes(permission);
+    page.props.auth.permissions.includes(permission);
 const userNavItems = computed<NavItem[]>(() => [
     ...(can('users.view') ? [{ title: 'All users', href: usersIndex() }] : []),
     ...(can('roles.view') ? [{ title: 'Roles', href: rolesIndex() }] : []),
@@ -134,8 +138,19 @@ const salesNavItems = computed<NavItem[]>(() => [
     ...(can('sales.view')
         ? [{ title: 'Sales history', href: salesIndex() }]
         : []),
+]);
+const reportNavItems = computed<NavItem[]>(() => [
     ...(can('sales.reports.view')
         ? [{ title: 'Sales reports', href: salesReports() }]
+        : []),
+    ...(can('inventory.view')
+        ? [{ title: 'Out-of-Stock Products', href: outOfStock() }]
+        : []),
+    ...(can('shifts.view')
+        ? [
+              { title: 'Expenses', href: expenses() },
+              { title: 'Current Shift', href: currentShift() },
+          ]
         : []),
 ]);
 const settingsNavItems = computed<NavItem[]>(() => [
@@ -172,6 +187,12 @@ const purchasingIsActive = computed(() =>
 const salesIsActive = computed(() =>
     salesNavItems.value.some((item) => isCurrentUrl(item.href)),
 );
+const reportsAreActive = computed(
+    () =>
+        reportNavItems.value.some((item) => isCurrentUrl(item.href)) ||
+        page.component === 'shifts/Show' ||
+        page.component === 'reports/CashMovement',
+);
 
 type SidebarSection =
     | 'users'
@@ -179,6 +200,7 @@ type SidebarSection =
     | 'inventory'
     | 'purchasing'
     | 'sales'
+    | 'reports'
     | 'settings';
 
 const openSection = ref<SidebarSection | null>(
@@ -192,9 +214,11 @@ const openSection = ref<SidebarSection | null>(
               ? 'purchasing'
               : salesIsActive.value
                 ? 'sales'
-                : settingsAreActive.value
-                  ? 'settings'
-                  : null,
+                : reportsAreActive.value
+                  ? 'reports'
+                  : settingsAreActive.value
+                    ? 'settings'
+                    : null,
 );
 
 const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
@@ -208,7 +232,13 @@ const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link
+                            :href="
+                                can('dashboard.view')
+                                    ? dashboard()
+                                    : editProfile()
+                            "
+                        >
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>
@@ -431,6 +461,45 @@ const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
                         </SidebarMenuItem>
                     </Collapsible>
                 </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarGroup v-if="reportNavItems.length" class="px-2 py-0">
+                <SidebarMenu
+                    ><Collapsible
+                        as-child
+                        :open="openSection === 'reports'"
+                        class="group/collapsible"
+                        @update:open="updateOpenSection('reports', $event)"
+                    >
+                        <SidebarMenuItem
+                            ><CollapsibleTrigger as-child
+                                ><SidebarMenuButton
+                                    tooltip="Reports"
+                                    :is-active="reportsAreActive"
+                                    ><ChartNoAxesCombined /><span>Reports</span
+                                    ><ChevronRight
+                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" /></SidebarMenuButton
+                            ></CollapsibleTrigger>
+                            <CollapsibleContent
+                                ><SidebarMenuSub
+                                    ><SidebarMenuSubItem
+                                        v-for="item in reportNavItems"
+                                        :key="item.title"
+                                        ><SidebarMenuSubButton
+                                            as-child
+                                            :is-active="isCurrentUrl(item.href)"
+                                            ><Link :href="item.href"
+                                                ><span>{{
+                                                    item.title
+                                                }}</span></Link
+                                            ></SidebarMenuSubButton
+                                        ></SidebarMenuSubItem
+                                    ></SidebarMenuSub
+                                ></CollapsibleContent
+                            >
+                        </SidebarMenuItem>
+                    </Collapsible></SidebarMenu
+                >
             </SidebarGroup>
 
             <SidebarGroup class="px-2 py-0">

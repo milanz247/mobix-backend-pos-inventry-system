@@ -82,7 +82,7 @@ class PurchaseController extends Controller
         $purchase->load(['lines.variant.product', 'lines.devices.serializedDevice.location', 'payments.recorder']);
 
         return Inertia::render('purchasing/purchases/Show', [
-            'purchase' => $pageData->purchase($purchase),
+            'purchase' => $pageData->purchase($purchase, request()->user()),
             'outstanding' => $purchases->outstandingAmount($purchase)->__toString(),
             'currency' => $purchase->business->currency,
             'paymentMethods' => [
@@ -104,7 +104,7 @@ class PurchaseController extends Controller
 
         return Inertia::render('purchasing/purchases/Edit', [
             ...$pageData->options(request()->user()),
-            'purchase' => $pageData->purchase($purchase),
+            'purchase' => $pageData->purchase($purchase, request()->user()),
         ]);
     }
 

@@ -20,7 +20,7 @@ class CategoryController extends Controller
 {
     public function index(Request $request): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $search = $request->string('search')->trim()->toString();
         $status = CatalogStatus::tryFrom($request->string('status')->toString());
 
@@ -49,7 +49,7 @@ class CategoryController extends Controller
 
     public function store(StoreCategoryRequest $request): RedirectResponse
     {
-        Business::query()->sole()->categories()->create($request->validated());
+        Business::query()->where('setup_key', 'initial')->sole()->categories()->create($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Category created.')]);
 
@@ -58,7 +58,7 @@ class CategoryController extends Controller
 
     public function edit(Category $category): Response
     {
-        $category = Business::query()->sole()->categories()->findOrFail($category->id);
+        $category = Business::query()->where('setup_key', 'initial')->sole()->categories()->findOrFail($category->id);
 
         return Inertia::render('catalog/categories/Edit', [
             'category' => [
@@ -73,7 +73,7 @@ class CategoryController extends Controller
 
     public function update(UpdateCategoryRequest $request, Category $category): RedirectResponse
     {
-        $category = Business::query()->sole()->categories()->findOrFail($category->id);
+        $category = Business::query()->where('setup_key', 'initial')->sole()->categories()->findOrFail($category->id);
         $category->update($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Category updated.')]);
@@ -83,7 +83,7 @@ class CategoryController extends Controller
 
     public function updateStatus(UpdateCategoryStatusRequest $request, Category $category): RedirectResponse
     {
-        $category = Business::query()->sole()->categories()->findOrFail($category->id);
+        $category = Business::query()->where('setup_key', 'initial')->sole()->categories()->findOrFail($category->id);
         $category->update($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Category status updated.')]);
@@ -94,7 +94,7 @@ class CategoryController extends Controller
     public function destroy(Category $category): RedirectResponse
     {
         DB::transaction(function () use ($category): void {
-            $managedCategory = Business::query()->sole()->categories()
+            $managedCategory = Business::query()->where('setup_key', 'initial')->sole()->categories()
                 ->lockForUpdate()
                 ->findOrFail($category->id);
 

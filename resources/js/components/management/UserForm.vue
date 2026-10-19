@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Form, Link } from '@inertiajs/vue3';
+import { Form, Link, usePage } from '@inertiajs/vue3';
+import type { Auth } from '@/types';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
@@ -10,12 +11,14 @@ import { ref } from 'vue';
 
 type Role = { id: number; name: string };
 type Option = { value: string; label: string };
+type Location = { id: number; name: string; code: string; status: string };
 type ManagedUser = {
     name: string;
     email: string;
     phone: string | null;
     status: string;
     roles: Role[];
+    locations?: Location[];
 };
 
 const props = defineProps<{
@@ -23,6 +26,7 @@ const props = defineProps<{
     method: 'post' | 'put';
     roles: Role[];
     statuses: Option[];
+    locations?: Location[];
     managedUser?: ManagedUser;
     embedded?: boolean;
 }>();
@@ -32,13 +36,30 @@ const emit = defineEmits<{
 }>();
 const sendInvite = ref(!props.managedUser);
 
-const selectedRoleId = props.managedUser?.roles[0]?.id;
+const selectedRoleIds = ref(
+    props.managedUser?.roles.map((role) => role.id) ?? [],
+);
+const selectedLocationIds = ref(
+    props.managedUser?.locations?.map((location) => location.id) ?? [],
+);
+const canAssignLocations = usePage<{
+    auth: Auth;
+}>().props.auth.permissions.includes('locations.assign-users');
 </script>
 
 <template>
     <Form
         :action="action"
         :method="method"
+        :transform="
+            (data) => ({
+                ...data,
+                role_ids: selectedRoleIds,
+                ...(canAssignLocations
+                    ? { location_ids: selectedLocationIds }
+                    : {}),
+            })
+        "
         class="form-section space-y-7"
         :reset-on-success="
             method === 'post' ? ['password', 'password_confirmation'] : []
@@ -144,20 +165,59 @@ const selectedRoleId = props.managedUser?.roles[0]?.id;
         </div>
 
         <div class="grid gap-2">
-            <Label for="role_id">Role</Label>
-            <select
-                id="role_id"
-                name="role_ids[]"
-                required
-                :value="selectedRoleId ?? ''"
-                class="w-full"
-            >
-                <option value="" disabled>Select a role</option>
-                <option v-for="role in roles" :key="role.id" :value="role.id">
+            <Label>Roles</Label>
+            <div class="grid gap-2 sm:grid-cols-2">
+                <label
+                    v-for="role in roles"
+                    :key="role.id"
+                    class="choice-card gap-2"
+                >
+                    <input
+                        v-model="selectedRoleIds"
+                        type="checkbox"
+                        :value="role.id"
+                        class="size-4"
+                    />
                     {{ role.name }}
-                </option>
-            </select>
+                </label>
+            </div>
             <InputError :message="errors.role_ids" />
+        </div>
+
+        <div v-if="canAssignLocations" class="grid gap-2">
+            <Label>Authorized locations</Label>
+            <p class="text-xs text-muted-foreground">
+                Select one or more locations. No assignment means no access to
+                location-dependent operations. Owners retain all-location
+                access.
+            </p>
+            <div class="grid gap-2 sm:grid-cols-2">
+                <label
+                    v-for="location in locations"
+                    :key="location.id"
+                    class="choice-card gap-2"
+                >
+                    <input
+                        v-model="selectedLocationIds"
+                        type="checkbox"
+                        :value="location.id"
+                        :disabled="location.status !== 'active'"
+                        class="size-4"
+                    />
+                    {{ location.name }} ({{ location.code }}){{
+                        location.status !== 'active' ? ' · Inactive' : ''
+                    }}
+                </label>
+            </div>
+            <p v-if="!locations?.length" class="text-xs text-muted-foreground">
+                No locations are available for you to assign.
+            </p>
+            <InputError :message="errors.location_ids" />
+            <InputError
+                v-for="(error, key) in errors"
+                :key="key"
+                :message="key.startsWith('location_ids.') ? error : undefined"
+            />
         </div>
 
         <div class="flex flex-wrap gap-3 border-t border-border/70 pt-6">

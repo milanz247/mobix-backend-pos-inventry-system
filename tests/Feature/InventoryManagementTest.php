@@ -65,7 +65,7 @@ test('inventory write routes enforce permission on direct requests', function ()
     $this->actingAs($user)->post(route('inventory.receiving.store'), [])->assertForbidden();
 });
 
-test('stock receiving keeps an authorized POS location selected', function () {
+test('stock receiving rejects an unauthorized location and keeps an authorized selection', function () {
     ['business' => $business, 'location' => $location, 'category' => $category] = inventoryContext();
     $cashier = User::factory()->create();
     $cashier->givePermissionTo(Permission::findOrCreate('inventory.receive', 'web'));
@@ -74,6 +74,9 @@ test('stock receiving keeps an authorized POS location selected', function () {
 
     $this->actingAs($cashier)
         ->get(route('inventory.receiving.create', ['location_id' => $otherLocation->id]))
+        ->assertNotFound();
+
+    $this->get(route('inventory.receiving.create', ['location_id' => $location->id]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('inventory/Receive')

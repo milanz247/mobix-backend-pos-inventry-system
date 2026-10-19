@@ -31,15 +31,17 @@ class SaleService
     public function __construct(
         private readonly LocationAccessService $locationAccess,
         private readonly InventoryService $inventory,
+        private readonly CashierShiftService $shifts,
     ) {}
 
     /** @param array<string, mixed> $data */
-    public function checkout(User $user, array $data): Sale
+    public function checkout(User $user, array $data, bool $requireActiveShift = false): Sale
     {
         try {
-            return DB::transaction(function () use ($user, $data): Sale {
+            return DB::transaction(function () use ($user, $data, $requireActiveShift): Sale {
                 $business = $this->locationAccess->business();
                 $location = $this->authorizedLocation($user, $business, (int) $data['location_id']);
+                $shiftId = $this->shifts->activeId($user, $location->id);
                 $payloadHash = $this->payloadHash(Arr::except($data, ['operation_key']));
                 $existing = Sale::query()->where('business_id', $business->id)->where('operation_key', $data['operation_key'])->lockForUpdate()->first();
                 if ($existing !== null) {
@@ -50,6 +52,13 @@ class SaleService
                     $this->assertSaleLocation($user, $existing);
 
                     return $existing->load(['lines.components', 'payments']);
+                }
+
+                if ($requireActiveShift) {
+                    abort_unless($user->can('shifts.view'), 403);
+                    if ($shiftId === null) {
+                        throw ValidationException::withMessages(['shift' => __('Open a cashier shift at the selected location before checkout.')]);
+                    }
                 }
 
                 $preparedLines = $this->prepareLines($user, $business, $location, $data['lines']);
@@ -89,6 +98,7 @@ class SaleService
                     'operation_key' => $data['operation_key'],
                     'payload_hash' => $payloadHash,
                     'cashier_id' => $user->id,
+                    'cashier_shift_id' => $shiftId,
                     'source' => $data['source'],
                     'customer_name' => filled($data['customer_name'] ?? null) ? trim((string) $data['customer_name']) : __('Walk-in customer'),
                     'customer_phone' => filled($data['customer_phone'] ?? null) ? trim((string) $data['customer_phone']) : null,
@@ -120,6 +130,7 @@ class SaleService
                         'reference' => $payment['reference'] ?? null,
                         'paid_at' => now(),
                         'received_by' => $user->id,
+                        'cashier_shift_id' => $shiftId,
                     ]);
                 }
 
@@ -144,6 +155,7 @@ class SaleService
     {
         try {
             return DB::transaction(function () use ($user, $sale, $data): SalePayment {
+                $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $business = $this->locationAccess->business();
                 $sale = $business->sales()->lockForUpdate()->findOrFail($sale->id);
                 $this->assertSaleLocation($user, $sale);
@@ -173,6 +185,7 @@ class SaleService
                     'reference' => $data['reference'] ?? null,
                     'paid_at' => now(),
                     'received_by' => $user->id,
+                    'cashier_shift_id' => $shiftId,
                 ]);
                 $sale->paid_total = $this->money(BigDecimal::of((string) $sale->paid_total)->plus($amount)->__toString());
                 $sale->payment_status = $this->paymentStatus((string) $sale->total, (string) $sale->paid_total, $this->refundTotal($sale), $this->returnedTotal($sale));
@@ -198,6 +211,7 @@ class SaleService
     {
         try {
             return DB::transaction(function () use ($user, $sale, $data): SaleReturn {
+                $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $business = $this->locationAccess->business();
                 $sale = $business->sales()->with(['lines.variant.product', 'lines.components.variant.product'])->lockForUpdate()->findOrFail($sale->id);
                 $this->assertSaleLocation($user, $sale);
@@ -265,6 +279,7 @@ class SaleService
                         'reference' => $data['refund_reference'] ?? null,
                         'refunded_at' => now(),
                         'processed_by' => $user->id,
+                        'cashier_shift_id' => $shiftId,
                     ]);
                 }
                 $operation = $this->inventory->returnSale($user, $saleReturn);

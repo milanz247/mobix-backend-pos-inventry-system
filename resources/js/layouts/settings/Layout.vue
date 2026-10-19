@@ -23,12 +23,12 @@ import type { Auth, NavItem } from '@/types';
 type SettingsNavItem = NavItem & { description: string };
 type SettingsNavGroup = { title: string; items: SettingsNavItem[] };
 
-const auth = usePage<{ auth: Auth }>().props.auth;
+const auth = computed(() => usePage<{ auth: Auth }>().props.auth);
 const settingsGroups = computed<SettingsNavGroup[]>(() => [
     {
         title: 'Workspace',
         items: [
-            ...(auth.permissions.includes('business-settings.view')
+            ...(auth.value.permissions.includes('business-settings.view')
                 ? [
                       {
                           title: 'Business',
@@ -50,7 +50,7 @@ const settingsGroups = computed<SettingsNavGroup[]>(() => [
                       },
                   ]
                 : []),
-            ...(auth.permissions.includes('locations.view')
+            ...(auth.value.permissions.includes('locations.view')
                 ? [
                       {
                           title: 'Locations',

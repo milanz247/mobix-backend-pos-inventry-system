@@ -9,6 +9,7 @@ use App\Models\SaleLineComponent;
 use App\Models\SalePayment;
 use App\Models\SaleRefund;
 use App\Models\SaleReturn;
+use App\Models\SaleReturnLine;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Support\Facades\Storage;
@@ -80,6 +81,7 @@ class SalePageData
                 ];
             })->values()->all(),
             'payments' => $sale->payments->map(fn (SalePayment $payment): array => [
+                'id' => $payment->id,
                 'amount' => $payment->amount,
                 'cash_tendered' => $payment->cash_tendered,
                 'change_given' => $payment->change_given,
@@ -94,6 +96,16 @@ class SalePageData
                 'total' => $return->total,
                 'refund_total' => $return->refund_total,
                 'reason' => $return->reason,
+                'notes' => $return->notes,
+                'lines' => $return->lines->map(fn (SaleReturnLine $line): array => [
+                    'id' => $line->id, 'product' => $line->saleLine->product_name_snapshot,
+                    'quantity' => $line->quantity, 'total' => $line->total, 'restock' => $line->restock,
+                ])->values()->all(),
+                'refunds' => $return->refunds->map(fn (SaleRefund $refund): array => [
+                    'id' => $refund->id, 'amount' => $refund->amount, 'method' => $refund->method,
+                    'reference' => $refund->reference, 'refunded_at' => $refund->refunded_at->toIso8601String(),
+                    'processed_by' => $refund->processor->name,
+                ])->values()->all(),
                 'processed_at' => $return->processed_at->format('Y-m-d H:i:s'),
                 'processed_by' => $return->processor->name,
             ])->values()->all(),

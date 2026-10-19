@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Business;
+use App\Models\CashierShift;
+use App\Models\Location;
 use App\Models\Role;
 use App\Models\User;
 use App\SystemRole;
@@ -90,4 +92,15 @@ test('deleting a managed user also removes their private profile photo', functio
 
     $this->assertModelMissing($user);
     Storage::disk(config('filesystems.default'))->assertMissing($photoPath);
+});
+
+test('users with cashier shift history are retained when deletion is requested', function () {
+    $owner = managementOwner();
+    $user = User::factory()->create();
+    $business = Business::query()->sole();
+    $location = Location::factory()->for($business)->create();
+    CashierShift::factory()->for($business)->for($location)->for($user, 'cashier')->create();
+    $this->actingAs($owner)->delete(route('users.destroy', $user))
+        ->assertSessionHasErrors(['user' => 'Users with cashier shift history cannot be deleted. Deactivate the account instead.']);
+    $this->assertModelExists($user);
 });

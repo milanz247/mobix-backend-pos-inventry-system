@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\Models\Business;
+use App\Models\CashierShift;
 use App\Models\Role;
+use App\Models\ShiftEvent;
 use App\Models\User;
+use App\PermissionName;
 use App\SystemRole;
 use App\UserStatus;
 use Illuminate\Database\Eloquent\Collection;
@@ -15,15 +18,20 @@ use Illuminate\Validation\ValidationException;
 
 class UserAdministrationService
 {
+    public function __construct(private readonly LocationAccessService $locations) {}
+
     /** @param array<string, mixed> $attributes */
     public function create(User $actor, array $attributes): User
     {
+        abort_unless($actor->can('users.create') && $actor->can('users.assign-roles'), 403);
+
         return DB::transaction(function () use ($actor, $attributes): User {
             $roles = $this->roles($attributes['role_ids']);
             $this->ensureRolesMayBeAssigned($actor, $roles);
 
-            $user = User::query()->create(Arr::except($attributes, ['role_ids', 'password_confirmation']));
+            $user = User::query()->create(Arr::except($attributes, ['role_ids', 'location_ids', 'password_confirmation']));
             $user->syncRoles($roles);
+            $this->syncLocations($actor, $user, $attributes);
 
             return $user;
         });
@@ -32,6 +40,8 @@ class UserAdministrationService
     /** @param array<string, mixed> $attributes */
     public function update(User $actor, User $managedUser, array $attributes): User
     {
+        abort_unless($actor->can('users.update') && $actor->can('users.assign-roles'), 403);
+
         return DB::transaction(function () use ($actor, $managedUser, $attributes): User {
             $managedUser = User::query()->lockForUpdate()->findOrFail($managedUser->id);
             $roles = $this->roles($attributes['role_ids']);
@@ -54,7 +64,8 @@ class UserAdministrationService
                 unset($attributes['password']);
             }
 
-            $managedUser->update(Arr::except($attributes, ['role_ids', 'password_confirmation']));
+            $this->syncLocations($actor, $managedUser, $attributes);
+            $managedUser->update(Arr::except($attributes, ['role_ids', 'location_ids', 'password_confirmation']));
             $managedUser->syncRoles($roles);
 
             return $managedUser;
@@ -63,6 +74,7 @@ class UserAdministrationService
 
     public function updateStatus(User $actor, User $managedUser, UserStatus $status): void
     {
+        abort_unless($actor->can('users.update'), 403);
         DB::transaction(function () use ($actor, $managedUser, $status): void {
             $managedUser = User::query()->lockForUpdate()->findOrFail($managedUser->id);
             $this->ensureUserMayBeManaged($actor, $managedUser);
@@ -77,6 +89,7 @@ class UserAdministrationService
 
     public function delete(User $actor, User $managedUser): void
     {
+        abort_unless($actor->can('users.delete'), 403);
         $profilePhotoPath = DB::transaction(function () use ($actor, $managedUser): ?string {
             $managedUser = User::query()->lockForUpdate()->findOrFail($managedUser->id);
             $this->ensureUserMayBeManaged($actor, $managedUser);
@@ -90,6 +103,10 @@ class UserAdministrationService
             }
 
             $profilePhotoPath = $managedUser->profile_photo_path;
+            if (CashierShift::query()->where('cashier_id', $managedUser->id)->exists()
+                || ShiftEvent::query()->where('actor_id', $managedUser->id)->exists()) {
+                $this->fail('user', __('Users with cashier shift history cannot be deleted. Deactivate the account instead.'));
+            }
             $managedUser->delete();
 
             return $profilePhotoPath;
@@ -109,19 +126,58 @@ class UserAdministrationService
         return Role::query()->where('guard_name', 'web')->whereKey($roleIds)->get();
     }
 
-    private function ensureUserMayBeManaged(User $actor, User $managedUser): void
+    public function ensureUserMayBeManaged(User $actor, User $managedUser): void
     {
-        if ($this->isOwner($managedUser) && ! $actor->hasRole(SystemRole::Owner->value)) {
+        abort_unless($this->locations->manageableUsersQuery($actor)->whereKey($managedUser->id)->exists(), 404);
+        $isOwner = $this->locations->hasAllLocationAccess($actor, $this->locations->business());
+        if (($this->isOwner($managedUser) || $managedUser->ownedBusiness()->exists()) && ! $isOwner) {
             $this->fail('user', __('Only the Owner can manage an Owner account.'));
         }
+
+        if (! $this->canManagePrivileges($actor, $managedUser)) {
+            $this->fail('user', __('You cannot manage an account with permissions you do not have.'));
+        }
+    }
+
+    public function canManagePrivileges(User $actor, User $managedUser): bool
+    {
+        return $this->locations->hasAllLocationAccess($actor, $this->locations->business())
+            || (! $this->isOwner($managedUser) && $managedUser->getAllPermissions()->every(fn ($permission): bool => $actor->can($permission->name)));
     }
 
     /** @param Collection<int, Role> $roles */
     private function ensureRolesMayBeAssigned(User $actor, Collection $roles): void
     {
-        if ($roles->contains('name', SystemRole::Owner->value) && ! $actor->hasRole(SystemRole::Owner->value)) {
+        $isOwner = $this->locations->hasAllLocationAccess($actor, $this->locations->business());
+        if ($roles->contains('name', SystemRole::Owner->value) && ! $isOwner) {
             $this->fail('role_ids', __('Only the Owner can assign the Owner role.'));
         }
+
+        if (! $isOwner && $roles->contains(fn (Role $role): bool => $role->permissions->contains(fn ($permission): bool => ! $actor->can($permission->name)))) {
+            $this->fail('role_ids', __('You cannot assign roles with permissions you do not have.'));
+        }
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private function syncLocations(User $actor, User $user, array $attributes): void
+    {
+        if (! array_key_exists('location_ids', $attributes)) {
+            return;
+        }
+        abort_unless($actor->can(PermissionName::LocationsAssignUsers->value), 403);
+        $ids = array_map('intval', $attributes['location_ids']);
+        $retainedIds = $user->locations()->pluck('locations.id')->all();
+        if ($this->locations->accessibleQuery($actor)->where(fn ($query) => $query->where('status', 'active')->orWhereIn('id', $retainedIds))->whereKey($ids)->count() !== count(array_unique($ids))) {
+            $this->fail('location_ids', __('Choose only active locations you are authorized to manage.'));
+        }
+        if ($actor->is($user) && $user->locations()->pluck('locations.id')->sort()->values()->all() !== collect($ids)->sort()->values()->all()) {
+            $this->fail('location_ids', __('You cannot change your own location assignments.'));
+        }
+        if ($this->isOwner($user) || $user->ownedBusiness()->exists()) {
+            return;
+        }
+        $user->locations()->sync($ids);
+        $user->unsetRelation('locations');
     }
 
     private function ensureMayBeDeactivated(User $actor, User $managedUser): void
@@ -155,7 +211,8 @@ class UserAdministrationService
 
     private function isOwner(User $user): bool
     {
-        return $user->hasRole(SystemRole::Owner->value);
+        return $user->hasRole(SystemRole::Owner->value)
+            || $user->ownedBusiness?->setup_key === 'initial';
     }
 
     /** @param Collection<int, Role> $roles */

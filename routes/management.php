@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function (): void {
     Route::get('users', [UserController::class, 'index'])->middleware('can:'.PermissionName::UsersView->value)->name('users.index');
-    Route::get('users/create', [UserController::class, 'create'])->middleware('can:'.PermissionName::UsersCreate->value)->name('users.create');
+    Route::get('users/create', [UserController::class, 'create'])->middleware(['can:'.PermissionName::UsersCreate->value, 'can:'.PermissionName::UsersAssignRoles->value])->name('users.create');
     Route::post('users', [UserController::class, 'store'])->middleware('can:'.PermissionName::UsersCreate->value)->name('users.store');
-    Route::get('users/{user}/edit', [UserController::class, 'edit'])->middleware('can:'.PermissionName::UsersUpdate->value)->name('users.edit');
+    Route::get('users/{user}/edit', [UserController::class, 'edit'])->middleware(['can:'.PermissionName::UsersUpdate->value, 'can:'.PermissionName::UsersAssignRoles->value])->name('users.edit');
     Route::put('users/{user}', [UserController::class, 'update'])->middleware('can:'.PermissionName::UsersUpdate->value)->name('users.update');
     Route::patch('users/{user}/status', [UserStatusController::class, 'update'])->middleware('can:'.PermissionName::UsersUpdate->value)->name('users.status.update');
     Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('can:'.PermissionName::UsersDelete->value)->name('users.destroy');

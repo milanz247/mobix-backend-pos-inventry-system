@@ -19,7 +19,7 @@ class BusinessSettingsController extends Controller
 {
     public function edit(Request $request): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
 
         return Inertia::render('settings/Business', [
             'business' => [

@@ -662,7 +662,8 @@ class InventoryService
         return array_values($bundleVariant->bundleComponents->map(function ($component) use ($location, $multiplier): array {
             $variant = $component->componentVariant;
 
-            if ($variant->product->product_type === ProductType::Combo || $variant->status !== CatalogStatus::Active) {
+            if ($variant->product->product_type === ProductType::Combo || $variant->status !== CatalogStatus::Active
+                || $variant->product->status !== CatalogStatus::Active || $variant->business_id !== $location->business_id) {
                 throw ValidationException::withMessages(['components' => __('The combo contains an inactive or nested combo component.')]);
             }
 

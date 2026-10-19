@@ -2,13 +2,18 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Business;
 use App\Models\User;
 use App\PermissionName;
+use App\Services\LocationAccessService;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    public function __construct(private readonly LocationAccessService $locations) {}
+
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -42,17 +47,22 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
-            'auth' => [
+            'auth' => Inertia::always(fn (): array => [
                 'user' => $user === null ? null : [
                     ...$user->toArray(),
                     'avatar' => $user->profile_photo_path === null
                         ? null
                         : route('profile-photo.show', ['v' => $user->updated_at?->getTimestamp()]),
                 ],
-                'roles' => fn (): array => $user?->getRoleNames()->values()->all() ?? [],
-                'permissions' => fn (): array => $this->permissionsFor($user),
-            ],
+                'roles' => $user?->getRoleNames()->values()->all() ?? [],
+                'permissions' => $this->permissionsFor($user),
+            ]),
             'businessPreferences' => $request->attributes->get('businessPreferences'),
+            'locationAccess' => Inertia::always(fn (): ?array => $user === null || ! Business::query()->where('setup_key', 'initial')->exists() ? null : [
+                'locations' => $this->locations->accessibleQuery($user)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
+                'selectedId' => $this->locations->selectedLocationId($request),
+                'allLocations' => $this->locations->hasAllLocationAccess($user, $this->locations->business()),
+            ]),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

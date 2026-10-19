@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { Calculator, ShoppingCart } from '@lucide/vue';
+import {
+    ArrowLeft,
+    Calculator,
+    ChartNoAxesCombined,
+    ShoppingCart,
+} from '@lucide/vue';
 import { computed, ref } from 'vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import UserMenuContent from '@/components/UserMenuContent.vue';
@@ -21,6 +26,9 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { getInitials } from '@/composables/useInitials';
 import { index as posIndex } from '@/routes/pos';
+import { dashboard } from '@/routes';
+import { edit as editProfile } from '@/routes/profile-settings';
+import { index as salesHistory } from '@/routes/sales';
 import type { Auth, BreadcrumbItem } from '@/types';
 
 withDefaults(
@@ -34,6 +42,7 @@ withDefaults(
 
 const page = usePage<{ auth: Auth }>();
 const user = computed(() => page.props.auth.user);
+const isPos = computed(() => page.component === 'sales/Pos');
 const canAccessPos = computed(() =>
     page.props.auth.permissions.includes('sales.pos'),
 );
@@ -120,18 +129,57 @@ function backspaceCalculator(): void {
 <template>
     <div>
         <header
-            class="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b border-border/70 bg-card/95 px-3 shadow-sm shadow-slate-950/5 backdrop-blur-md sm:px-4"
+            :aria-label="
+                isPos ? 'Point of sale navigation' : 'Application navigation'
+            "
+            :class="isPos ? 'flex-nowrap' : 'flex-wrap'"
+            class="sticky top-0 z-20 flex min-h-16 shrink-0 items-center gap-2 border-b border-border/70 bg-card/95 px-3 py-2 shadow-sm shadow-slate-950/5 backdrop-blur-md sm:px-4"
         >
-            <div class="flex min-w-0 items-center gap-2">
+            <div class="flex shrink-0 items-center gap-2">
                 <SidebarTrigger
                     class="-ml-1 size-9 rounded-lg border border-transparent hover:border-border hover:bg-accent"
                 />
-                <template v-if="breadcrumbs && breadcrumbs.length > 0">
+                <template v-if="isPos">
+                    <Button as-child variant="outline" size="sm">
+                        <Link
+                            :href="
+                                page.props.auth.permissions.includes(
+                                    'dashboard.view',
+                                )
+                                    ? dashboard()
+                                    : editProfile()
+                            "
+                            ><ArrowLeft class="size-4" /> Back</Link
+                        >
+                    </Button>
+                    <span class="hidden text-sm font-semibold 2xl:inline"
+                        >Point of sale</span
+                    >
+                </template>
+                <template v-else-if="breadcrumbs && breadcrumbs.length > 0">
                     <Breadcrumbs :breadcrumbs="breadcrumbs" />
                 </template>
             </div>
 
+            <div v-if="isPos" id="pos-navbar-actions" class="min-w-0 flex-1" />
             <div class="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+                <Button
+                    v-if="
+                        isPos &&
+                        page.props.auth.permissions.includes('sales.view')
+                    "
+                    as-child
+                    variant="outline"
+                    size="sm"
+                    aria-label="Sales history"
+                >
+                    <Link :href="salesHistory()"
+                        ><ChartNoAxesCombined class="size-4" /><span
+                            class="hidden sm:inline"
+                            >Sales history</span
+                        ></Link
+                    >
+                </Button>
                 <Button
                     type="button"
                     variant="outline"
@@ -144,7 +192,7 @@ function backspaceCalculator(): void {
                     <Calculator class="size-4" />
                 </Button>
                 <Button
-                    v-if="canAccessPos"
+                    v-if="canAccessPos && !isPos"
                     as-child
                     size="sm"
                     class="h-9 px-3 shadow-md shadow-primary/15"
@@ -156,7 +204,7 @@ function backspaceCalculator(): void {
                     </Link>
                 </Button>
 
-                <DropdownMenu>
+                <DropdownMenu v-if="!isPos">
                     <DropdownMenuTrigger as-child>
                         <Button
                             variant="outline"

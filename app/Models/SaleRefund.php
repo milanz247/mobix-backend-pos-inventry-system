@@ -16,7 +16,7 @@ use LogicException;
  * @property string $method
  * @property Carbon $refunded_at
  */
-#[Fillable(['business_id', 'sale_id', 'amount', 'operation_key', 'method', 'reference', 'refunded_at', 'processed_by'])]
+#[Fillable(['cashier_shift_id', 'business_id', 'sale_id', 'amount', 'operation_key', 'method', 'reference', 'refunded_at', 'processed_by'])]
 class SaleRefund extends Model
 {
     /** @use HasFactory<SaleRefundFactory> */

@@ -24,7 +24,7 @@ class BrandController extends Controller
 {
     public function index(Request $request): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $search = $request->string('search')->trim()->toString();
         $status = CatalogStatus::tryFrom($request->string('status')->toString());
 
@@ -54,7 +54,7 @@ class BrandController extends Controller
 
     public function store(StoreBrandRequest $request): RedirectResponse
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $attributes = $request->safe()->except('logo');
         $logoPath = $this->storeLogo($request->file('logo'));
 
@@ -79,7 +79,7 @@ class BrandController extends Controller
 
     public function edit(Brand $brand): Response
     {
-        $brand = Business::query()->sole()->brands()->findOrFail($brand->id);
+        $brand = Business::query()->where('setup_key', 'initial')->sole()->brands()->findOrFail($brand->id);
 
         return Inertia::render('catalog/brands/Edit', [
             'brand' => [
@@ -95,7 +95,7 @@ class BrandController extends Controller
 
     public function update(UpdateBrandRequest $request, Brand $brand): RedirectResponse
     {
-        $brand = Business::query()->sole()->brands()->findOrFail($brand->id);
+        $brand = Business::query()->where('setup_key', 'initial')->sole()->brands()->findOrFail($brand->id);
         $attributes = $request->safe()->except('logo');
         $previousLogoPath = $brand->logo_path;
         $newLogoPath = $this->storeLogo($request->file('logo'));
@@ -127,7 +127,7 @@ class BrandController extends Controller
 
     public function updateStatus(UpdateBrandStatusRequest $request, Brand $brand): RedirectResponse
     {
-        $brand = Business::query()->sole()->brands()->findOrFail($brand->id);
+        $brand = Business::query()->where('setup_key', 'initial')->sole()->brands()->findOrFail($brand->id);
         $brand->update($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Brand status updated.')]);
@@ -138,7 +138,7 @@ class BrandController extends Controller
     public function destroy(Brand $brand): RedirectResponse
     {
         $logoPath = DB::transaction(function () use ($brand): ?string {
-            $managedBrand = Business::query()->sole()->brands()
+            $managedBrand = Business::query()->where('setup_key', 'initial')->sole()->brands()
                 ->lockForUpdate()
                 ->findOrFail($brand->id);
 

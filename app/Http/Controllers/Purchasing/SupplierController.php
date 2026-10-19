@@ -21,12 +21,15 @@ use Inertia\Response;
 
 class SupplierController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, LocationAccessService $locationAccess): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $search = $request->string('search')->trim()->toString();
         $status = SupplierStatus::tryFrom($request->string('status')->toString());
-        $suppliers = $business->suppliers()->withCount('purchases')
+        $allowedLocationIds = $locationAccess->accessibleQuery($request->user())->select('locations.id');
+        $suppliers = $business->suppliers()->withCount(['purchases' => fn ($query) => $query
+            ->whereIn('location_id', $allowedLocationIds)
+            ->when(! $request->user()->can('purchases.view'), fn ($query) => $query->whereRaw('1 = 0'))])
             ->when($search !== '', fn ($query) => $query->where(fn ($query) => $query
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('contact_person', 'like', "%{$search}%")
@@ -59,7 +62,7 @@ class SupplierController extends Controller
 
     public function store(StoreSupplierRequest $request): RedirectResponse
     {
-        $supplier = Business::query()->sole()->suppliers()->create($request->validated());
+        $supplier = Business::query()->where('setup_key', 'initial')->sole()->suppliers()->create($request->validated());
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Supplier created.')]);
 
         return to_route('suppliers.show', $supplier);
@@ -67,9 +70,10 @@ class SupplierController extends Controller
 
     public function show(Supplier $supplier, LocationAccessService $locationAccess): Response
     {
-        $supplier = Business::query()->sole()->suppliers()->findOrFail($supplier->id);
+        $supplier = Business::query()->where('setup_key', 'initial')->sole()->suppliers()->findOrFail($supplier->id);
         $allowedLocationIds = $locationAccess->accessibleQuery(request()->user())->select('locations.id');
         $purchases = $supplier->purchases()->whereIn('location_id', $allowedLocationIds)
+            ->when(! request()->user()->can('purchases.view'), fn ($query) => $query->whereRaw('1 = 0'))
             ->with('location:id,name,code')->latest('invoice_date')->limit(10)->get()
             ->map(fn (Purchase $purchase): array => [
                 'id' => $purchase->id,
@@ -100,14 +104,14 @@ class SupplierController extends Controller
 
     public function edit(Supplier $supplier): Response
     {
-        $supplier = Business::query()->sole()->suppliers()->findOrFail($supplier->id);
+        $supplier = Business::query()->where('setup_key', 'initial')->sole()->suppliers()->findOrFail($supplier->id);
 
         return Inertia::render('purchasing/suppliers/Edit', ['supplier' => $supplier]);
     }
 
     public function update(UpdateSupplierRequest $request, Supplier $supplier): RedirectResponse
     {
-        $supplier = Business::query()->sole()->suppliers()->findOrFail($supplier->id);
+        $supplier = Business::query()->where('setup_key', 'initial')->sole()->suppliers()->findOrFail($supplier->id);
         $supplier->update($request->validated());
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Supplier updated.')]);
 
@@ -117,7 +121,7 @@ class SupplierController extends Controller
     public function updateStatus(Request $request, Supplier $supplier): RedirectResponse
     {
         $validated = $request->validate(['status' => ['required', Rule::enum(SupplierStatus::class)]]);
-        $supplier = Business::query()->sole()->suppliers()->findOrFail($supplier->id);
+        $supplier = Business::query()->where('setup_key', 'initial')->sole()->suppliers()->findOrFail($supplier->id);
         if ($validated['status'] === SupplierStatus::Inactive->value
             && $supplier->purchases()->where('status', PurchaseStatus::Draft->value)->exists()) {
             return back()->withErrors(['status' => __('This supplier has draft purchases. Post or update them before deactivating the supplier.')]);
@@ -131,7 +135,7 @@ class SupplierController extends Controller
     public function destroy(Supplier $supplier): RedirectResponse
     {
         DB::transaction(function () use ($supplier): void {
-            $supplier = Business::query()->sole()->suppliers()->lockForUpdate()->findOrFail($supplier->id);
+            $supplier = Business::query()->where('setup_key', 'initial')->sole()->suppliers()->lockForUpdate()->findOrFail($supplier->id);
 
             if ($supplier->getAttribute('status') !== SupplierStatus::Inactive) {
                 throw ValidationException::withMessages([

@@ -8,6 +8,6 @@ trait ScopesCatalogValidation
 {
     protected function currentBusiness(): Business
     {
-        return Business::query()->sole();
+        return Business::query()->where('setup_key', 'initial')->sole();
     }
 }

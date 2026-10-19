@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { Head, InfiniteScroll, Link, router, useForm } from '@inertiajs/vue3';
+import {
+    Head,
+    InfiniteScroll,
+    Link,
+    router,
+    useForm,
+    usePoll,
+} from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
     Barcode,
@@ -13,7 +20,8 @@ import {
     Trash2,
 } from '@lucide/vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
-import Heading from '@/components/Heading.vue';
+import PosCashDrawer from '@/components/shifts/PosCashDrawer.vue';
+import type { PosDrawer } from '@/types/shift';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,9 +35,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
-import inventoryRoutes from '@/routes/inventory';
 import { index, checkout } from '@/routes/pos';
-import { index as salesIndex, receipt as saleReceipt } from '@/routes/sales';
+import { receipt as saleReceipt } from '@/routes/sales';
 
 type Variant = {
     id: number;
@@ -47,6 +54,9 @@ type Variant = {
     quantity_on_hand: string;
     devices_in_stock: number;
     is_virtual_combo: boolean;
+    available_quantity: string;
+    stock_status: string;
+    can_sell: boolean;
 };
 type MatchingDevice = {
     product_variant_id: number;
@@ -128,11 +138,10 @@ const props = defineProps<{
     };
     currency: string;
     cashierId: number;
+    drawer: PosDrawer;
     canOverridePrice: boolean;
     canDiscount: boolean;
     canCredit: boolean;
-    canReceiveStock: boolean;
-    canOpenStock: boolean;
     saleSources: { value: string; label: string }[];
     posSettings: PosSettings;
 }>();
@@ -141,6 +150,26 @@ const search = ref(props.filters.search);
 const categoryId = ref(String(props.filters.category_id ?? ''));
 const brandId = ref(String(props.filters.brand_id ?? ''));
 const locationId = ref(String(props.filters.location_id));
+const drawerProcessing = ref(false);
+const navbarReady = ref(false);
+const hasActiveShift = computed(
+    () =>
+        props.drawer.location_id === Number(locationId.value) &&
+        props.selectedLocation.id === Number(locationId.value) &&
+        props.drawer.shift !== null,
+);
+
+let cancelShiftPoll: (() => void) | null = null;
+const shiftPolling = usePoll(15000, () => ({
+    only: ['drawer'],
+    data: { location_id: Number(locationId.value) },
+    onCancelToken: (token) => {
+        cancelShiftPoll = () => token.cancel();
+    },
+    onFinish: () => {
+        cancelShiftPoll = null;
+    },
+}));
 const cart = ref<CartLine[]>([]);
 const heldCarts = ref<HeldCart[]>([]);
 const orderDiscount = ref('0.00');
@@ -149,7 +178,6 @@ const customerPhone = ref('');
 const customerEmail = ref('');
 const saleSource = ref('in_store_pos');
 const notes = ref('');
-const currentDateTime = ref<Date | null>(null);
 const discountModalOpen = ref(false);
 const customerModalOpen = ref(false);
 const receiptModalOpen = ref(false);
@@ -191,6 +219,18 @@ const form = useForm({
     }[],
 });
 const checkoutErrors = computed(() => Object.entries(form.errors));
+watch(
+    () => drawerProcessing.value || form.processing,
+    (busy) => {
+        if (busy) {
+            shiftPolling.stop();
+            cancelShiftPoll?.();
+        } else {
+            shiftPolling.start();
+        }
+    },
+    { flush: 'sync' },
+);
 const hasInsufficientCash = computed(() =>
     payments.value.some(
         (payment) =>
@@ -235,46 +275,7 @@ const discountPreview = computed(() => {
 
     return amount > discountBase.value ? discountBase.value : amount;
 });
-const hasUnavailableProducts = computed(() =>
-    props.variants.data.some(
-        (variant) =>
-            !variant.is_virtual_combo &&
-            (variant.tracking_mode === 'serialized'
-                ? variant.devices_in_stock < 1
-                : thousandths(variant.quantity_on_hand) < 1000n),
-    ),
-);
-const stockEntryHref = computed(() => {
-    const options = { query: { location_id: Number(locationId.value) } };
-
-    if (props.canReceiveStock) {
-        return inventoryRoutes.receiving.create(options).url;
-    }
-
-    if (props.canOpenStock) {
-        return inventoryRoutes.opening.create(options).url;
-    }
-
-    return null;
-});
-const currentDate = computed(() =>
-    currentDateTime.value?.toLocaleDateString(undefined, {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-    }),
-);
-const currentTime = computed(() =>
-    currentDateTime.value?.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-    }),
-);
-
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let clockTimer: ReturnType<typeof setInterval> | undefined;
 let sidebarWrapper: HTMLElement | null = null;
 let originalDocumentOverflow = '';
 let originalBodyOverflow = '';
@@ -283,6 +284,7 @@ let originalSidebarWrapperMinHeight = '';
 let originalSidebarWrapperOverflow = '';
 let pendingReceiptWindow: Window | null = null;
 watch([search, categoryId, brandId, locationId], () => {
+    cancelShiftPoll?.();
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
         router.get(
@@ -303,6 +305,7 @@ watch([search, categoryId, brandId, locationId], () => {
                     'matchingDevice',
                     'filters',
                     'selectedLocation',
+                    'drawer',
                 ],
             },
         );
@@ -315,9 +318,17 @@ watch(
     },
     { deep: true, flush: 'sync' },
 );
+watch(
+    () => props.selectedLocation.id,
+    (id) => {
+        if (locationId.value !== String(id)) {
+            locationId.value = String(id);
+        }
+    },
+);
 onBeforeUnmount(() => {
+    cancelShiftPoll?.();
     if (searchTimer) clearTimeout(searchTimer);
-    if (clockTimer) clearInterval(clockTimer);
     closePendingReceiptWindow();
 
     document.documentElement.style.overflow = originalDocumentOverflow;
@@ -330,6 +341,7 @@ onBeforeUnmount(() => {
     }
 });
 onMounted(() => {
+    navbarReady.value = true;
     originalDocumentOverflow = document.documentElement.style.overflow;
     originalBodyOverflow = document.body.style.overflow;
     document.documentElement.style.overflow = 'hidden';
@@ -347,11 +359,6 @@ onMounted(() => {
         sidebarWrapper.style.minHeight = '0';
         sidebarWrapper.style.overflow = 'hidden';
     }
-
-    currentDateTime.value = new Date();
-    clockTimer = setInterval(() => {
-        currentDateTime.value = new Date();
-    }, 1000);
 
     try {
         const stored = window.localStorage.getItem(heldCartStorageKey);
@@ -451,14 +458,14 @@ function addVariant(variant: Variant): void {
     });
 }
 function canAddVariant(variant: Variant): boolean {
-    if (variant.is_virtual_combo) return true;
-
-    return variant.tracking_mode === 'serialized'
-        ? variant.devices_in_stock > 0
-        : thousandths(variant.quantity_on_hand) >= 1000n;
+    return variant.can_sell;
 }
 function variantStockLabel(variant: Variant): string {
-    if (variant.is_virtual_combo) return 'Bundle available';
+    if (variant.stock_status === 'inconsistent')
+        return 'Check stock / components';
+    if (thousandths(variant.available_quantity) <= 0n) return 'Out of stock';
+    if (variant.is_virtual_combo)
+        return `${variant.available_quantity.replace(/\.?0+$/, '')} bundles available`;
 
     if (variant.tracking_mode === 'serialized') {
         if (variant.devices_in_stock === 0) return 'No devices available';
@@ -466,9 +473,7 @@ function variantStockLabel(variant: Variant): string {
         return `${variant.devices_in_stock} device${variant.devices_in_stock === 1 ? '' : 's'} available`;
     }
 
-    return thousandths(variant.quantity_on_hand) >= 1000n
-        ? `${variant.quantity_on_hand} in stock`
-        : 'Out of stock';
+    return `${variant.available_quantity.replace(/\.0+$/, '')} in stock`;
 }
 function formatQuantity(value: bigint): string {
     return `${value / 1000n}.${(value % 1000n).toString().padStart(3, '0')}`;
@@ -577,6 +582,16 @@ function restoreCartLine(value: unknown): CartLine | null {
                     ? storedVariant.devices_in_stock
                     : 0,
             is_virtual_combo: storedVariant.is_virtual_combo === true,
+            available_quantity: isQuantityValue(
+                storedVariant.available_quantity,
+            )
+                ? storedVariant.available_quantity
+                : '0.000',
+            stock_status:
+                typeof storedVariant.stock_status === 'string'
+                    ? storedVariant.stock_status
+                    : 'unknown',
+            can_sell: false,
         },
         quantity: value.quantity,
         unit_price: value.unit_price,
@@ -851,6 +866,9 @@ function scanSearch(): void {
             quantity_on_hand: '0.000',
             devices_in_stock: 1,
             is_virtual_combo: false,
+            available_quantity: '1.000',
+            stock_status: 'in_stock',
+            can_sell: true,
         };
         cart.value.push({
             variant,
@@ -882,6 +900,7 @@ function scanSearch(): void {
                     'matchingDevice',
                     'filters',
                     'selectedLocation',
+                    'drawer',
                 ],
                 onSuccess: () => scanSearch(),
             },
@@ -939,7 +958,13 @@ function printCompletedSaleReceipt(): void {
     receiptModalOpen.value = false;
 }
 function submitCheckout(): void {
-    if (cart.value.length === 0) return;
+    if (
+        cart.value.length === 0 ||
+        !hasActiveShift.value ||
+        drawerProcessing.value ||
+        form.processing
+    )
+        return;
     prepareAutoPrintWindow();
     form.location_id = Number(locationId.value);
     form.customer_name = props.posSettings.show_customer_name
@@ -1014,57 +1039,18 @@ defineOptions({
         <section
             class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden"
         >
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <Heading
-                    title="Point of sale"
-                    description="Find products, build the order, and take payment."
-                    variant="small"
+            <Teleport v-if="navbarReady" to="#pos-navbar-actions">
+                <PosCashDrawer
+                    :drawer="drawer"
+                    :location-id="Number(locationId)"
+                    :resolved-location-id="selectedLocation.id"
+                    :location-name="selectedLocation.name"
+                    :currency="currency"
+                    :checkout-busy="form.processing"
+                    @busy="drawerProcessing = $event"
+                    @switch-location="locationId = String($event)"
                 />
-                <div class="flex flex-wrap items-center justify-end gap-2">
-                    <div
-                        v-if="posSettings.show_date_time"
-                        class="rounded-lg border border-border/70 bg-card px-3 py-1.5 shadow-xs"
-                        aria-live="off"
-                    >
-                        <p
-                            class="text-xs font-medium whitespace-nowrap tabular-nums"
-                        >
-                            <span class="text-muted-foreground">{{
-                                currentDate ?? 'Loading date…'
-                            }}</span>
-                            <span class="px-1.5 text-muted-foreground/60"
-                                >·</span
-                            >
-                            <span>{{ currentTime ?? '--:--:--' }}</span>
-                        </p>
-                    </div>
-                    <Button
-                        v-if="posSettings.show_sales_history"
-                        as-child
-                        variant="outline"
-                        size="sm"
-                        ><Link :href="salesIndex()">Sales history</Link></Button
-                    >
-                </div>
-            </div>
-
-            <div
-                v-if="hasUnavailableProducts"
-                role="status"
-                class="surface-panel flex flex-col gap-3 border-amber-300/70 bg-amber-50/70 p-3 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-100"
-            >
-                <p>
-                    Products without stock at the selected location cannot be
-                    sold. Add stock through receiving or opening stock first.
-                </p>
-                <Link
-                    v-if="stockEntryHref"
-                    :href="stockEntryHref"
-                    class="shrink-0 font-semibold underline underline-offset-4"
-                >
-                    Add stock at {{ selectedLocation.name }}
-                </Link>
-            </div>
+            </Teleport>
 
             <div
                 class="grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.85fr)]"
@@ -1118,6 +1104,7 @@ defineOptions({
                         <select
                             v-if="posSettings.show_location_filter"
                             v-model="locationId"
+                            :disabled="drawerProcessing || form.processing"
                             class="h-10 min-w-44 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                             aria-label="Sales location"
                         >
@@ -1657,6 +1644,8 @@ defineOptions({
                                 "
                                 :disabled="
                                     form.processing ||
+                                    drawerProcessing ||
+                                    !hasActiveShift ||
                                     cart.length === 0 ||
                                     hasInsufficientCash
                                 "

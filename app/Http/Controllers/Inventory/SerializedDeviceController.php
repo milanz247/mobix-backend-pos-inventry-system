@@ -27,7 +27,9 @@ class SerializedDeviceController extends Controller
 
         $devices = $business->serializedDevices()->with([
             'variant:id,product_id,name,sku', 'variant.product:id,name', 'location:id,name',
-            'events' => fn ($query) => $query->with(['fromLocation:id,name', 'toLocation:id,name', 'performer:id,name'])->latest('created_at')->limit(8),
+            'events' => fn ($query) => $query->where('business_id', $business->id)
+                ->where(fn ($query) => $query->whereIn('from_location_id', $locationIds)->orWhereIn('to_location_id', $locationIds))
+                ->with(['fromLocation:id,name', 'toLocation:id,name', 'performer:id,name'])->latest('created_at')->limit(8),
         ])
             ->whereIn('location_id', $locationIds)
             ->when($locationId !== null, fn (Builder $query) => $query->where('location_id', $locationId))
@@ -47,8 +49,8 @@ class SerializedDeviceController extends Controller
                 'history' => $device->events->map(fn ($event): array => [
                     'id' => $event->id,
                     'type' => $event->event_type->value,
-                    'from' => $event->fromLocation?->name,
-                    'to' => $event->toLocation?->name,
+                    'from' => $locationIds->contains($event->from_location_id) ? $event->fromLocation?->name : null,
+                    'to' => $locationIds->contains($event->to_location_id) ? $event->toLocation?->name : null,
                     'status_after' => $event->status_after->value,
                     'actor' => $event->performer->name,
                     'created_at' => $event->created_at->toIso8601String(),

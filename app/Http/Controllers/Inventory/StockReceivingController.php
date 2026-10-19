@@ -23,7 +23,7 @@ class StockReceivingController extends Controller
             'locations' => $locations,
             'variants' => $pageData->variants($locationAccess->business()),
             'opening' => false,
-            'selectedLocationId' => $requestedLocation['id'] ?? $locations[0]['id'] ?? null,
+            'selectedLocationId' => $requestedLocation['id'] ?? $locationAccess->selectedLocationId($request) ?? $locations[0]['id'] ?? null,
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Business;
+use App\Models\CashierShift;
 use App\Models\Category;
 use App\Models\InventoryStock;
 use App\Models\Location;
@@ -27,6 +28,8 @@ function salesFeatureContext(string ...$permissions): array
     $location = Location::factory()->for($business)->create(['name' => 'Sales Main']);
     $cashier = User::factory()->create();
     $location->users()->attach($cashier);
+    $cashier->givePermissionTo(Permission::findOrCreate('shifts.view', 'web'));
+    CashierShift::factory()->for($business)->for($location)->for($cashier, 'cashier')->create(['opening_cash' => '0.00']);
     foreach ($permissions as $permission) {
         $cashier->givePermissionTo(Permission::findOrCreate($permission, 'web'));
     }
@@ -352,7 +355,7 @@ test('POS resolves an available serialized device by scanned IMEI in the selecte
             ->where('matchingDevice.product_variant_id', $variant->id));
 });
 
-test('POS exposes location stock and stock receiving access for eligible products', function () {
+test('POS exposes zero stock product availability without receiving controls', function () {
     ['user' => $user, 'location' => $location, 'quantityVariant' => $variant] = salesFeatureContext(
         'sales.pos', 'inventory.receive',
     );
@@ -362,13 +365,18 @@ test('POS exposes location stock and stock receiving access for eligible product
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('sales/Pos')
-            ->where('canReceiveStock', true)
+            ->missing('canReceiveStock')
+            ->missing('canOpenStock')
             ->where('posSettings.show_receipt_after_sale', true)
             ->where('posSettings.auto_print_receipt', false)
             ->where('posSettings.require_imei_on_sale', true)
             ->where('posSettings.products_per_page', 24)
             ->where('variants.data.0.id', $variant->id)
-            ->where('variants.data.0.quantity_on_hand', '0.000'));
+            ->where('variants.data.0.quantity_on_hand', '0.000')
+            ->where('variants.data.0.can_sell', false)
+            ->where('variants.data.0.stock_status', 'out_of_stock'));
+
+    $this->get(route('inventory.receiving.create', ['location_id' => $location->id]))->assertOk();
 });
 
 test('POS exposes the next product page for infinite scrolling', function () {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CashierShiftController;
 use App\Http\Controllers\Sales\PosController;
 use App\Http\Controllers\Sales\SaleController;
 use App\Http\Controllers\Sales\SalePaymentController;
@@ -9,6 +10,12 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function (): void {
     Route::get('pos', [PosController::class, 'index'])->middleware('can:sales.pos')->name('pos.index');
     Route::post('pos/checkout', [PosController::class, 'checkout'])->middleware(['can:sales.pos', 'can:sales.create', 'can:sales.view'])->name('pos.checkout');
+
+    Route::middleware(['can:sales.pos', 'can:shifts.view'])->prefix('pos/shifts')->name('pos.shifts.')->group(function () {
+        Route::post('/', [CashierShiftController::class, 'store'])->name('store');
+        Route::post('/{shift}/movements', [CashierShiftController::class, 'storeMovement'])->name('movements');
+        Route::post('/{shift}/close', [CashierShiftController::class, 'close'])->name('close');
+    });
 
     Route::get('sales', [SaleController::class, 'index'])->middleware('can:sales.view')->name('sales.index');
     Route::get('sales/reports', [SaleController::class, 'reports'])->middleware('can:sales.reports.view')->name('sales.reports');

@@ -31,7 +31,7 @@ class ProductController extends Controller
 {
     public function index(Request $request): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $search = $request->string('search')->trim()->toString();
         $variantSearch = $request->string('variant')->trim()->toString();
         $status = CatalogStatus::tryFrom($request->string('status')->toString());
@@ -114,14 +114,14 @@ class ProductController extends Controller
 
     public function create(): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
 
         return Inertia::render('catalog/products/Create', $this->formOptions($business));
     }
 
     public function show(Product $product): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $product = $business->products()
             ->with([
                 'category:id,name',
@@ -182,7 +182,7 @@ class ProductController extends Controller
     public function store(StoreProductRequest $request, SaveProduct $saveProduct): RedirectResponse
     {
         $saveProduct->handle(
-            Business::query()->sole(),
+            Business::query()->where('setup_key', 'initial')->sole(),
             $request->safe()->all(),
             image: $request->file('image'),
         );
@@ -194,7 +194,7 @@ class ProductController extends Controller
 
     public function edit(Product $product): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $product = $business->products()
             ->with(['variants.bundleComponents.componentVariant.product'])
             ->findOrFail($product->id);
@@ -249,7 +249,7 @@ class ProductController extends Controller
 
     public function update(UpdateProductRequest $request, Product $product, SaveProduct $saveProduct): RedirectResponse
     {
-        $product = Business::query()->sole()->products()->findOrFail($product->id);
+        $product = Business::query()->where('setup_key', 'initial')->sole()->products()->findOrFail($product->id);
 
         $saveProduct->handle(
             $product->business,
@@ -265,7 +265,7 @@ class ProductController extends Controller
 
     public function updateStatus(UpdateProductStatusRequest $request, Product $product): RedirectResponse
     {
-        $product = Business::query()->sole()->products()->findOrFail($product->id);
+        $product = Business::query()->where('setup_key', 'initial')->sole()->products()->findOrFail($product->id);
         $product->update($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Product status updated.')]);
@@ -275,7 +275,7 @@ class ProductController extends Controller
 
     public function destroy(Product $product, DeleteProduct $deleteProduct): RedirectResponse
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
         $imagePath = $deleteProduct->handle($business, $product);
 
         if ($imagePath !== null && ! Product::query()->where('image_path', $imagePath)->exists()) {

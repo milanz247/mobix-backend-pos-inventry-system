@@ -14,7 +14,7 @@ class InvoiceSettingsController extends Controller
 {
     public function edit(SalePageData $pageData): Response
     {
-        $business = Business::query()->sole();
+        $business = Business::query()->where('setup_key', 'initial')->sole();
 
         return Inertia::render('settings/Invoices', [
             'invoice' => [

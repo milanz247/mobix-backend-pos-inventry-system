@@ -18,6 +18,7 @@ declare module '@inertiajs/core' {
     export interface InertiaConfig {
         flashDataType: {
             toast?: { type: 'success' | 'error'; message: string };
+            closedShift?: { id: number; reference: string };
             completedSale?: {
                 id: number;
                 sale_number: string;

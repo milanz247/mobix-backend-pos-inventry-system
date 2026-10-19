@@ -28,7 +28,9 @@ type User = {
     email: string;
     phone: string | null;
     status: string;
+    can_manage: boolean;
     roles: Role[];
+    locations: { id: number; name: string; code: string; status: string }[];
 };
 type LinkItem = { url: string | null; label: string; active: boolean };
 
@@ -36,6 +38,7 @@ const props = defineProps<{
     users: { data: User[]; links: LinkItem[] };
     roles: Role[];
     statuses: { value: string; label: string }[];
+    locations: { id: number; name: string; code: string; status: string }[];
     filters: { search?: string; role?: number; status?: string };
 }>();
 
@@ -225,6 +228,7 @@ defineOptions({
                         <th scope="col">User</th>
                         <th scope="col">Contact</th>
                         <th scope="col">Role</th>
+                        <th scope="col">Locations</th>
                         <th scope="col">Status</th>
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
@@ -250,6 +254,21 @@ defineOptions({
                             </div>
                         </td>
                         <td>
+                            <span
+                                v-if="
+                                    user.roles.some(
+                                        (role) => role.name === 'Owner',
+                                    )
+                                "
+                                >All locations</span
+                            >
+                            <span v-else>{{
+                                user.locations
+                                    .map((location) => location.name)
+                                    .join(', ') || 'Not assigned'
+                            }}</span>
+                        </td>
+                        <td>
                             <Badge
                                 :variant="
                                     user.status === 'active'
@@ -263,12 +282,16 @@ defineOptions({
                         <td class="text-right">
                             <RowActions
                                 v-if="
-                                    can('users.update') || can('users.delete')
+                                    user.can_manage &&
+                                    (can('users.update') || can('users.delete'))
                                 "
                                 :label="user.name"
                             >
                                 <Button
-                                    v-if="can('users.update')"
+                                    v-if="
+                                        can('users.update') &&
+                                        can('users.assign-roles')
+                                    "
                                     as-child
                                     variant="outline"
                                     size="icon-sm"
@@ -283,7 +306,10 @@ defineOptions({
                                     </Link>
                                 </Button>
                                 <Button
-                                    v-if="can('users.update')"
+                                    v-if="
+                                        can('users.update') &&
+                                        user.id !== auth.user.id
+                                    "
                                     type="button"
                                     variant="outline"
                                     size="icon-sm"
@@ -295,7 +321,10 @@ defineOptions({
                                     <Power aria-hidden="true" />
                                 </Button>
                                 <Button
-                                    v-if="can('users.delete')"
+                                    v-if="
+                                        can('users.delete') &&
+                                        user.id !== auth.user.id
+                                    "
                                     type="button"
                                     variant="outline"
                                     size="icon-sm"
@@ -311,7 +340,7 @@ defineOptions({
                     </tr>
                     <tr v-if="users.data.length === 0">
                         <td
-                            colspan="5"
+                            colspan="6"
                             class="py-12 text-center text-muted-foreground"
                         >
                             No users found.
@@ -353,6 +382,7 @@ defineOptions({
                     method="post"
                     :roles="roles"
                     :statuses="statuses"
+                    :locations="locations"
                     @cancel="addUserOpen = false"
                     @success="addUserOpen = false"
                 />

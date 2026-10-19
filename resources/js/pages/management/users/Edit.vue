@@ -12,11 +12,13 @@ type ManagedUser = {
     phone: string | null;
     status: string;
     roles: Role[];
+    locations: { id: number; name: string; code: string; status: string }[];
 };
 defineProps<{
     managedUser: ManagedUser;
     roles: Role[];
     statuses: { value: string; label: string }[];
+    locations: { id: number; name: string; code: string; status: string }[];
 }>();
 defineOptions({
     layout: {
@@ -38,6 +40,7 @@ defineOptions({
             :managed-user="managedUser"
             :roles="roles"
             :statuses="statuses"
+            :locations="locations"
         />
     </section>
 </template>

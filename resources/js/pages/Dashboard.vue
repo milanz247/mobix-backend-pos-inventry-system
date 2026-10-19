@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import {
     Banknote,
     ChartNoAxesCombined,
@@ -20,7 +20,7 @@ type TrendRow = {
     date: string;
     sales_count: number;
     net_sales: string;
-    gross_profit: string;
+    gross_profit: string | null;
 };
 
 const props = defineProps<{
@@ -34,11 +34,14 @@ const props = defineProps<{
     };
     performance: {
         net_sales_30_days: string;
-        gross_profit_30_days: string;
+        gross_profit_30_days: string | null;
     };
     trend: TrendRow[];
     currency: string;
     generatedAt: string;
+    canViewCosts: boolean;
+    locations: { id: number; name: string }[];
+    filters: { location_id: number | '' };
 }>();
 
 const auth = usePage<{ auth: Auth }>().props.auth;
@@ -117,7 +120,7 @@ const bestSalesDay = computed(() =>
 const chartBounds = computed(() => {
     const values = visibleTrend.value.flatMap((row) => [
         Number(row.net_sales),
-        Number(row.gross_profit),
+        ...(props.canViewCosts ? [Number(row.gross_profit)] : []),
     ]);
     const minimum = Math.min(0, ...values);
     const maximum = Math.max(0, ...values);
@@ -206,6 +209,30 @@ defineOptions({
                 description="A live view of today's trading position and the last 30 days of sales performance."
             />
             <div class="flex items-center gap-3">
+                <select
+                    :value="filters.location_id"
+                    aria-label="Dashboard location"
+                    @change="
+                        router.get(
+                            dashboard().url,
+                            {
+                                location_id: (
+                                    $event.target as HTMLSelectElement
+                                ).value,
+                            },
+                            { preserveScroll: true },
+                        )
+                    "
+                >
+                    <option value="">All authorized locations</option>
+                    <option
+                        v-for="location in locations"
+                        :key="location.id"
+                        :value="location.id"
+                    >
+                        {{ location.name }}
+                    </option>
+                </select>
                 <p class="hidden text-xs text-muted-foreground sm:block">
                     Updated {{ generatedTime }}
                 </p>
@@ -275,11 +302,18 @@ defineOptions({
             <div class="flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <h2 id="sales-performance-heading" class="font-semibold">
-                        Sales &amp; profit
+                        {{
+                            canViewCosts
+                                ? 'Sales & profit'
+                                : 'Sales performance'
+                        }}
                     </h2>
                     <p class="text-sm text-muted-foreground">
-                        Net sales after returns and profit from recorded cost
-                        snapshots.
+                        {{
+                            canViewCosts
+                                ? 'Net sales after returns and profit from recorded cost snapshots.'
+                                : 'Net sales after returns for your authorized locations.'
+                        }}
                     </p>
                 </div>
                 <div
@@ -313,7 +347,11 @@ defineOptions({
                         <div>
                             <h3 class="font-semibold">Performance trend</h3>
                             <p class="text-xs text-muted-foreground">
-                                Daily net sales and gross profit
+                                {{
+                                    canViewCosts
+                                        ? 'Daily net sales and gross profit'
+                                        : 'Daily net sales'
+                                }}
                             </p>
                         </div>
                         <div class="flex items-center gap-4 text-xs">
@@ -321,7 +359,10 @@ defineOptions({
                                 <span class="size-2 rounded-full bg-blue-500" />
                                 Net sales
                             </span>
-                            <span class="flex items-center gap-1.5">
+                            <span
+                                v-if="canViewCosts"
+                                class="flex items-center gap-1.5"
+                            >
                                 <span
                                     class="size-2 rounded-full bg-emerald-500"
                                 />
@@ -336,7 +377,9 @@ defineOptions({
                             role="img"
                             :aria-label="
                                 trendDays +
-                                '-day net sales and gross profit trend'
+                                (canViewCosts
+                                    ? '-day net sales and gross profit trend'
+                                    : '-day net sales trend')
                             "
                             preserveAspectRatio="none"
                         >
@@ -375,6 +418,7 @@ defineOptions({
                                 vector-effect="non-scaling-stroke"
                             />
                             <polyline
+                                v-if="canViewCosts"
                                 :points="profitPoints"
                                 fill="none"
                                 stroke="rgb(16 185 129)"
@@ -442,7 +486,10 @@ defineOptions({
                             {{ money(selectedNetSales) }}
                         </p>
                     </article>
-                    <article class="surface-panel relative overflow-hidden p-3">
+                    <article
+                        v-if="canViewCosts"
+                        class="surface-panel relative overflow-hidden p-3"
+                    >
                         <div
                             class="absolute -top-8 -right-8 size-24 rounded-full bg-emerald-500/10"
                             aria-hidden="true"
