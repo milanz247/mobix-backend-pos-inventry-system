@@ -4,28 +4,34 @@ namespace App\Services;
 
 use App\Models\CashierShift;
 use App\Models\CashMovement;
-use App\Models\Sale;
 use App\Models\SalePayment;
 use App\Models\SaleRefund;
 use App\Models\ShiftEvent;
 use App\Models\User;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
+use stdClass;
 
 /** @phpstan-type TransactionRow array{id: int, reference: string|null, at: string, amount: string|null, method: string, actor: string, status: string, description: string|null, url: string|null} */
 class ShiftReportService
 {
+    public function __construct(private readonly SalesActivityService $activity, private readonly LocationAccessService $access) {}
+
     /** @return LengthAwarePaginator<int, TransactionRow> */
     public function transactions(User $user, CashierShift $shift, string $section): LengthAwarePaginator
     {
         $canOpenSale = $user->can('sales.view');
         if ($section === 'sales') {
-            return Sale::query()->where('cashier_shift_id', $shift->id)->with(['cashier:id,name', 'payments'])
-                ->latest('posted_at')->latest('id')->paginate(20)->withQueryString()->through(fn (Sale $sale): array => $this->row([
-                    'id' => $sale->id, 'reference' => $sale->sale_number, 'at' => $sale->posted_at->toIso8601String(),
-                    'amount' => $sale->total, 'method' => $sale->payments->pluck('method')->unique()->implode(' / ') ?: 'credit',
-                    'actor' => $sale->cashier->name, 'status' => $sale->status->value,
+            return $this->activity->query($user, $this->access->business(), $shift->location_id)
+                ->where('cashier_shift_id', $shift->id)->leftJoin('users as actor', 'actor.id', '=', 'sales_activity.cashier_id')
+                ->select('sales_activity.*', 'actor.name as actor_name')->orderByDesc('posted_at')->orderByDesc('sale_id')
+                ->paginate(20)->withQueryString()->through(fn (stdClass $sale): array => $this->row([
+                    'id' => (int) $sale->sale_id, 'reference' => $sale->sale_number.($sale->event_type === 'sale' ? '' : ' · '.$sale->event_type),
+                    'at' => Carbon::parse($sale->posted_at)->toIso8601String(), 'amount' => (string) $sale->total,
+                    'method' => $sale->event_type === 'replacement' ? 'exchange' : (SalePayment::query()->where('sale_id', $sale->sale_id)->where('cashier_shift_id', $shift->id)->pluck('method')->unique()->implode(' / ') ?: 'credit'),
+                    'actor' => $sale->actor_name, 'status' => $sale->status,
                     'description' => $canOpenSale ? $sale->customer_name : 'Sale details require sales access',
-                    'url' => $canOpenSale ? route('sales.show', $sale) : null,
+                    'url' => $canOpenSale ? route('sales.show', $sale->sale_id) : null,
                 ]));
         }
         if ($section === 'payments') {

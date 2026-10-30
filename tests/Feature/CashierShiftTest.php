@@ -21,7 +21,7 @@ function shiftContext(): array
     $location = Location::factory()->for($business)->create();
     $user = User::factory()->create();
     $location->users()->attach($user);
-    shiftPermissions($user, ['shifts.view', 'shifts.open', 'shifts.movements', 'shifts.close', 'sales.pos', 'sales.view', 'sales.create', 'sales.credit', 'sale-payments.create', 'sale-returns.create', 'sale-refunds.create', 'inventory.opening']);
+    shiftPermissions($user, ['shifts.view', 'shifts.print', 'expense-reports.view', 'shift-reports.view', 'credit-sales.view', 'customers.view', 'customers.create', 'sales-receipts.print', 'return-receipts.print', 'sale-replacements.create', 'shifts.open', 'shifts.movements', 'shifts.close', 'sales.pos', 'sales.view', 'sales.create', 'sales.credit', 'sale-payments.create', 'sale-returns.create', 'sale-refunds.create', 'inventory.opening']);
 
     return compact('user', 'business', 'location');
 }
@@ -149,6 +149,8 @@ test('cash and noncash refunds use the processing shift even for sales from an e
 test('later credit collections attach once to the current shift without importing earlier payments', function () {
     $context = shiftContext();
     $payload = shiftSalePayload($context, [['amount' => '20.00', 'method' => 'cash']]);
+    $payload['customer_name'] = 'Credit Customer';
+    $payload['customer_phone'] = '0771234567';
     $this->actingAs($context['user']);
     $sale = app(SaleService::class)->checkout($context['user'], $payload);
     $shift = openTestShift($context);

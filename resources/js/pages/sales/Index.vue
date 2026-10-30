@@ -3,6 +3,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { Eye, RotateCcw } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
+import ShiftPagination from '@/components/shifts/ShiftPagination.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,8 @@ type Sale = {
     location: string;
     lines_count: number;
     total: string;
+    paid_total: string;
+    outstanding: string;
     payment_status: string;
     status: string;
 };
@@ -36,6 +39,7 @@ const props = defineProps<{
     paymentStatuses: Status[];
     statuses: Status[];
     currency: string;
+    creditOnly?: boolean;
 }>();
 const auth = usePage<{ auth: Auth }>().props.auth;
 const canProcessReturns = auth.permissions.includes('sale-returns.create');
@@ -56,7 +60,7 @@ watch(
         timer = setTimeout(
             () =>
                 router.get(
-                    index.url(),
+                    props.creditOnly ? '/sales/credit' : index.url(),
                     {
                         search: query.value.search || undefined,
                         date_from: query.value.date_from || undefined,
@@ -86,17 +90,21 @@ function money(value: string): string {
     return `${props.currency} ${BigInt(whole || '0').toLocaleString()}.${fraction.padEnd(2, '0').slice(0, 2)}`;
 }
 defineOptions({
-    layout: { breadcrumbs: [{ title: 'Sales history', href: index() }] },
+    layout: { breadcrumbs: [{ title: 'POS & Sales', href: index() }] },
 });
 </script>
 
 <template>
-    <Head title="Sales history" />
+    <Head :title="creditOnly ? 'Credit sales' : 'Sales history'" />
     <section class="page-shell space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <Heading
-                title="Sales history"
-                description="Posted invoices, payments, and returns across your authorized locations."
+                :title="creditOnly ? 'Credit sales' : 'Sales history'"
+                :description="
+                    creditOnly
+                        ? 'Search credit invoices, record customer payments and settle outstanding balances.'
+                        : 'Posted invoices, payments, and returns across your authorized locations.'
+                "
             />
             <Button as-child><Link :href="posIndex()">Open POS</Link></Button>
         </div>
@@ -170,25 +178,115 @@ defineOptions({
                 </option>
             </select>
         </div>
-        <div class="table-panel">
-            <div class="overflow-x-auto">
-                <table class="data-table min-w-[980px]">
+        <div v-if="creditOnly" class="space-y-3 md:hidden">
+            <article
+                v-for="sale in sales.data"
+                :key="sale.id"
+                class="surface-panel space-y-3 p-4"
+            >
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="font-semibold break-all">
+                            {{ sale.sale_number }}
+                        </p>
+                        <p class="mt-1 text-sm">{{ sale.customer }}</p>
+                        <p class="text-xs text-muted-foreground">
+                            {{ sale.posted_at }} · {{ sale.location }}
+                        </p>
+                    </div>
+                    <Badge variant="outline" class="shrink-0">{{
+                        sale.payment_status.replaceAll('_', ' ')
+                    }}</Badge>
+                </div>
+                <div
+                    class="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm"
+                >
+                    <div>
+                        <p class="text-xs text-muted-foreground">Paid</p>
+                        <p
+                            class="min-w-32 font-medium whitespace-nowrap tabular-nums"
+                        >
+                            {{ money(sale.paid_total) }}
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-muted-foreground">Balance due</p>
+                        <p
+                            class="font-semibold tabular-nums"
+                            :class="
+                                sale.outstanding !== '0.00'
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : ''
+                            "
+                        >
+                            {{ money(sale.outstanding) }}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <Button as-child class="h-10 flex-1"
+                        ><Link :href="show(sale.id)"
+                            ><Eye />
+                            {{
+                                sale.payment_status === 'paid'
+                                    ? 'View payments'
+                                    : 'Payments / Settle'
+                            }}</Link
+                        ></Button
+                    ><Button
+                        v-if="canProcessReturns && sale.status !== 'returned'"
+                        as-child
+                        variant="outline"
+                        class="h-10"
+                        ><Link :href="createReturn(sale.id)"
+                            >Return</Link
+                        ></Button
+                    >
+                </div>
+            </article>
+            <p
+                v-if="sales.data.length === 0"
+                class="surface-panel p-8 text-center text-sm text-muted-foreground"
+            >
+                No credit invoices match the current search.
+            </p>
+        </div>
+        <ShiftPagination
+            v-if="creditOnly"
+            class="md:hidden"
+            :links="sales.links"
+        />
+        <div class="table-panel" :class="creditOnly ? 'hidden md:block' : ''">
+            <div
+                class="overflow-x-auto"
+                :class="creditOnly ? 'hidden md:block' : ''"
+            >
+                <table
+                    class="data-table table-auto"
+                    :class="creditOnly ? 'min-w-[1060px]' : 'min-w-[1320px]'"
+                >
                     <thead>
                         <tr>
                             <th>Invoice</th>
                             <th>Date / customer</th>
                             <th>Location / cashier</th>
-                            <th>Lines</th>
+                            <th v-if="!creditOnly">Lines</th>
                             <th>Total</th>
-                            <th>Payment</th>
-                            <th>Status</th>
-                            <th class="text-right">Actions</th>
+                            <th>Paid / Balance due</th>
+                            <th v-if="!creditOnly">Payment</th>
+                            <th v-if="!creditOnly">Status</th>
+                            <th class="min-w-68 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="sale in sales.data" :key="sale.id">
-                            <td class="font-semibold">
+                            <td class="min-w-44 font-semibold">
                                 {{ sale.sale_number }}
+                                <div v-if="creditOnly" class="mt-2">
+                                    <Badge variant="outline">{{
+                                        sale.payment_status.replaceAll('_', ' ')
+                                    }}</Badge>
+                                </div>
                             </td>
                             <td>
                                 <div>{{ sale.posted_at }}</div>
@@ -202,16 +300,36 @@ defineOptions({
                                     {{ sale.cashier }} · {{ sale.source }}
                                 </div>
                             </td>
-                            <td>{{ sale.lines_count }}</td>
-                            <td class="font-medium tabular-nums">
+                            <td v-if="!creditOnly">{{ sale.lines_count }}</td>
+                            <td
+                                class="min-w-32 font-medium whitespace-nowrap tabular-nums"
+                            >
                                 {{ money(sale.total) }}
                             </td>
-                            <td>
+                            <td class="min-w-40 tabular-nums">
+                                <p
+                                    class="text-xs whitespace-nowrap text-muted-foreground"
+                                >
+                                    Paid {{ money(sale.paid_total) }}
+                                </p>
+                                <p
+                                    class="mt-1 font-semibold whitespace-nowrap"
+                                    :class="
+                                        creditOnly &&
+                                        sale.outstanding !== '0.00'
+                                            ? 'text-amber-700 dark:text-amber-400'
+                                            : ''
+                                    "
+                                >
+                                    Due {{ money(sale.outstanding) }}
+                                </p>
+                            </td>
+                            <td v-if="!creditOnly">
                                 <Badge variant="outline">{{
                                     sale.payment_status.replaceAll('_', ' ')
                                 }}</Badge>
                             </td>
-                            <td>
+                            <td v-if="!creditOnly">
                                 <Badge
                                     :variant="
                                         sale.status === 'returned'
@@ -226,15 +344,29 @@ defineOptions({
                                     }}</Badge
                                 >
                             </td>
-                            <td class="text-right">
-                                <div class="flex justify-end gap-2">
+                            <td class="min-w-68 text-right align-middle">
+                                <div
+                                    class="flex items-center justify-end gap-2 py-1"
+                                >
                                     <Button
                                         as-child
-                                        variant="outline"
+                                        :variant="
+                                            creditOnly ? 'default' : 'outline'
+                                        "
                                         size="sm"
+                                        class="h-9 shrink-0 justify-center"
+                                        :class="creditOnly ? 'w-40' : 'w-24'"
                                     >
                                         <Link :href="show(sale.id)">
-                                            <Eye /> View
+                                            <Eye v-if="!creditOnly" />
+                                            {{
+                                                creditOnly
+                                                    ? sale.payment_status ===
+                                                      'paid'
+                                                        ? 'View payments'
+                                                        : 'Payments / Settle'
+                                                    : 'View'
+                                            }}
                                         </Link>
                                     </Button>
                                     <Button
@@ -245,9 +377,12 @@ defineOptions({
                                         as-child
                                         variant="secondary"
                                         size="sm"
+                                        class="h-9 shrink-0 justify-center px-2"
+                                        :class="creditOnly ? 'w-16' : 'w-24'"
                                     >
                                         <Link :href="createReturn(sale.id)">
-                                            <RotateCcw /> Return
+                                            <RotateCcw v-if="!creditOnly" />
+                                            Return
                                         </Link>
                                     </Button>
                                 </div>
@@ -255,7 +390,7 @@ defineOptions({
                         </tr>
                         <tr v-if="sales.data.length === 0">
                             <td
-                                colspan="8"
+                                :colspan="creditOnly ? 6 : 9"
                                 class="py-12 text-center text-muted-foreground"
                             >
                                 No sales match the current search.
@@ -264,27 +399,16 @@ defineOptions({
                     </tbody>
                 </table>
             </div>
-            <nav
-                class="flex flex-wrap justify-end gap-1 border-t p-3"
-                aria-label="Sales pages"
-            >
-                <Link
-                    v-for="link in sales.links"
-                    :key="link.label"
-                    :href="link.url ?? index.url()"
-                    :class="[
-                        'rounded px-2 py-1 text-sm',
-                        link.active
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground',
-                    ]"
-                    >{{
-                        link.label
-                            .replace('&laquo; Previous', 'Previous')
-                            .replace('Next &raquo;', 'Next')
-                    }}</Link
-                >
-            </nav>
+            <ShiftPagination :links="sales.links" />
         </div>
     </section>
 </template>
+
+<style scoped>
+.data-table th {
+    white-space: normal;
+}
+.data-table td {
+    vertical-align: middle;
+}
+</style>

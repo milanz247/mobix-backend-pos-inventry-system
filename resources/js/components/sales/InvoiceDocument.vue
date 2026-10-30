@@ -48,7 +48,10 @@ function moneyFromMinor(value: bigint): string {
 
 const outstandingBalance = computed(() => {
     const balance =
-        minorUnits(props.sale.total) - minorUnits(props.sale.paid_total);
+        minorUnits(props.sale.total) -
+        minorUnits(props.sale.returned_total) -
+        (minorUnits(props.sale.paid_total) -
+            minorUnits(props.sale.refund_total));
 
     return balance > 0n ? balance : 0n;
 });
@@ -149,6 +152,18 @@ const outstandingBalance = computed(() => {
                     >
                 </p>
                 <p
+                    v-if="
+                        line.returned_quantity &&
+                        line.returned_quantity !== '0.000'
+                    "
+                    class="text-xs"
+                >
+                    Returned quantity: {{ line.returned_quantity }}
+                </p>
+                <p v-if="line.is_replacement" class="text-xs font-medium">
+                    Warranty replacement
+                </p>
+                <p
                     v-if="business.invoice_show_product_codes"
                     class="text-[0.68rem] break-all text-slate-600"
                 >
@@ -213,6 +228,22 @@ const outstandingBalance = computed(() => {
                     <template v-for="line in sale.lines" :key="line.id">
                         <tr class="invoice-section border-b align-top">
                             <td class="py-2">
+                                <p
+                                    v-if="
+                                        line.returned_quantity &&
+                                        line.returned_quantity !== '0.000'
+                                    "
+                                    class="text-xs"
+                                >
+                                    Returned quantity:
+                                    {{ line.returned_quantity }}
+                                </p>
+                                <p
+                                    v-if="line.is_replacement"
+                                    class="text-xs font-medium"
+                                >
+                                    Warranty replacement
+                                </p>
                                 <div class="font-medium break-words">
                                     {{ line.product_name
                                     }}<template v-if="line.variant_name">
@@ -300,7 +331,22 @@ const outstandingBalance = computed(() => {
             <div
                 class="invoice-accent invoice-accent-border mt-2 flex justify-between border-y py-2 text-base font-bold"
             >
-                <span>Total</span><span>{{ money(sale.total) }}</span>
+                <span>{{
+                    sale.returned_total !== '0.00' ? 'Gross total' : 'Total'
+                }}</span
+                ><span>{{ money(sale.total) }}</span>
+            </div>
+            <div
+                v-if="sale.returned_total !== '0.00'"
+                class="flex justify-between font-semibold"
+            >
+                <span>Total after returns</span
+                ><span>{{
+                    moneyFromMinor(
+                        minorUnits(sale.total) -
+                            minorUnits(sale.returned_total),
+                    )
+                }}</span>
             </div>
             <div class="flex justify-between">
                 <span>Paid</span><span>{{ money(sale.paid_total) }}</span>
@@ -366,6 +412,36 @@ const outstandingBalance = computed(() => {
                 </p>
             </div>
         </div>
+
+        <section
+            v-if="sale.returns?.length"
+            class="mt-4 border-t border-dashed pt-3 text-xs"
+        >
+            <h3 class="font-semibold">Returns &amp; replacements</h3>
+            <div
+                v-for="item in sale.returns"
+                :key="item.id"
+                class="invoice-section mt-2 border-b border-dashed pb-2"
+            >
+                <p class="font-semibold">
+                    {{ item.return_number }} ·
+                    {{
+                        item.is_exchange
+                            ? 'Replacement issued'
+                            : 'Return / Refund'
+                    }}
+                </p>
+                <p>{{ item.processed_at }} · {{ item.reason }}</p>
+                <p class="flex justify-between">
+                    <span>Return credit</span
+                    ><span>{{ money(item.total) }}</span>
+                </p>
+                <p class="flex justify-between">
+                    <span>Refund issued</span
+                    ><span>{{ money(item.refund_total) }}</span>
+                </p>
+            </div>
+        </section>
 
         <footer
             class="invoice-section mt-5 border-t border-dashed pt-3 text-center text-xs"

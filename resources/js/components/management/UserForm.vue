@@ -45,6 +45,9 @@ const selectedLocationIds = ref(
 const canAssignLocations = usePage<{
     auth: Auth;
 }>().props.auth.permissions.includes('locations.assign-users');
+const canChangeStatus = usePage<{
+    auth: Auth;
+}>().props.auth.permissions.includes('users.change-status');
 </script>
 
 <template>
@@ -107,6 +110,7 @@ const canAssignLocations = usePage<{
                 <select
                     id="status"
                     name="status"
+                    :disabled="!!managedUser && !canChangeStatus"
                     required
                     :value="managedUser?.status ?? 'active'"
                     class="w-full"
@@ -119,6 +123,12 @@ const canAssignLocations = usePage<{
                         {{ status.label }}
                     </option>
                 </select>
+                <input
+                    v-if="managedUser && !canChangeStatus"
+                    type="hidden"
+                    name="status"
+                    :value="managedUser.status"
+                />
                 <InputError :message="errors.status" />
             </div>
             <label

@@ -215,7 +215,7 @@ defineOptions({
                     ></Button
                 ><Button
                     v-if="
-                        purchase.status === 'draft' && can('purchases.update')
+                        purchase.status === 'draft' && can('purchases.delete')
                     "
                     variant="destructive"
                     @click="deletePurchase"

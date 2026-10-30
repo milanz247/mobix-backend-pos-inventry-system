@@ -82,7 +82,7 @@ defineOptions({
                     ><Link :href="edit(location.id)">Edit</Link></Button
                 >
                 <Button
-                    v-if="can('locations.update') && !location.is_main"
+                    v-if="can('locations.change-status') && !location.is_main"
                     :variant="
                         location.status === 'active' ? 'destructive' : 'outline'
                     "

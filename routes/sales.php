@@ -17,11 +17,13 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{shift}/close', [CashierShiftController::class, 'close'])->name('close');
     });
 
+    Route::get('sales/credit', [SaleController::class, 'index'])->defaults('credit', true)->middleware(['can:sales.view', 'can:credit-sales.view'])->name('sales.credit');
     Route::get('sales', [SaleController::class, 'index'])->middleware('can:sales.view')->name('sales.index');
     Route::get('sales/reports', [SaleController::class, 'reports'])->middleware('can:sales.reports.view')->name('sales.reports');
-    Route::get('sales/{sale}/receipt', [SaleController::class, 'receipt'])->middleware('can:sales.view')->name('sales.receipt');
+    Route::get('sales/{sale}/receipt', [SaleController::class, 'receipt'])->middleware(['can:sales.view', 'can:sales-receipts.print'])->name('sales.receipt');
     Route::get('sales/{sale}', [SaleController::class, 'show'])->middleware('can:sales.view')->name('sales.show');
     Route::post('sales/{sale}/payments', [SalePaymentController::class, 'store'])->middleware(['can:sales.view', 'can:sale-payments.create'])->name('sales.payments.store');
+    Route::get('sales/{sale}/returns/{saleReturn}/receipt', [SaleReturnController::class, 'receipt'])->middleware(['can:sales.view', 'can:return-receipts.print'])->name('sales.returns.receipt');
     Route::get('sales/{sale}/returns/create', [SaleReturnController::class, 'create'])->middleware(['can:sales.view', 'can:sale-returns.create'])->name('sales.returns.create');
     Route::post('sales/{sale}/returns', [SaleReturnController::class, 'store'])->middleware(['can:sales.view', 'can:sale-returns.create'])->name('sales.returns.store');
 });

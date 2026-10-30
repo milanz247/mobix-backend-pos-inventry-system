@@ -168,7 +168,7 @@ usePoll(15000, {
                     <tbody>
                         <tr
                             v-for="transaction in transactions.data"
-                            :key="transaction.id"
+                            :key="`${transaction.reference}-${transaction.at}`"
                         >
                             <td>
                                 <Link

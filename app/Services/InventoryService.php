@@ -5,6 +5,7 @@ namespace App\Services;
 use App\CatalogStatus;
 use App\InventoryOperationType;
 use App\Models\Business;
+use App\Models\DamagedStockEntry;
 use App\Models\InventoryOperation;
 use App\Models\InventoryStock;
 use App\Models\Location;
@@ -243,20 +244,21 @@ class InventoryService
         }, 3);
     }
 
-    public function postSale(User $user, Sale $sale): InventoryOperation
+    /** @param list<int>|null $lineIds */
+    public function postSale(User $user, Sale $sale, ?array $lineIds = null, ?string $operationKey = null): InventoryOperation
     {
-        return DB::transaction(function () use ($user, $sale): InventoryOperation {
+        return DB::transaction(function () use ($user, $sale, $lineIds, $operationKey): InventoryOperation {
             $business = $this->locationAccess->business();
             $sale = $business->sales()->with(['lines.variant.product', 'lines.serializedDevice', 'lines.components.variant.product'])
                 ->lockForUpdate()->findOrFail($sale->id);
             $location = $this->authorizedLocation($user, $sale->location_id);
 
-            if ($sale->inventory_operation_id !== null) {
+            if ($lineIds === null && $sale->inventory_operation_id !== null) {
                 return InventoryOperation::query()->findOrFail($sale->inventory_operation_id);
             }
 
             $operation = $this->existingOrNewOperation($business, $user, [
-                'operation_key' => $sale->operation_key,
+                'operation_key' => $operationKey ?? $sale->operation_key,
                 'location_id' => $location->id,
                 'reference' => $sale->sale_number,
                 'reason' => 'pos_sale',
@@ -265,6 +267,9 @@ class InventoryService
             $operation->update(['source_location_id' => $location->id]);
 
             foreach ($sale->lines as $line) {
+                if ($lineIds !== null && ! in_array($line->id, $lineIds, true)) {
+                    continue;
+                }
                 if ($line->is_combo) {
                     $this->consumeBundleComponents($user, $sale, $operation, $location, $line);
 
@@ -290,7 +295,9 @@ class InventoryService
                 $this->changeQuantity($operation, $location, $variant, '-'.$quantity, StockMovementType::Sale, $sale);
             }
 
-            $sale->update(['inventory_operation_id' => $operation->id]);
+            if ($lineIds === null) {
+                $sale->update(['inventory_operation_id' => $operation->id]);
+            }
 
             return $operation->fresh(['lines']) ?? $operation;
         }, 3);
@@ -312,7 +319,7 @@ class InventoryService
                 'notes' => $saleReturn->notes,
             ], InventoryOperationType::SaleReturn);
 
-            if ($operation->lines()->exists() || $operation->deviceEvents()->exists()) {
+            if ($operation->lines()->exists() || $operation->deviceEvents()->exists() || DamagedStockEntry::query()->where('inventory_operation_id', $operation->id)->exists()) {
                 return $operation;
             }
 
@@ -327,7 +334,18 @@ class InventoryService
                         if ($device->status !== SerializedDeviceStatus::Sold || $device->location_id !== $location->id) {
                             throw ValidationException::withMessages(['lines' => __('The device is no longer sold from this location.')]);
                         }
-                        $this->markDeviceReturned($user, $operation, $saleReturn, $location, $device, SerializedDeviceStatus::InRepair);
+                        $this->markDeviceReturned($user, $operation, $saleReturn, $location, $device, SerializedDeviceStatus::Damaged);
+                    }
+
+                    $variant = $returnLine->is_component ? $returnLine->component->variant : $returnLine->saleLine->variant;
+                    if ($returnLine->serialized_device_id === null && $variant->tracking_mode === VariantTrackingMode::QuantityBased && $variant->product->product_type !== ProductType::Combo) {
+                        DamagedStockEntry::query()->create([
+                            'business_id' => $business->id, 'location_id' => $location->id,
+                            'product_variant_id' => $variant->id, 'inventory_operation_id' => $operation->id,
+                            'sale_return_line_id' => $returnLine->id, 'quantity' => $returnLine->quantity,
+                            'remaining_quantity' => $returnLine->quantity, 'unit_cost' => $returnLine->unit_cost_snapshot, 'reason' => $saleReturn->reason,
+                            'notes' => $saleReturn->notes, 'recorded_by' => $user->id,
+                        ]);
                     }
 
                     continue;
@@ -502,14 +520,61 @@ class InventoryService
             $variant = $this->activeVariant($business, (int) $data['product_variant_id']);
             $this->assertQuantityVariant($variant);
             $quantity = $this->normalizeQuantity((string) $data['quantity']);
+            if ($data['reason'] === 'damaged') {
+                abort_unless($user->can('damaged-stock.create'), 403);
+            }
+            if ($data['reason'] === 'damaged' && $data['direction'] !== 'decrease') {
+                throw ValidationException::withMessages(['direction' => __('Move damaged items out of available stock. Use Damaged stock to recover repaired items.')]);
+            }
             $delta = $data['direction'] === 'decrease' ? '-'.$quantity : $quantity;
             $movementType = $data['direction'] === 'decrease' ? StockMovementType::AdjustmentOut : StockMovementType::AdjustmentIn;
 
             $operation->update(['destination_location_id' => $location->id]);
             $operation->lines()->create(['business_id' => $business->id, 'product_variant_id' => $variant->id, 'quantity' => $delta]);
             $this->changeQuantity($operation, $location, $variant, $delta, $movementType);
+            if ($data['reason'] === 'damaged') {
+                DamagedStockEntry::query()->create([
+                    'business_id' => $business->id, 'location_id' => $location->id,
+                    'product_variant_id' => $variant->id, 'inventory_operation_id' => $operation->id,
+                    'quantity' => $quantity, 'remaining_quantity' => $quantity, 'unit_cost' => $variant->cost_price,
+                    'reason' => 'Stock damaged', 'notes' => $data['notes'] ?? null, 'recorded_by' => $user->id,
+                ]);
+            }
 
             return $operation->fresh(['lines']) ?? $operation;
+        }, 3);
+    }
+
+    /** @param array<string, mixed> $data */
+    public function resolveDamage(User $user, DamagedStockEntry $entry, array $data): InventoryOperation
+    {
+        abort_unless($user->can($data['action'] === 'repair' ? 'damaged-stock.repair' : 'damaged-stock.write-off'), 403);
+
+        return DB::transaction(function () use ($user, $entry, $data): InventoryOperation {
+            $business = $this->locationAccess->business();
+            $entry = DamagedStockEntry::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($entry->id);
+            $location = $this->authorizedLocation($user, $entry->location_id);
+            $payload = [...$data, 'damage_entry_id' => $entry->id, 'location_id' => $location->id, 'reference' => 'DAMAGE-'.$entry->id, 'reason' => $data['action'] === 'repair' ? 'Damaged stock repaired' : 'Damaged stock written off'];
+            $operation = $this->existingOrNewOperation($business, $user, $payload, InventoryOperationType::Adjustment);
+            if ($operation->lines()->exists()) {
+                return $operation;
+            }
+            $quantity = $this->normalizeQuantity((string) $data['quantity']);
+            if (BigDecimal::of($quantity)->isGreaterThan($entry->remaining_quantity)) {
+                throw ValidationException::withMessages(['quantity' => __('Quantity exceeds the remaining damaged stock.')]);
+            }
+            $operation->update(['destination_location_id' => $location->id]);
+            $operation->lines()->create([
+                'business_id' => $business->id, 'product_variant_id' => $entry->product_variant_id,
+                'quantity' => $data['action'] === 'repair' ? $quantity : '0.000',
+            ]);
+            if ($data['action'] === 'repair') {
+                $variant = $this->activeVariant($business, $entry->product_variant_id);
+                $this->changeQuantity($operation, $location, $variant, $quantity, StockMovementType::AdjustmentIn);
+            }
+            $entry->update(['remaining_quantity' => BigDecimal::of($entry->remaining_quantity)->minus($quantity)->toScale(3)->__toString()]);
+
+            return $operation;
         }, 3);
     }
 
@@ -613,8 +678,8 @@ class InventoryService
             $operation = $this->existingOrNewOperation($business, $user, $data, InventoryOperationType::DeviceStatus);
             $newStatus = SerializedDeviceStatus::from($data['status']);
 
-            if ($device->status === SerializedDeviceStatus::Sold) {
-                throw ValidationException::withMessages(['status' => __('A sold device cannot be changed through inventory adjustment.')]);
+            if (in_array($device->status, [SerializedDeviceStatus::Sold, SerializedDeviceStatus::ReturnedToSupplier], true)) {
+                throw ValidationException::withMessages(['status' => __('Sold and supplier-returned devices cannot be changed through inventory adjustment.')]);
             }
 
             if (! $operation->deviceEvents()->exists()) {

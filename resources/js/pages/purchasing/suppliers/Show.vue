@@ -135,7 +135,7 @@ defineOptions({
                 >
                 <Button
                     v-if="
-                        can('suppliers.deactivate') &&
+                        can('suppliers.delete') &&
                         supplier.status === 'inactive'
                     "
                     variant="destructive"

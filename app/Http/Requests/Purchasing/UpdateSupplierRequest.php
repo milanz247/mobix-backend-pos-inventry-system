@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Purchasing;
 
+use App\Http\Requests\Concerns\AuthorizesStatusChanges;
+use App\Models\Supplier;
 use App\Services\LocationAccessService;
 use App\SupplierStatus;
 use Illuminate\Foundation\Http\FormRequest;
@@ -9,12 +11,16 @@ use Illuminate\Validation\Rule;
 
 class UpdateSupplierRequest extends FormRequest
 {
+    use AuthorizesStatusChanges;
+
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return true;
+        $supplier = $this->route('supplier');
+
+        return $supplier instanceof Supplier && $this->maySetStatus($supplier, 'suppliers.deactivate');
     }
 
     /**

@@ -259,7 +259,7 @@ defineOptions({
                                     <Power aria-hidden="true" />
                                 </Button>
                                 <Button
-                                    v-if="can('brands.deactivate')"
+                                    v-if="can('brands.delete')"
                                     type="button"
                                     variant="outline"
                                     size="icon-sm"

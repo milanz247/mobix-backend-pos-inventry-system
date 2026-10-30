@@ -23,7 +23,7 @@ use LogicException;
  * @property-read Collection<int, SaleReturnLine> $lines
  * @property-read Collection<int, SaleRefund> $refunds
  */
-#[Fillable(['business_id', 'location_id', 'return_number', 'operation_key', 'payload_hash', 'total', 'refund_total', 'reason', 'notes', 'inventory_operation_id', 'processed_by', 'processed_at'])]
+#[Fillable(['cashier_shift_id', 'balance_after', 'net_total_after', 'net_paid_after', 'is_exchange', 'business_id', 'location_id', 'return_number', 'operation_key', 'payload_hash', 'total', 'refund_total', 'reason', 'notes', 'inventory_operation_id', 'processed_by', 'processed_at'])]
 class SaleReturn extends Model
 {
     /** @use HasFactory<SaleReturnFactory> */
@@ -59,6 +59,12 @@ class SaleReturn extends Model
         return $this->hasMany(SaleReturnLine::class);
     }
 
+    /** @return HasMany<SaleLine, $this> */
+    public function replacements(): HasMany
+    {
+        return $this->hasMany(SaleLine::class, 'sale_return_id');
+    }
+
     /** @return HasMany<SaleRefund, $this> */
     public function refunds(): HasMany
     {
@@ -67,7 +73,7 @@ class SaleReturn extends Model
 
     protected function casts(): array
     {
-        return ['total' => 'decimal:2', 'refund_total' => 'decimal:2', 'processed_at' => 'datetime'];
+        return ['balance_after' => 'decimal:2', 'net_total_after' => 'decimal:2', 'net_paid_after' => 'decimal:2', 'is_exchange' => 'boolean', 'total' => 'decimal:2', 'refund_total' => 'decimal:2', 'processed_at' => 'datetime'];
     }
 
     protected static function booted(): void

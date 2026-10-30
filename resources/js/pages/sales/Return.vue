@@ -13,6 +13,7 @@ import sales, { index, show } from '@/routes/sales';
 
 type SaleLine = {
     id: number;
+    product_variant_id: number;
     product_name: string;
     variant_name: string;
     sku: string;
@@ -41,10 +42,19 @@ const props = defineProps<{
     currency: string;
     paymentMethods: Method[];
     canRefund: boolean;
+    canExchange: boolean;
+    requireReplacementImei: boolean;
+    replacementDevices: {
+        id: number;
+        product_variant_id: number;
+        imei: string;
+    }[];
     remainingPaid: string;
 }>();
 const confirmation = useConfirmationDialog();
 const form = useForm({
+    is_exchange: false,
+    replacements: [] as { sale_line_id: number; device_identifier?: string }[],
     operation_key: crypto.randomUUID(),
     location_id: props.locations[0]?.id ?? '',
     reason: 'Customer return',
@@ -53,6 +63,7 @@ const form = useForm({
         sale_line_id: line.id,
         quantity: '0.000',
         restock: true,
+        replacement_identifier: '',
     })),
     refund_amount: '0.00',
     refund_method: 'cash',
@@ -104,6 +115,7 @@ const returnTotal = computed(() =>
     }, 0n),
 );
 const expectedRefund = computed(() => {
+    if (form.is_exchange) return 0n;
     const remainingPaid = minorUnits(props.remainingPaid);
     return returnTotal.value < remainingPaid
         ? returnTotal.value
@@ -120,17 +132,37 @@ function lineInput(line: SaleLine): {
     sale_line_id: number;
     quantity: string;
     restock: boolean;
+    replacement_identifier: string;
 } {
     return (
         form.lines.find((item) => item.sale_line_id === line.id) ?? {
             sale_line_id: line.id,
             quantity: '0.000',
             restock: true,
+            replacement_identifier: '',
         }
     );
 }
+watch(
+    () => [form.is_exchange, form.reason],
+    () => {
+        if (form.is_exchange || form.reason === 'Faulty item')
+            form.lines.forEach((line) => {
+                line.restock = false;
+            });
+    },
+);
 function submitReturn(): void {
-    form.lines = selectedLines.value;
+    form.replacements = form.is_exchange
+        ? selectedLines.value.map((line) => ({
+              sale_line_id: line.sale_line_id,
+              device_identifier: line.replacement_identifier || undefined,
+          }))
+        : [];
+    form.transform((data) => ({
+        ...data,
+        lines: data.lines.filter((line) => quantityMilli(line.quantity) > 0n),
+    }));
     confirmation.request({
         title: `Process return for ${props.sale.sale_number}?`,
         description:
@@ -158,7 +190,7 @@ defineOptions({
         <div class="flex flex-wrap items-start justify-between gap-3">
             <Heading
                 :title="`Return · ${sale.sale_number}`"
-                description="Select sold items and record the refund. Returned quantities are restocked transactionally at the original location."
+                description="Return items for a refund or give a same-item warranty replacement. Faulty returns go to damaged stock at the original location."
             /><Button as-child variant="outline"
                 ><Link :href="show(sale.id)"
                     ><ArrowLeft /> Back to sale</Link
@@ -235,19 +267,85 @@ defineOptions({
                                         inputmode="decimal"
                                         :aria-label="`Return quantity for ${line.product_name}`"
                                         :max="line.returnable_quantity"
-                                    /><label
-                                        class="flex items-center gap-2 text-xs"
-                                        ><input
+                                    />
+                                    <label class="grid gap-1 text-xs"
+                                        >Returned item condition
+                                        <select
                                             v-model="lineInput(line).restock"
-                                            type="checkbox"
-                                            class="rounded border-input"
-                                        />
-                                        Return to saleable stock</label
-                                    ><span
+                                            :disabled="
+                                                form.is_exchange ||
+                                                form.reason === 'Faulty item'
+                                            "
+                                            class="h-9 rounded-md border bg-background px-2"
+                                        >
+                                            <option :value="true">
+                                                Saleable — return to available
+                                                stock
+                                            </option>
+                                            <option :value="false">
+                                                Faulty — send to damaged stock
+                                            </option>
+                                        </select>
+                                    </label>
+                                    <p
                                         v-if="!lineInput(line).restock"
-                                        class="block text-amber-700"
-                                        >Not added to available stock</span
+                                        class="text-xs text-amber-700"
                                     >
+                                        Kept out of available stock.
+                                    </p>
+                                    <template
+                                        v-if="
+                                            form.is_exchange &&
+                                            quantityMilli(
+                                                lineInput(line).quantity,
+                                            ) > 0n
+                                        "
+                                    >
+                                        <p class="text-xs font-medium">
+                                            Replacement: same product and
+                                            quantity
+                                        </p>
+                                        <label
+                                            v-if="
+                                                line.tracking_mode ===
+                                                    'serialized' &&
+                                                !line.is_combo
+                                            "
+                                            class="grid gap-1 text-xs"
+                                            >Replacement IMEI
+                                            <select
+                                                v-model="
+                                                    lineInput(line)
+                                                        .replacement_identifier
+                                                "
+                                                class="h-9 rounded-md border bg-background px-2"
+                                            >
+                                                <option
+                                                    value=""
+                                                    :disabled="
+                                                        requireReplacementImei
+                                                    "
+                                                >
+                                                    {{
+                                                        requireReplacementImei
+                                                            ? 'Choose replacement device'
+                                                            : 'Auto-select available device'
+                                                    }}
+                                                </option>
+                                                <option
+                                                    v-for="device in replacementDevices.filter(
+                                                        (item) =>
+                                                            item.product_variant_id ===
+                                                            line.product_variant_id,
+                                                    )"
+                                                    :key="device.id"
+                                                    :value="device.imei"
+                                                >
+                                                    {{ device.imei }}
+                                                </option>
+                                            </select>
+                                        </label>
+                                    </template>
                                 </div>
                                 <span
                                     v-else
@@ -284,6 +382,28 @@ defineOptions({
                 </table>
             </div>
             <aside class="surface-panel h-fit space-y-4 p-4">
+                <div>
+                    <Label for="return-action">Return action</Label>
+                    <select
+                        id="return-action"
+                        v-model="form.is_exchange"
+                        class="mt-1 h-10 w-full rounded-md border bg-background px-3"
+                    >
+                        <option :value="false">Return / Refund</option>
+                        <option v-if="canExchange" :value="true">
+                            Replace same item — no cash refund
+                        </option>
+                    </select>
+                    <p
+                        v-if="form.is_exchange"
+                        class="mt-2 text-xs text-muted-foreground"
+                    >
+                        The faulty item enters damaged stock and an equal-value
+                        replacement leaves available stock. Previous payments
+                        and the balance stay unchanged. An open cashier shift is
+                        required.
+                    </p>
+                </div>
                 <div>
                     <Label for="return-location">Return location</Label
                     ><select
@@ -376,9 +496,10 @@ defineOptions({
                     :message="message"
                 />
                 <p class="text-xs text-muted-foreground">
-                    Inspect returned items before restocking. The current
-                    inventory model tracks saleable quantities; damaged-unit
-                    quarantine is not configured.
+                    Inspect returned items before choosing their condition.
+                    Faulty items are tracked under Inventory → Damaged stock.
+                    Replacements require available stock and are recorded
+                    together with the return.
                 </p>
                 <Button
                     class="w-full"
@@ -388,7 +509,11 @@ defineOptions({
                         (expectedRefund > 0n && !canRefund)
                     "
                     >{{
-                        form.processing ? 'Processing…' : 'Confirm return'
+                        form.processing
+                            ? 'Processing…'
+                            : form.is_exchange
+                              ? 'Confirm replacement'
+                              : 'Confirm return'
                     }}</Button
                 >
             </aside>

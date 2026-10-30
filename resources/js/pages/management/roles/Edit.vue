@@ -4,7 +4,10 @@ import Heading from '@/components/Heading.vue';
 import RoleForm from '@/components/management/RoleForm.vue';
 import { index, update } from '@/routes/roles';
 
-type Permission = { id: number; name: string; label: string };
+import type {
+    PermissionGroups,
+    FunctionPermission as Permission,
+} from '@/types/permissions';
 type Role = {
     id: number;
     name: string;
@@ -12,7 +15,7 @@ type Role = {
     is_system: boolean;
     permissions: Permission[];
 };
-defineProps<{ role: Role; permissionGroups: Record<string, Permission[]> }>();
+defineProps<{ role: Role; permissionGroups: PermissionGroups }>();
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Edit role', href: index() }] },
 });

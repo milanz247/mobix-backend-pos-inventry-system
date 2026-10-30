@@ -67,7 +67,7 @@ class OutOfStockReportController extends Controller
                     'category' => $variant->product->category->name, 'brand' => $variant->product->brand?->name,
                     'location' => $location->name, 'catalogue_status' => $variant->status->value,
                     'last_movement_at' => $variant->getAttribute('last_movement_at') === null ? null : Carbon::parse($variant->getAttribute('last_movement_at'), $business->timezone)->toIso8601String(),
-                    'url' => $user->can('products.view') ? route('products.show', $variant->product_id) : route('inventory.locations.index', ['location_id' => $location->id, 'search' => $variant->sku]),
+                    'url' => $user->can('products.view') ? route('products.show', $variant->product_id) : ($user->can('inventory.view') ? route('inventory.locations.index', ['location_id' => $location->id, 'search' => $variant->sku]) : null),
                 ];
             });
 

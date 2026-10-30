@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Http\Requests\Concerns\AuthorizesStatusChanges;
 use App\LocationStatus;
 use App\LocationType;
 use App\Models\Location;
@@ -12,6 +13,8 @@ use Illuminate\Validation\Rule;
 
 class UpdateLocationRequest extends FormRequest
 {
+    use AuthorizesStatusChanges;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -19,7 +22,7 @@ class UpdateLocationRequest extends FormRequest
     {
         $location = $this->route('location');
 
-        return $location instanceof Location && $this->user()->can('update', $location);
+        return $location instanceof Location && $this->user()->can('update', $location) && $this->maySetStatus($location, 'locations.change-status');
     }
 
     /**

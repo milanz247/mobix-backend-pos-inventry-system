@@ -45,6 +45,11 @@ class LocationPolicy
             && $this->locationAccess->canAccess($user, $location);
     }
 
+    public function changeStatus(User $user, Location $location): bool
+    {
+        return $user->can(PermissionName::LocationsChangeStatus->value) && $this->locationAccess->canAccess($user, $location);
+    }
+
     /**
      * Determine whether the user can delete the model.
      */

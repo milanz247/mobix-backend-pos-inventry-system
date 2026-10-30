@@ -28,7 +28,7 @@ class StoreRoleRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:125', Rule::unique('roles', 'name')->where('guard_name', 'web'), Rule::notIn(array_column(SystemRole::cases(), 'value'))],
             'description' => ['nullable', 'string', 'max:500'],
-            'permission_ids' => ['required', 'array'],
+            'permission_ids' => ['present', 'array'],
             'permission_ids.*' => ['integer', 'distinct', Rule::exists('permissions', 'id')->where('guard_name', 'web')],
         ];
     }

@@ -22,7 +22,7 @@ defineProps<{
         stock_status: string;
         catalogue_status: string;
         last_movement_at: string | null;
-        url: string;
+        url: string | null;
     }>;
     summary: { zero_stock: number; inconsistent: number };
     locations: Option[];
@@ -148,9 +148,14 @@ defineProps<{
                         <tr v-for="row in rows.data" :key="row.id">
                             <td>
                                 <Link
+                                    v-if="row.url"
                                     :href="row.url"
                                     class="font-medium text-primary hover:underline"
                                     >{{ row.product }}</Link
+                                >
+                                <span v-else class="font-medium">{{
+                                    row.product
+                                }}</span
                                 ><span
                                     class="block text-xs text-muted-foreground"
                                     >{{ row.variant }} ·

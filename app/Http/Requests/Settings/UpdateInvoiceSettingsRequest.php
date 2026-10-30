@@ -11,7 +11,7 @@ class UpdateInvoiceSettingsRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can(PermissionName::BusinessSettingsUpdate->value) ?? false;
+        return $this->user()?->can(PermissionName::InvoiceSettingsUpdate->value) ?? false;
     }
 
     /** @return array<string, array<int, string>> */

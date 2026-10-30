@@ -119,6 +119,8 @@ type CompletedSale = {
     sale_number: string;
     customer: string;
     total: string;
+    paid_total: string;
+    outstanding: string;
     cash_tendered: string | null;
     change_given: string;
 };
@@ -142,6 +144,21 @@ const props = defineProps<{
     canOverridePrice: boolean;
     canDiscount: boolean;
     canCredit: boolean;
+    canCreateCustomer: boolean;
+    canPrintReceipt: boolean;
+    creditSale: {
+        id: number;
+        sale_number: string;
+        customer_id: number;
+        customer_name: string;
+        outstanding: string;
+    } | null;
+    customers: {
+        id: number;
+        name: string;
+        phone: string;
+        email: string | null;
+    }[];
     saleSources: { value: string; label: string }[];
     posSettings: PosSettings;
 }>();
@@ -162,7 +179,10 @@ const hasActiveShift = computed(
 let cancelShiftPoll: (() => void) | null = null;
 const shiftPolling = usePoll(15000, () => ({
     only: ['drawer'],
-    data: { location_id: Number(locationId.value) },
+    data: {
+        location_id: Number(locationId.value),
+        credit_sale_id: props.creditSale?.id,
+    },
     onCancelToken: (token) => {
         cancelShiftPoll = () => token.cancel();
     },
@@ -173,6 +193,34 @@ const shiftPolling = usePoll(15000, () => ({
 const cart = ref<CartLine[]>([]);
 const heldCarts = ref<HeldCart[]>([]);
 const orderDiscount = ref('0.00');
+const creditModalOpen = ref(false);
+const creditCustomerId = ref(
+    props.creditSale ? String(props.creditSale.customer_id) : '',
+);
+const creditPaid = ref('0.00');
+const customerSearch = ref('');
+function normalizedCustomerSearch(value: string): string {
+    return value.toLowerCase().replace(/[\s()+.-]+/g, '');
+}
+const selectedCreditCustomer = computed(() =>
+    props.customers.find(
+        (customer) => String(customer.id) === creditCustomerId.value,
+    ),
+);
+const filteredCustomers = computed(() => {
+    const query = normalizedCustomerSearch(customerSearch.value);
+    return props.customers.filter(
+        (customer) =>
+            normalizedCustomerSearch(customer.name).includes(query) ||
+            normalizedCustomerSearch(customer.phone).includes(query),
+    );
+});
+watch(creditModalOpen, (open) => {
+    if (open) router.reload({ only: ['customers'] });
+});
+watch(customerSearch, () => {
+    if (!props.creditSale) creditCustomerId.value = '';
+});
 const customerName = ref('');
 const customerPhone = ref('');
 const customerEmail = ref('');
@@ -191,13 +239,16 @@ const payments = ref<Payment[]>([
     { amount: '', method: 'cash', reference: '', cash_tendered: '' },
 ]);
 const confirmation = useConfirmationDialog();
-const heldCartStorageKey = `nalakamobile:pos-held-carts:${props.cashierId}`;
-const activeCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}`;
+const heldCartStorageKey = `nalakamobile:pos-held-carts:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
+const activeCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
 const activeCartLifetime = 12 * 60 * 60 * 1000;
 let activeCartRestored = false;
 const form = useForm({
     operation_key: crypto.randomUUID(),
     location_id: Number(locationId.value),
+    credit_sale_id: null as number | null,
+    is_credit: false,
+    customer_id: null as number | null,
     customer_name: '',
     customer_phone: '',
     customer_email: '',
@@ -294,6 +345,7 @@ watch([search, categoryId, brandId, locationId], () => {
                 category_id: categoryId.value || undefined,
                 brand_id: brandId.value || undefined,
                 location_id: locationId.value,
+                credit_sale_id: props.creditSale?.id,
             },
             {
                 preserveState: true,
@@ -889,6 +941,7 @@ function scanSearch(): void {
                 category_id: categoryId.value || undefined,
                 brand_id: brandId.value || undefined,
                 location_id: locationId.value,
+                credit_sale_id: props.creditSale?.id,
             },
             {
                 preserveState: true,
@@ -957,7 +1010,7 @@ function printCompletedSaleReceipt(): void {
     }).url;
     receiptModalOpen.value = false;
 }
-function submitCheckout(): void {
+function submitCheckout(credit = false): void {
     if (
         cart.value.length === 0 ||
         !hasActiveShift.value ||
@@ -966,16 +1019,25 @@ function submitCheckout(): void {
     )
         return;
     prepareAutoPrintWindow();
+    form.credit_sale_id = props.creditSale?.id ?? null;
+    form.is_credit = credit;
+    form.customer_id =
+        credit && creditCustomerId.value
+            ? Number(creditCustomerId.value)
+            : null;
     form.location_id = Number(locationId.value);
-    form.customer_name = props.posSettings.show_customer_name
-        ? customerName.value
-        : '';
-    form.customer_phone = props.posSettings.show_customer_phone
-        ? customerPhone.value
-        : '';
-    form.customer_email = props.posSettings.show_customer_email
-        ? customerEmail.value
-        : '';
+    form.customer_name =
+        credit || props.posSettings.show_customer_name
+            ? customerName.value
+            : '';
+    form.customer_phone =
+        credit || props.posSettings.show_customer_phone
+            ? customerPhone.value
+            : '';
+    form.customer_email =
+        credit || props.posSettings.show_customer_email
+            ? customerEmail.value
+            : '';
     form.source = saleSource.value;
     form.order_discount = orderDiscount.value;
     form.notes = props.posSettings.show_sale_notes ? notes.value : '';
@@ -1005,6 +1067,13 @@ function submitCheckout(): void {
         form.payments = [{ amount: formatMinor(cartTotal()), method: 'cash' }];
     }
 
+    if (credit) {
+        form.payments =
+            minorUnits(creditPaid.value) > 0n
+                ? [{ amount: creditPaid.value, method: 'cash' }]
+                : [];
+    }
+
     form.post(checkout().url, {
         preserveScroll: true,
         onFlash: (flash) => {
@@ -1020,6 +1089,10 @@ function submitCheckout(): void {
             }
         },
         onSuccess: () => {
+            creditModalOpen.value = false;
+            creditCustomerId.value = '';
+            creditPaid.value = '0.00';
+            customerSearch.value = '';
             resetSale();
         },
         onError: () => closePendingReceiptWindow(),
@@ -1036,6 +1109,18 @@ defineOptions({
         class="page-shell h-0 min-h-0 w-full max-w-full flex-1 overflow-hidden"
     >
         <Head title="POS checkout" />
+        <div
+            v-if="creditSale"
+            class="flex items-center justify-between gap-3 rounded-md border bg-muted p-3 text-sm"
+        >
+            <span
+                >Adding new items to
+                <strong>{{ creditSale.sale_number }}</strong> ·
+                {{ creditSale.customer_name }} · Previous balance
+                {{ money(minorUnits(creditSale.outstanding)) }}</span
+            >
+            <Link :href="`/sales/${creditSale.id}`">Back to bill</Link>
+        </div>
         <section
             class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden"
         >
@@ -1048,7 +1133,9 @@ defineOptions({
                     :currency="currency"
                     :checkout-busy="form.processing"
                     @busy="drawerProcessing = $event"
-                    @switch-location="locationId = String($event)"
+                    @switch-location="
+                        !creditSale && (locationId = String($event))
+                    "
                 />
             </Teleport>
 
@@ -1104,7 +1191,11 @@ defineOptions({
                         <select
                             v-if="posSettings.show_location_filter"
                             v-model="locationId"
-                            :disabled="drawerProcessing || form.processing"
+                            :disabled="
+                                !!creditSale ||
+                                drawerProcessing ||
+                                form.processing
+                            "
                             class="h-10 min-w-44 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                             aria-label="Sales location"
                         >
@@ -1647,9 +1738,10 @@ defineOptions({
                                     drawerProcessing ||
                                     !hasActiveShift ||
                                     cart.length === 0 ||
-                                    hasInsufficientCash
+                                    hasInsufficientCash ||
+                                    !!creditSale
                                 "
-                                @click="submitCheckout"
+                                @click="submitCheckout(false)"
                             >
                                 <span
                                     v-if="form.processing"
@@ -1670,6 +1762,24 @@ defineOptions({
                                 </template>
                             </Button>
                         </div>
+
+                        <Button
+                            v-if="canCredit"
+                            variant="outline"
+                            class="w-full"
+                            :disabled="
+                                form.processing ||
+                                drawerProcessing ||
+                                !hasActiveShift ||
+                                cart.length === 0
+                            "
+                            @click="creditModalOpen = true"
+                            >{{
+                                creditSale
+                                    ? 'Add items to credit bill'
+                                    : 'Credit sale'
+                            }}</Button
+                        >
 
                         <div
                             v-if="
@@ -1847,6 +1957,143 @@ defineOptions({
             </DialogContent>
         </Dialog>
 
+        <Dialog v-model:open="creditModalOpen">
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Credit sale</DialogTitle>
+                    <DialogDescription
+                        >Select a saved customer or enter a new customer. Record
+                        today's payment and collect the remaining balance
+                        later.</DialogDescription
+                    >
+                </DialogHeader>
+                <div class="space-y-3">
+                    <div v-if="creditSale" class="rounded-md border p-3">
+                        <p class="font-semibold">
+                            {{ creditSale.sale_number }} ·
+                            {{ creditSale.customer_name }}
+                        </p>
+                        <p>
+                            Previous balance:
+                            {{ money(minorUnits(creditSale.outstanding)) }}
+                        </p>
+                    </div>
+                    <template v-else>
+                        <Label for="credit-search">Find customer</Label>
+                        <Input
+                            id="credit-search"
+                            v-model="customerSearch"
+                            placeholder="Search name or phone"
+                            autocomplete="off"
+                        />
+                        <div
+                            class="max-h-40 overflow-y-auto rounded-md border"
+                            aria-label="Customer search results"
+                        >
+                            <button
+                                v-for="customer in filteredCustomers"
+                                :key="customer.id"
+                                type="button"
+                                class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-muted"
+                                :class="
+                                    creditCustomerId === String(customer.id)
+                                        ? 'bg-muted font-semibold'
+                                        : ''
+                                "
+                                @click="creditCustomerId = String(customer.id)"
+                            >
+                                {{ customer.name }} · {{ customer.phone }}
+                            </button>
+                            <p
+                                v-if="filteredCustomers.length === 0"
+                                class="p-3 text-sm text-muted-foreground"
+                            >
+                                No saved customer found. Enter a new customer
+                                below.
+                            </p>
+                        </div>
+                        <p
+                            v-if="selectedCreditCustomer"
+                            class="text-sm font-semibold"
+                        >
+                            Selected: {{ selectedCreditCustomer.name }} ·
+                            {{ selectedCreditCustomer.phone }}
+                        </p>
+                        <Button
+                            v-if="canCreateCustomer"
+                            type="button"
+                            variant="outline"
+                            @click="
+                                creditCustomerId = '';
+                                customerName = '';
+                                customerPhone = '';
+                            "
+                            >Create new customer</Button
+                        >
+                    </template>
+                    <template v-if="!creditCustomerId && canCreateCustomer">
+                        <Label for="credit-name">Customer name *</Label>
+                        <Input
+                            id="credit-name"
+                            v-model="customerName"
+                            required
+                        />
+                        <Label for="credit-phone">Phone *</Label>
+                        <Input
+                            id="credit-phone"
+                            v-model="customerPhone"
+                            required
+                        />
+                    </template>
+                    <Label for="credit-paid">Cash paid today</Label>
+                    <Input
+                        id="credit-paid"
+                        v-model="creditPaid"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                    />
+                    <p>New items: {{ money(cartTotal()) }}</p>
+                    <p class="font-semibold">
+                        Balance due:
+                        {{
+                            money(
+                                minorUnits(creditSale?.outstanding ?? '0') +
+                                    cartTotal() -
+                                    minorUnits(creditPaid || '0'),
+                            )
+                        }}
+                    </p>
+                    <p
+                        v-for="[field, message] in checkoutErrors"
+                        :key="field"
+                        class="text-sm text-destructive"
+                    >
+                        {{ message }}
+                    </p>
+                </div>
+                <DialogFooter>
+                    <Button
+                        :disabled="
+                            form.processing ||
+                            (!creditCustomerId &&
+                                (!canCreateCustomer ||
+                                    !customerName.trim() ||
+                                    !customerPhone.trim())) ||
+                            !/^\d+(?:\.\d{1,2})?$/.test(creditPaid) ||
+                            minorUnits(creditPaid || '0') > cartTotal()
+                        "
+                        @click="submitCheckout(true)"
+                        >{{
+                            creditSale
+                                ? 'Add items to bill'
+                                : 'Complete credit sale'
+                        }}</Button
+                    >
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
         <Dialog v-model:open="customerModalOpen">
             <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-lg">
                 <DialogHeader class="border-b bg-muted/30 px-5 py-4 text-left">
@@ -1956,10 +2203,23 @@ defineOptions({
                         <p
                             class="text-xs font-medium text-primary-foreground/75"
                         >
-                            Change to customer
+                            {{
+                                minorUnits(completedSale.outstanding) > 0n
+                                    ? 'Credit balance due'
+                                    : 'Change to customer'
+                            }}
                         </p>
                         <p class="mt-1 text-3xl font-bold tabular-nums">
-                            {{ money(minorUnits(completedSale.change_given)) }}
+                            {{
+                                money(
+                                    minorUnits(
+                                        minorUnits(completedSale.outstanding) >
+                                            0n
+                                            ? completedSale.outstanding
+                                            : completedSale.change_given,
+                                    ),
+                                )
+                            }}
                         </p>
                     </div>
                 </div>
@@ -1974,7 +2234,7 @@ defineOptions({
                         Next sale
                     </Button>
                     <Button
-                        v-if="completedSale"
+                        v-if="completedSale && canPrintReceipt"
                         type="button"
                         class="flex-1"
                         @click="printCompletedSaleReceipt"

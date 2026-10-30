@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ChevronDown, Eye, Pencil, Power, Search, Trash2, X } from '@lucide/vue';
+import {
+    ChevronDown,
+    Eye,
+    Pencil,
+    Power,
+    Search,
+    Trash2,
+    X,
+} from '@lucide/vue';
 import { toast } from 'vue-sonner';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
@@ -562,7 +570,8 @@ defineOptions({
                                 v-if="
                                     can('products.view') ||
                                     can('products.update') ||
-                                    can('products.deactivate')
+                                    can('products.deactivate') ||
+                                    can('products.delete')
                                 "
                                 :label="product.name"
                             >
@@ -611,7 +620,7 @@ defineOptions({
                                 /></Button>
                                 <Button
                                     v-if="
-                                        can('products.deactivate') &&
+                                        can('products.delete') &&
                                         product.status === 'inactive'
                                     "
                                     type="button"

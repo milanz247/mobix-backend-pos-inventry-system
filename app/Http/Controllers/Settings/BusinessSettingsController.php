@@ -22,6 +22,7 @@ class BusinessSettingsController extends Controller
         $business = Business::query()->where('setup_key', 'initial')->sole();
 
         return Inertia::render('settings/Business', [
+            'canUpdate' => request()->user()->can('business-settings.update'),
             'business' => [
                 'name' => $business->name,
                 'logo_url' => $business->logo_path === null

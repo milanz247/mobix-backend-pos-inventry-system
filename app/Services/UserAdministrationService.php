@@ -56,6 +56,9 @@ class UserAdministrationService
                 $this->ensureOwnerMayBeChanged($managedUser);
             }
 
+            if ($attributes['status'] !== $managedUser->status->value) {
+                abort_unless($actor->can('users.change-status'), 403);
+            }
             if ($attributes['status'] === UserStatus::Inactive->value) {
                 $this->ensureMayBeDeactivated($actor, $managedUser);
             }
@@ -74,7 +77,7 @@ class UserAdministrationService
 
     public function updateStatus(User $actor, User $managedUser, UserStatus $status): void
     {
-        abort_unless($actor->can('users.update'), 403);
+        abort_unless($actor->can('users.change-status'), 403);
         DB::transaction(function () use ($actor, $managedUser, $status): void {
             $managedUser = User::query()->lockForUpdate()->findOrFail($managedUser->id);
             $this->ensureUserMayBeManaged($actor, $managedUser);

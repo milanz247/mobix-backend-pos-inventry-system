@@ -37,6 +37,7 @@ type SaleData = {
     refund_total: string;
     notes: string | null;
     lines: {
+        is_replacement: boolean;
         id: number;
         product_name: string;
         variant_name: string;
@@ -68,6 +69,7 @@ type SaleData = {
         received_by: string;
     }[];
     returns: {
+        is_exchange: boolean;
         id: number;
         return_number: string | null;
         total: string;
@@ -98,6 +100,9 @@ const props = defineProps<{
     currency: string;
     outstanding: string;
     canRecordPayment: boolean;
+    canPrintReceipt: boolean;
+    canPrintReturn: boolean;
+    canAddItems: boolean;
     canReturn: boolean;
     canRefund: boolean;
     paymentMethods: Method[];
@@ -112,6 +117,9 @@ const form = useForm({
 const hasOutstanding = computed(
     () => BigInt(props.outstanding.replace('.', '')) > 0n,
 );
+function formatMinor(value: bigint): string {
+    return `${value / 100n}.${(value % 100n).toString().padStart(2, '0')}`;
+}
 function money(value: string): string {
     const [whole = '0', fraction = '00'] = value.split('.', 2);
     return `${props.currency} ${BigInt(whole || '0').toLocaleString()}.${fraction.padEnd(2, '0').slice(0, 2)}`;
@@ -163,9 +171,15 @@ defineOptions({
                 </div>
             </div>
             <div class="flex flex-wrap gap-2">
+                <Button v-if="canAddItems" as-child
+                    ><Link
+                        :href="`/pos?credit_sale_id=${sale.id}&location_id=${sale.location.id}`"
+                        >Add items to this bill</Link
+                    ></Button
+                >
                 <Button as-child variant="outline"
                     ><Link :href="index()"><ArrowLeft /> Sales</Link></Button
-                ><Button as-child variant="outline"
+                ><Button v-if="canPrintReceipt" as-child variant="outline"
                     ><Link :href="receipt(sale.id)"
                         ><Printer /> Print receipt</Link
                     ></Button
@@ -253,6 +267,12 @@ defineOptions({
                                             <div
                                                 class="text-xs text-muted-foreground"
                                             >
+                                                <Badge
+                                                    v-if="line.is_replacement"
+                                                    variant="outline"
+                                                    class="mr-2"
+                                                    >Warranty replacement</Badge
+                                                >
                                                 {{ line.sku
                                                 }}<Badge
                                                     v-if="line.is_combo"
@@ -356,7 +376,11 @@ defineOptions({
                         <span>Tax</span><span>{{ money(sale.tax_total) }}</span>
                     </div>
                     <div class="flex justify-between border-t pt-3 font-bold">
-                        <span>Total</span
+                        <span>{{
+                            sale.returned_total !== '0.00'
+                                ? 'Gross total'
+                                : 'Total'
+                        }}</span
                         ><span class="tabular-nums">{{
                             money(sale.total)
                         }}</span>
@@ -368,6 +392,20 @@ defineOptions({
                     <div class="flex justify-between text-sm">
                         <span>Returned</span
                         ><span>{{ money(sale.returned_total) }}</span>
+                    </div>
+                    <div
+                        v-if="sale.returned_total !== '0.00'"
+                        class="flex justify-between text-sm font-semibold"
+                    >
+                        <span>Total after returns</span
+                        ><span>{{
+                            money(
+                                formatMinor(
+                                    minorUnits(sale.total) -
+                                        minorUnits(sale.returned_total),
+                                ),
+                            )
+                        }}</span>
                     </div>
                     <div class="flex justify-between text-sm">
                         <span>Refunded</span
@@ -386,6 +424,16 @@ defineOptions({
                     @submit.prevent="recordPayment"
                 >
                     <h2 class="font-semibold">Record payment</h2>
+                    <p class="text-sm text-muted-foreground">
+                        Add a payment whenever the customer pays, or settle the
+                        full balance.
+                    </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        @click="form.amount = outstanding"
+                        >Use full balance / Final payment</Button
+                    >
                     <div class="space-y-1">
                         <Label for="payment-amount">Amount</Label
                         ><Input
@@ -518,9 +566,29 @@ defineOptions({
                             }}</span
                             ><span>{{ money(item.total) }}</span>
                         </div>
+                        <Button
+                            v-if="canPrintReturn"
+                            as-child
+                            variant="outline"
+                            size="sm"
+                            class="my-2"
+                            ><Link
+                                :href="`/sales/${sale.id}/returns/${item.id}/receipt`"
+                                ><Printer /> Print
+                                {{
+                                    item.is_exchange ? 'replacement' : 'return'
+                                }}
+                                receipt</Link
+                            ></Button
+                        >
                         <p class="text-xs text-muted-foreground">
                             {{ item.processed_at }} · {{ item.processed_by }} ·
-                            {{ item.reason }}
+                            {{ item.reason }} ·
+                            {{
+                                item.is_exchange
+                                    ? 'Replacement issued — no cash refund'
+                                    : 'Return / Refund'
+                            }}
                         </p>
                         <p class="text-xs text-muted-foreground">
                             Refund {{ money(item.refund_total) }}

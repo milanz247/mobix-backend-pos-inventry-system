@@ -37,19 +37,19 @@ Route::middleware(['auth'])->group(function () {
         ->name('business-settings.update');
 
     Route::get('settings/invoices', [InvoiceSettingsController::class, 'edit'])
-        ->middleware('can:'.PermissionName::BusinessSettingsView->value)
+        ->middleware('can:'.PermissionName::InvoiceSettingsView->value)
         ->name('invoice-settings.edit');
 
     Route::put('settings/invoices', [InvoiceSettingsController::class, 'update'])
-        ->middleware('can:'.PermissionName::BusinessSettingsUpdate->value)
+        ->middleware('can:'.PermissionName::InvoiceSettingsUpdate->value)
         ->name('invoice-settings.update');
 
     Route::get('settings/pos', [PosSettingsController::class, 'edit'])
-        ->middleware('can:'.PermissionName::BusinessSettingsView->value)
+        ->middleware('can:'.PermissionName::PosSettingsView->value)
         ->name('pos-settings.edit');
 
     Route::put('settings/pos', [PosSettingsController::class, 'update'])
-        ->middleware('can:'.PermissionName::BusinessSettingsUpdate->value)
+        ->middleware('can:'.PermissionName::PosSettingsUpdate->value)
         ->name('pos-settings.update');
 
     Route::get('settings/locations', [LocationController::class, 'index'])->name('locations.index');

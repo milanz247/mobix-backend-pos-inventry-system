@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Sales;
 use App\CatalogStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sales\CheckoutRequest;
+use App\Models\Customer;
 use App\Models\ProductVariant;
+use App\Models\Sale;
 use App\Models\SerializedDeviceIdentifier;
 use App\ProductType;
 use App\SaleSource;
@@ -32,6 +34,17 @@ class PosController extends Controller
             ?: ($locationAccess->selectedLocationId($request) ?? $shifts->activeQuery($user)->whereIn('location_id', $locations->modelKeys())->value('location_id') ?? (int) $locations->first()->id);
         $location = $locationAccess->accessibleQuery($user)->where('status', 'active')->whereKey($locationId)->firstOrFail();
         $request->session()->put('active_location_id', $location->id);
+        $creditSale = null;
+        if ($request->integer('credit_sale_id')) {
+            abort_unless($user->can('sales.credit') && $user->can('sales.view') && $user->can('credit-sales.add-items') && $user->can('credit-sales.view'), 403);
+            $existingSale = app(SaleService::class)->scoped($user, Sale::query()->findOrFail($request->integer('credit_sale_id')));
+            abort_unless($existingSale->is_credit && $existingSale->customer_id !== null && $existingSale->location_id === $location->id, 422);
+            $creditSale = [
+                'id' => $existingSale->id, 'sale_number' => $existingSale->sale_number,
+                'customer_id' => $existingSale->customer_id, 'customer_name' => $existingSale->customer_name,
+                'outstanding' => app(SaleService::class)->outstanding($existingSale)->__toString(),
+            ];
+        }
         $search = mb_substr($request->string('search')->trim()->toString(), 0, 100);
         $categoryId = $business->pos_show_category_filter ? ($request->integer('category_id') ?: null) : null;
         $brandId = $business->pos_show_brand_filter ? ($request->integer('brand_id') ?: null) : null;
@@ -89,6 +102,7 @@ class PosController extends Controller
 
         return Inertia::render('sales/Pos', [
             'variants' => Inertia::scroll($variants),
+            'creditSale' => $creditSale,
             'matchingDevice' => $matchingDevice,
             'locations' => $locations->map(fn ($item): array => ['id' => $item->id, 'name' => $item->name, 'code' => $item->code])->values(),
             'selectedLocation' => ['id' => $location->id, 'name' => $location->name, 'code' => $location->code],
@@ -116,12 +130,15 @@ class PosController extends Controller
                 'show_brand_filter' => $business->pos_show_brand_filter,
                 'show_location_filter' => $business->pos_show_location_filter,
                 'show_receipt_after_sale' => $business->pos_show_receipt_after_sale,
-                'auto_print_receipt' => $business->pos_auto_print_receipt,
+                'auto_print_receipt' => $business->pos_auto_print_receipt && $user->can('sales-receipts.print'),
                 'products_per_page' => $business->pos_products_per_page,
             ],
             'canOverridePrice' => $business->pos_allow_price_override && $user->can('sales.price-override'),
             'canDiscount' => $user->can('sales.discount'),
-            'canCredit' => $user->can('sales.credit'),
+            'customers' => fn () => ! $user->can('customers.view') ? [] : Customer::query()->where('business_id', $business->id)->orderBy('name')->get(['id', 'name', 'phone', 'email']),
+            'canCredit' => $user->can('sales.credit') && $user->can('credit-sales.view') && $user->can('customers.view'),
+            'canCreateCustomer' => $user->can('customers.create'),
+            'canPrintReceipt' => $user->can('sales-receipts.print'),
         ]);
     }
 
@@ -140,9 +157,15 @@ class PosController extends Controller
                 'sale_number' => $sale->sale_number,
                 'customer' => $sale->customer_name ?: __('Walk-in customer'),
                 'total' => $sale->total,
+                'paid_total' => $sale->paid_total,
+                'outstanding' => $sales->outstanding($sale)->__toString(),
                 'cash_tendered' => $cashPayment === null ? null : $cashPayment->cash_tendered,
                 'change_given' => $cashPayment === null ? '0.00' : $cashPayment->change_given,
             ]);
+        }
+
+        if ($request->integer('credit_sale_id')) {
+            return to_route('sales.show', $sale);
         }
 
         return to_route('pos.index', ['location_id' => $sale->location_id]);

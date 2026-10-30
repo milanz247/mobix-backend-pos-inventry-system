@@ -11,7 +11,7 @@ class UpdatePosSettingsRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can(PermissionName::BusinessSettingsUpdate->value) ?? false;
+        return $this->user()?->can(PermissionName::PosSettingsUpdate->value) ?? false;
     }
 
     /** @return array<string, array<int, mixed>> */

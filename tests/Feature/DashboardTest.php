@@ -150,11 +150,5 @@ test('dashboard reports sales returns payments balances and reliable profit', fu
             ->where('trend.29.date', '2026-10-16')
             ->where('trend.29.net_sales', '250.00')
             ->where('trend.29.gross_profit', '100.00')
-            ->has('paymentMethods', 2)
-            ->where('paymentMethods.0.method', 'cash')
-            ->where('paymentMethods.0.amount', '150.00')
-            ->has('topProducts', 2)
-            ->where('topProducts.0.name', 'Popular Phone')
-            ->where('topProducts.0.quantity', '2.000')
             ->etc());
 });

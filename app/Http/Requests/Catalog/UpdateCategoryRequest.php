@@ -4,6 +4,7 @@ namespace App\Http\Requests\Catalog;
 
 use App\CatalogStatus;
 use App\Http\Requests\Catalog\Concerns\ScopesCatalogValidation;
+use App\Http\Requests\Concerns\AuthorizesStatusChanges;
 use App\Models\Category;
 use App\PermissionName;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -14,6 +15,7 @@ use Illuminate\Validation\Validator;
 
 class UpdateCategoryRequest extends FormRequest
 {
+    use AuthorizesStatusChanges;
     use ScopesCatalogValidation;
 
     /**
@@ -26,6 +28,7 @@ class UpdateCategoryRequest extends FormRequest
 
         return $this->user()?->can(PermissionName::CategoriesUpdate->value)
             && $category instanceof Category
+            && $this->maySetStatus($category, 'categories.deactivate')
             && $category->business_id === $business->id;
     }
 

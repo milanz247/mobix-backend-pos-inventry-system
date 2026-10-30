@@ -16,6 +16,7 @@ class PosSettingsController extends Controller
         $business = Business::query()->where('setup_key', 'initial')->sole();
 
         return Inertia::render('settings/Pos', [
+            'canUpdate' => request()->user()->can('pos-settings.update'),
             'settings' => [
                 'show_sale_source' => $business->pos_show_sale_source,
                 'show_customer_name' => $business->pos_show_customer_name,

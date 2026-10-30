@@ -19,7 +19,7 @@ import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
 import { destroy, edit, index, store } from '@/routes/roles';
 import type { Auth } from '@/types';
 
-type Permission = { id: number; name: string; label: string };
+import type { PermissionGroups } from '@/types/permissions';
 type Role = {
     id: number;
     name: string;
@@ -30,7 +30,7 @@ type Role = {
 };
 defineProps<{
     roles: Role[];
-    permissionGroups: Record<string, Permission[]>;
+    permissionGroups: PermissionGroups;
 }>();
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string) => auth.permissions.includes(permission);
@@ -112,13 +112,17 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                         <td class="text-right">
                             <RowActions
                                 v-if="
-                                    can('roles.update') ||
+                                    (can('roles.update') &&
+                                        role.name !== 'Owner') ||
                                     (can('roles.delete') && !role.is_system)
                                 "
                                 :label="role.name"
                             >
                                 <Button
-                                    v-if="can('roles.update')"
+                                    v-if="
+                                        can('roles.update') &&
+                                        role.name !== 'Owner'
+                                    "
                                     as-child
                                     variant="outline"
                                     size="icon-sm"

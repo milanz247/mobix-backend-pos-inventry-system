@@ -245,7 +245,7 @@ defineOptions({
                                             ><Pencil /></Link></Button
                                     ><Button
                                         v-if="
-                                            can('purchases.update') &&
+                                            can('purchases.delete') &&
                                             purchase.status === 'draft'
                                         "
                                         variant="destructive"

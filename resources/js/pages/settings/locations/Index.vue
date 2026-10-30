@@ -204,7 +204,7 @@ defineOptions({
                                 </Button>
                                 <Button
                                     v-if="
-                                        can('locations.update') &&
+                                        can('locations.change-status') &&
                                         !location.is_main
                                     "
                                     type="button"

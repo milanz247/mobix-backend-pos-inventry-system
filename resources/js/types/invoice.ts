@@ -17,6 +17,8 @@ export type InvoiceSale = {
     returned_total: string;
     refund_total: string;
     lines: {
+        is_replacement?: boolean;
+        returned_quantity?: string;
         id: number;
         product_name: string;
         variant_name: string;
@@ -32,6 +34,15 @@ export type InvoiceSale = {
             quantity: string;
             imei: string | null;
         }[];
+    }[];
+    returns?: {
+        id: number;
+        return_number: string;
+        is_exchange: boolean;
+        total: string;
+        refund_total: string;
+        processed_at: string;
+        reason: string;
     }[];
     payments: {
         amount: string;

@@ -3,6 +3,7 @@
 use App\Models\BundleComponent;
 use App\Models\Business;
 use App\Models\Category;
+use App\Models\DamagedStockEntry;
 use App\Models\InventoryOperation;
 use App\Models\InventoryStock;
 use App\Models\Location;
@@ -13,6 +14,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\ProductCondition;
 use App\Services\InventoryService;
+use App\Support\PermissionCatalog;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +29,11 @@ function inventoryContext(string ...$permissions): array
     $location = Location::factory()->for($business)->create(['name' => 'Main shop']);
     $category = Category::factory()->for($business)->create();
 
+    foreach (PermissionCatalog::legacyGrants() as $old => $new) {
+        if (in_array($old, $permissions, true)) {
+            $permissions = [...$permissions, ...$new];
+        }
+    }
     foreach ($permissions as $permission) {
         $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
     }
@@ -399,4 +406,35 @@ test('inventory permissions are seeded idempotently without granting every role'
 
     expect(Permission::query()->where('name', 'inventory.view')->count())->toBe(1)
         ->and(Permission::query()->where('name', 'inventory.transfer')->count())->toBe(1);
+});
+
+test('damaged quantities leave saleable stock once and can be repaired or written off with an audit', function () {
+    ['user' => $user, 'business' => $business, 'location' => $location, 'category' => $category] = inventoryContext('inventory.view', 'inventory.adjust');
+    $variant = inventoryVariant($business, $category);
+    InventoryStock::factory()->for($business)->for($location)->for($variant, 'variant')->create(['quantity_on_hand' => '10.000']);
+    $payload = ['operation_key' => Str::uuid()->toString(), 'location_id' => $location->id, 'mode' => 'quantity', 'product_variant_id' => $variant->id, 'quantity' => '4.000', 'notes' => 'Water damaged'];
+    $this->actingAs($user)->post(route('inventory.damaged.store'), $payload)->assertSessionHasNoErrors();
+    $this->post(route('inventory.damaged.store'), $payload)->assertSessionHasNoErrors();
+    $entry = DamagedStockEntry::query()->sole();
+    expect($entry->remaining_quantity)->toBe('4.000')->and(InventoryStock::query()->sole()->quantity_on_hand)->toBe('6.000');
+    $repair = ['operation_key' => Str::uuid()->toString(), 'action' => 'repair', 'quantity' => '2.000', 'notes' => 'Repaired and tested'];
+    $this->post(route('inventory.damaged.resolve', $entry), $repair)->assertSessionHasNoErrors();
+    $this->post(route('inventory.damaged.resolve', $entry), $repair)->assertSessionHasNoErrors();
+    expect($entry->fresh()->remaining_quantity)->toBe('2.000')->and(InventoryStock::query()->sole()->quantity_on_hand)->toBe('8.000');
+    $this->post(route('inventory.damaged.resolve', $entry), ['operation_key' => Str::uuid()->toString(), 'action' => 'write_off', 'quantity' => '3.000', 'notes' => 'Beyond repair'])->assertSessionHasErrors('quantity');
+    $this->post(route('inventory.damaged.resolve', $entry), ['operation_key' => Str::uuid()->toString(), 'action' => 'write_off', 'quantity' => '2.000', 'notes' => 'Beyond repair'])->assertSessionHasNoErrors();
+    expect($entry->fresh()->remaining_quantity)->toBe('0.000')->and(InventoryStock::query()->sole()->quantity_on_hand)->toBe('8.000');
+});
+
+test('damaged stock cannot exceed available stock and unauthorized users cannot move it', function () {
+    ['user' => $user, 'business' => $business, 'location' => $location, 'category' => $category] = inventoryContext('inventory.view', 'inventory.adjust');
+    $variant = inventoryVariant($business, $category);
+    InventoryStock::factory()->for($business)->for($location)->for($variant, 'variant')->create(['quantity_on_hand' => '1.000']);
+    $payload = ['operation_key' => Str::uuid()->toString(), 'location_id' => $location->id, 'mode' => 'quantity', 'product_variant_id' => $variant->id, 'quantity' => '2.000', 'notes' => 'Damaged'];
+    $this->actingAs($user)->post(route('inventory.damaged.store'), $payload)->assertSessionHasErrors('quantity');
+    expect(DamagedStockEntry::count())->toBe(0)->and(InventoryStock::query()->sole()->quantity_on_hand)->toBe('1.000');
+    $other = User::factory()->create();
+    $other->givePermissionTo(['inventory.view', 'damaged-stock.view']);
+    $this->actingAs($other)->post(route('inventory.damaged.store'), $payload)->assertForbidden();
+    $this->get(route('inventory.damaged.index'))->assertInertia(fn (Assert $page) => $page->has('entries.data', 0));
 });

@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\CatalogStatus;
 use App\Models\Business;
+use App\Models\Customer;
 use App\Models\Location;
 use App\Models\ProductVariant;
 use App\Models\Sale;
+use App\Models\SaleAddition;
 use App\Models\SaleLine;
 use App\Models\SalePayment;
 use App\Models\SaleReturn;
@@ -43,6 +45,28 @@ class SaleService
                 $location = $this->authorizedLocation($user, $business, (int) $data['location_id']);
                 $shiftId = $this->shifts->activeId($user, $location->id);
                 $payloadHash = $this->payloadHash(Arr::except($data, ['operation_key']));
+                $target = null;
+                if (! empty($data['credit_sale_id'])) {
+                    abort_unless($user->can('sales.credit') && $user->can('credit-sales.add-items'), 403);
+                    $target = $business->sales()->lockForUpdate()->findOrFail((int) $data['credit_sale_id']);
+                    $this->assertSaleLocation($user, $target);
+                    $addition = SaleAddition::query()->where('business_id', $business->id)->where('operation_key', $data['operation_key'])->first();
+                    if ($addition !== null) {
+                        if ($addition->sale_id !== $target->id || ! hash_equals($addition->payload_hash, $payloadHash)) {
+                            throw ValidationException::withMessages(['operation_key' => __('This key was already used for different items.')]);
+                        }
+
+                        return $target->load(['lines.components', 'payments']);
+                    }
+                    if (! $target->is_credit || $target->customer_id === null || $target->status !== SaleStatus::Completed || $target->payment_status === SalePaymentStatus::Paid) {
+                        throw ValidationException::withMessages(['credit_sale_id' => __('Only an unpaid credit bill without returns can receive more items. Create a new credit sale for this customer.')]);
+                    }
+                    if ($target->location_id !== $location->id) {
+                        throw ValidationException::withMessages(['location_id' => __('Use the original bill location when adding items.')]);
+                    }
+                    $data['customer_id'] = $target->customer_id;
+                    $data['is_credit'] = true;
+                }
                 $existing = Sale::query()->where('business_id', $business->id)->where('operation_key', $data['operation_key'])->lockForUpdate()->first();
                 if ($existing !== null) {
                     if (! hash_equals($existing->payload_hash, $payloadHash)) {
@@ -92,31 +116,76 @@ class SaleService
                     throw ValidationException::withMessages(['payments' => __('This sale has a balance due. Credit sale permission is required.')]);
                 }
 
-                $sale = Sale::query()->create([
-                    'business_id' => $business->id,
-                    'location_id' => $location->id,
-                    'operation_key' => $data['operation_key'],
-                    'payload_hash' => $payloadHash,
-                    'cashier_id' => $user->id,
-                    'cashier_shift_id' => $shiftId,
-                    'source' => $data['source'],
-                    'customer_name' => filled($data['customer_name'] ?? null) ? trim((string) $data['customer_name']) : __('Walk-in customer'),
-                    'customer_phone' => filled($data['customer_phone'] ?? null) ? trim((string) $data['customer_phone']) : null,
-                    'customer_email' => filled($data['customer_email'] ?? null) ? Str::lower(trim((string) $data['customer_email'])) : null,
-                    'subtotal' => $subtotal->toScale(2, RoundingMode::HalfUp)->__toString(),
-                    'discount_total' => $discountTotal,
-                    'tax_total' => '0.00',
-                    'total' => $total,
-                    'paid_total' => $paidTotal,
-                    'status' => SaleStatus::Completed,
-                    'payment_status' => $this->paymentStatus($total, $paidTotal, '0.00'),
-                    'notes' => $data['notes'] ?? null,
-                    'posted_at' => now(),
-                ]);
-                $sale->update(['sale_number' => sprintf('SAL-%s-%07d', now()->format('Ymd'), $sale->id)]);
+                $isCredit = (bool) ($data['is_credit'] ?? false) || BigDecimal::of($paidTotal)->isLessThan($total);
+                $customer = null;
+                if ($isCredit) {
+                    abort_unless($user->can('sales.credit') && $user->can('credit-sales.view'), 403);
+                    abort_unless($user->can('customers.view'), 403);
+                    if (! empty($data['customer_id'])) {
+                        $customer = Customer::query()->where('business_id', $business->id)->whereKey($data['customer_id'])->first();
+                        if ($customer === null) {
+                            throw ValidationException::withMessages(['customer_id' => __('Select a customer from this business.')]);
+                        }
+                    } else {
+                        abort_unless($user->can('customers.create'), 403);
+                        $name = trim((string) ($data['customer_name'] ?? ''));
+                        $phone = preg_replace('/[\s()\-]+/', '', trim((string) ($data['customer_phone'] ?? '')));
+                        if ($name === '' || $phone === '') {
+                            throw ValidationException::withMessages(['customer_id' => __('Credit sales require a customer name and phone number.')]);
+                        }
+                        $customer = Customer::query()->firstOrCreate(
+                            ['business_id' => $business->id, 'phone' => $phone],
+                            ['name' => $name, 'email' => $data['customer_email'] ?? null],
+                        );
+                    }
+                }
 
+                $addition = null;
+                if ($target === null) {
+                    $sale = Sale::query()->create([
+                        'business_id' => $business->id,
+                        'location_id' => $location->id,
+                        'operation_key' => $data['operation_key'],
+                        'payload_hash' => $payloadHash,
+                        'cashier_id' => $user->id,
+                        'cashier_shift_id' => $shiftId,
+                        'source' => $data['source'],
+                        'is_credit' => $isCredit,
+                        'customer_id' => $customer?->id,
+                        'customer_name' => $customer === null ? (filled($data['customer_name'] ?? null) ? trim((string) $data['customer_name']) : __('Walk-in customer')) : $customer->name,
+                        'customer_phone' => $customer === null ? (filled($data['customer_phone'] ?? null) ? trim((string) $data['customer_phone']) : null) : $customer->phone,
+                        'customer_email' => $customer === null ? (filled($data['customer_email'] ?? null) ? Str::lower(trim((string) $data['customer_email'])) : null) : $customer->email,
+                        'subtotal' => $subtotal->toScale(2, RoundingMode::HalfUp)->__toString(),
+                        'discount_total' => $discountTotal,
+                        'tax_total' => '0.00',
+                        'total' => $total,
+                        'paid_total' => $paidTotal,
+                        'status' => SaleStatus::Completed,
+                        'payment_status' => $this->paymentStatus($total, $paidTotal, '0.00'),
+                        'notes' => $data['notes'] ?? null,
+                        'posted_at' => now(),
+                    ]);
+                    $sale->update(['sale_number' => sprintf('SAL-%s-%07d', now()->format('Ymd'), $sale->id)]);
+
+                } else {
+                    $sale = $target;
+                    $sale->fill([
+                        'subtotal' => $this->money(BigDecimal::of((string) $sale->subtotal)->plus($subtotal)->__toString()),
+                        'discount_total' => $this->money(BigDecimal::of((string) $sale->discount_total)->plus($discountTotal)->__toString()),
+                        'total' => $this->money(BigDecimal::of((string) $sale->total)->plus($total)->__toString()),
+                        'paid_total' => $this->money(BigDecimal::of((string) $sale->paid_total)->plus($paidTotal)->__toString()),
+                    ]);
+                    $sale->payment_status = $this->paymentStatus((string) $sale->total, (string) $sale->paid_total, '0.00');
+                    $sale->save();
+                    $addition = SaleAddition::query()->create([
+                        'business_id' => $business->id, 'sale_id' => $sale->id,
+                        'operation_key' => $data['operation_key'], 'payload_hash' => $payloadHash,
+                        'created_by' => $user->id, 'total' => $total, 'cashier_shift_id' => $shiftId,
+                    ]);
+                }
+                $newLineIds = [];
                 foreach ($preparedLines as $line) {
-                    $sale->lines()->create(Arr::except($line, ['device_identifier', 'variant']));
+                    $newLineIds[] = $sale->lines()->create([...Arr::except($line, ['device_identifier', 'variant']), 'sale_addition_id' => $addition?->id])->id;
                 }
                 foreach ($payments as $payment) {
                     $sale->payments()->create([
@@ -134,7 +203,7 @@ class SaleService
                     ]);
                 }
 
-                $this->inventory->postSale($user, $sale);
+                $this->inventory->postSale($user, $sale, $target === null ? null : $newLineIds, $target === null ? null : $data['operation_key']);
 
                 return $sale->fresh(['location', 'cashier', 'lines.variant.product', 'lines.serializedDevice', 'lines.components', 'payments']) ?? $sale;
             }, 3);
@@ -229,6 +298,19 @@ class SaleService
                     return $existing->load(['lines', 'refunds']);
                 }
 
+                $isExchange = (bool) ($data['is_exchange'] ?? false);
+                if ($isExchange) {
+                    abort_unless($user->can('sales.create') && $user->can('shifts.view') && $user->can('sale-replacements.create'), 403);
+                    if ($shiftId === null) {
+                        throw ValidationException::withMessages(['is_exchange' => __('Open a cashier shift at this location before giving a replacement.')]);
+                    }
+                }
+                if ($isExchange || ($data['reason'] ?? '') === 'Faulty item') {
+                    foreach ($data['lines'] as &$returnItem) {
+                        $returnItem['restock'] = false;
+                    }
+                    unset($returnItem);
+                }
                 $returnLines = $this->prepareReturnLines($sale, $data['lines']);
                 if ($returnLines === []) {
                     throw ValidationException::withMessages(['lines' => __('Select at least one item to return.')]);
@@ -242,7 +324,7 @@ class SaleService
                 $refundAmount = $this->money((string) ($data['refund_amount'] ?? '0'));
                 $refundedSoFar = BigDecimal::of($this->refundTotal($sale));
                 $paidRemaining = BigDecimal::of((string) $sale->paid_total)->minus($refundedSoFar);
-                $expectedRefund = BigDecimal::min($returnTotal, BigDecimal::max($paidRemaining, BigDecimal::zero()))->toScale(2, RoundingMode::HalfUp);
+                $expectedRefund = $isExchange ? BigDecimal::zero() : BigDecimal::min($returnTotal, BigDecimal::max($paidRemaining, BigDecimal::zero()))->toScale(2, RoundingMode::HalfUp);
                 if (BigDecimal::of($refundAmount)->compareTo($expectedRefund) !== 0) {
                     throw ValidationException::withMessages(['refund_amount' => __('Refund the return value up to the net amount already paid; unpaid returned value reduces the balance due.')]);
                 }
@@ -250,7 +332,10 @@ class SaleService
                     abort(403);
                 }
 
+                $replacementLines = $isExchange ? $this->prepareReplacementLines($user, $business, $location, $sale, $returnLines, $data['replacements'] ?? []) : [];
                 $saleReturn = $sale->returns()->create([
+                    'is_exchange' => $isExchange,
+                    'cashier_shift_id' => $shiftId,
                     'business_id' => $business->id,
                     'location_id' => $location->id,
                     'operation_key' => $data['operation_key'],
@@ -284,10 +369,36 @@ class SaleService
                 }
                 $operation = $this->inventory->returnSale($user, $saleReturn);
                 $saleReturn->update(['inventory_operation_id' => $operation->id]);
+                if ($isExchange) {
+                    $lineIds = [];
+                    $addedSubtotal = BigDecimal::zero();
+                    $addedDiscounts = BigDecimal::zero();
+                    foreach ($replacementLines as $replacement) {
+                        $lineIds[] = $sale->lines()->create([
+                            ...Arr::except($replacement, ['device_identifier', 'variant']),
+                            'sale_return_id' => $saleReturn->id,
+                        ])->id;
+                        $addedSubtotal = $addedSubtotal->plus($replacement['subtotal']);
+                        $addedDiscounts = $addedDiscounts->plus($replacement['discount_amount']);
+                    }
+                    $sale->fill([
+                        'subtotal' => $this->money(BigDecimal::of((string) $sale->subtotal)->plus($addedSubtotal)->__toString()),
+                        'discount_total' => $this->money(BigDecimal::of((string) $sale->discount_total)->plus($addedDiscounts)->__toString()),
+                        'total' => $this->money(BigDecimal::of((string) $sale->total)->plus($returnTotal)->__toString()),
+                    ])->save();
+                    $replacementKey = Str::uuid()->toString();
+                    $this->inventory->postSale($user, $sale, $lineIds, $replacementKey);
+                }
                 $sale->refresh();
                 $sale->status = $this->saleStatus($sale);
                 $sale->payment_status = $this->paymentStatus((string) $sale->total, (string) $sale->paid_total, $this->refundTotal($sale), $this->returnedTotal($sale));
                 $sale->save();
+
+                $saleReturn->update([
+                    'balance_after' => $this->outstanding($sale)->__toString(),
+                    'net_total_after' => $this->money(BigDecimal::of((string) $sale->total)->minus($this->returnedTotal($sale))->__toString()),
+                    'net_paid_after' => $this->money(BigDecimal::of((string) $sale->paid_total)->minus($this->refundTotal($sale))->__toString()),
+                ]);
 
                 return $saleReturn->fresh(['lines.saleLine', 'refunds', 'inventoryOperation']) ?? $saleReturn;
             }, 3);
@@ -561,6 +672,50 @@ class SaleService
         return $prepared;
     }
 
+    /**
+     * @param  list<array<string, mixed>>  $returnLines
+     * @param  list<array<string, mixed>>  $replacements
+     * @return list<array<string, mixed>>
+     */
+    private function prepareReplacementLines(User $user, Business $business, Location $location, Sale $sale, array $returnLines, array $replacements): array
+    {
+        $requested = [];
+        foreach ($replacements as $replacement) {
+            $id = (int) $replacement['sale_line_id'];
+            if (isset($requested[$id])) {
+                throw ValidationException::withMessages(['replacements' => __('Choose each replacement once.')]);
+            }
+            $requested[$id] = $replacement;
+        }
+        $result = [];
+        foreach ($returnLines as $returned) {
+            if ($returned['is_component']) {
+                continue;
+            }
+            $original = $sale->lines->firstWhere('id', $returned['sale_line_id']);
+            if ($original === null || ! isset($requested[$original->id])) {
+                throw ValidationException::withMessages(['replacements' => __('Select a replacement for every returned item.')]);
+            }
+            $prepared = $this->prepareLines($user, $business, $location, [[
+                'product_variant_id' => $original->product_variant_id,
+                'quantity' => $returned['quantity'],
+                'device_identifier' => $requested[$original->id]['device_identifier'] ?? null,
+            ]])[0];
+            $subtotal = $this->money(BigDecimal::of((string) $original->unit_price)->multipliedBy($returned['quantity'])->__toString());
+            $prepared['unit_price'] = $original->unit_price;
+            $prepared['subtotal'] = $subtotal;
+            $prepared['discount_amount'] = $this->money(BigDecimal::of($subtotal)->minus($returned['total'])->__toString());
+            $prepared['total'] = $returned['total'];
+            $result[] = $prepared;
+            unset($requested[$original->id]);
+        }
+        if ($requested !== []) {
+            throw ValidationException::withMessages(['replacements' => __('Replacements must match the items being returned.')]);
+        }
+
+        return $result;
+    }
+
     private function returnValue(SaleLine $line, BigDecimal $quantity, BigDecimal $available): string
     {
         $alreadyReturned = BigDecimal::of((string) $line->returnLines()->where('is_component', false)->sum('total'));
@@ -628,6 +783,7 @@ class SaleService
 
     private function assertSaleLocation(User $user, Sale $sale): void
     {
+        abort_unless(! $sale->is_credit || $user->can('credit-sales.view'), 403);
         if (! $this->locationAccess->canAccess($user, $sale->location)) {
             abort(404);
         }

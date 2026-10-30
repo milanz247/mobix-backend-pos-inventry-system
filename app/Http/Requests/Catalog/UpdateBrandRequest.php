@@ -4,6 +4,7 @@ namespace App\Http\Requests\Catalog;
 
 use App\CatalogStatus;
 use App\Http\Requests\Catalog\Concerns\ScopesCatalogValidation;
+use App\Http\Requests\Concerns\AuthorizesStatusChanges;
 use App\Models\Brand;
 use App\PermissionName;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -14,6 +15,7 @@ use Illuminate\Validation\Validator;
 
 class UpdateBrandRequest extends FormRequest
 {
+    use AuthorizesStatusChanges;
     use ScopesCatalogValidation;
 
     /**
@@ -26,6 +28,7 @@ class UpdateBrandRequest extends FormRequest
 
         return $this->user()?->can(PermissionName::BrandsUpdate->value)
             && $brand instanceof Brand
+            && $this->maySetStatus($brand, 'brands.deactivate')
             && $brand->business_id === $business->id;
     }
 

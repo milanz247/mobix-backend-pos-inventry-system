@@ -13,7 +13,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('users', [UserController::class, 'store'])->middleware('can:'.PermissionName::UsersCreate->value)->name('users.store');
     Route::get('users/{user}/edit', [UserController::class, 'edit'])->middleware(['can:'.PermissionName::UsersUpdate->value, 'can:'.PermissionName::UsersAssignRoles->value])->name('users.edit');
     Route::put('users/{user}', [UserController::class, 'update'])->middleware('can:'.PermissionName::UsersUpdate->value)->name('users.update');
-    Route::patch('users/{user}/status', [UserStatusController::class, 'update'])->middleware('can:'.PermissionName::UsersUpdate->value)->name('users.status.update');
+    Route::patch('users/{user}/status', [UserStatusController::class, 'update'])->middleware('can:'.PermissionName::UsersChangeStatus->value)->name('users.status.update');
     Route::delete('users/{user}', [UserController::class, 'destroy'])->middleware('can:'.PermissionName::UsersDelete->value)->name('users.destroy');
 
     Route::get('roles', [RoleController::class, 'index'])->middleware('can:'.PermissionName::RolesView->value)->name('roles.index');

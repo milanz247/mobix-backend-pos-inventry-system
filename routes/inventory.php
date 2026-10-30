@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Inventory\DamagedStockController;
 use App\Http\Controllers\Inventory\InventoryOverviewController;
 use App\Http\Controllers\Inventory\LocationInventoryController;
 use App\Http\Controllers\Inventory\OpeningStockController;
@@ -11,6 +12,9 @@ use App\Http\Controllers\Inventory\StockTransferController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('inventory')->name('inventory.')->middleware('auth')->group(function (): void {
+    Route::get('damaged', [DamagedStockController::class, 'index'])->middleware('can:damaged-stock.view')->name('damaged.index');
+    Route::post('damaged', [DamagedStockController::class, 'store'])->middleware(['can:damaged-stock.view', 'can:damaged-stock.create'])->name('damaged.store');
+    Route::post('damaged/{entry}/resolve', [DamagedStockController::class, 'resolve'])->middleware('can:damaged-stock.view')->name('damaged.resolve');
     Route::get('/', InventoryOverviewController::class)->middleware('can:inventory.view')->name('index');
     Route::get('locations', LocationInventoryController::class)->middleware('can:inventory.view')->name('locations.index');
 

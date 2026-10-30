@@ -27,6 +27,7 @@ class SalePageData
         return [
             'id' => $sale->id,
             'sale_number' => $sale->sale_number,
+            'is_credit' => (bool) $sale->is_credit,
             'posted_at' => $sale->posted_at->format('Y-m-d H:i:s'),
             'status' => $sale->status->value,
             'source' => $sale->source->value,
@@ -55,6 +56,8 @@ class SalePageData
 
                 return [
                     'id' => $line->id,
+                    'product_variant_id' => $line->product_variant_id,
+                    'is_replacement' => $line->sale_return_id !== null,
                     'product_name' => $line->product_name_snapshot,
                     'variant_name' => $line->variant_name_snapshot,
                     'sku' => $line->sku_snapshot,
@@ -93,6 +96,7 @@ class SalePageData
             'returns' => $sale->returns->map(fn (SaleReturn $return): array => [
                 'id' => $return->id,
                 'return_number' => $return->return_number,
+                'is_exchange' => (bool) $return->is_exchange,
                 'total' => $return->total,
                 'refund_total' => $return->refund_total,
                 'reason' => $return->reason,

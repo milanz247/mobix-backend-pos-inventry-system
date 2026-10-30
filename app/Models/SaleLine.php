@@ -15,6 +15,7 @@ use LogicException;
 /**
  * @property int $id
  * @property int $business_id
+ * @property int|null $sale_return_id
  * @property int $sale_id
  * @property int $product_variant_id
  * @property int|null $serialized_device_id
@@ -32,7 +33,7 @@ use LogicException;
  * @property-read Collection<int, SaleLineComponent> $components
  * @property-read Collection<int, SaleReturnLine> $returnLines
  */
-#[Fillable(['business_id', 'product_variant_id', 'serialized_device_id', 'product_name_snapshot', 'variant_name_snapshot', 'sku_snapshot', 'barcode_snapshot', 'tracking_mode', 'is_combo', 'imei_snapshot', 'quantity', 'unit_price', 'discount_amount', 'cost_snapshot', 'subtotal', 'total'])]
+#[Fillable(['sale_addition_id', 'sale_return_id', 'business_id', 'product_variant_id', 'serialized_device_id', 'product_name_snapshot', 'variant_name_snapshot', 'sku_snapshot', 'barcode_snapshot', 'tracking_mode', 'is_combo', 'imei_snapshot', 'quantity', 'unit_price', 'discount_amount', 'cost_snapshot', 'subtotal', 'total'])]
 class SaleLine extends Model
 {
     /** @use HasFactory<SaleLineFactory> */

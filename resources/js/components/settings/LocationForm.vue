@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Form, Link } from '@inertiajs/vue3';
+import type { Auth } from '@/types';
+import { Form, Link, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,9 @@ defineProps<{
     statuses: Option[];
     location?: Location;
 }>();
+const canChangeStatus = usePage<{
+    auth: Auth;
+}>().props.auth.permissions.includes('locations.change-status');
 </script>
 
 <template>
@@ -84,7 +88,9 @@ defineProps<{
                     name="status"
                     required
                     :value="location?.status ?? 'active'"
-                    :disabled="location?.is_main"
+                    :disabled="
+                        location?.is_main || (!!location && !canChangeStatus)
+                    "
                     class="w-full disabled:opacity-60"
                 >
                     <option
@@ -96,10 +102,10 @@ defineProps<{
                     </option>
                 </select>
                 <input
-                    v-if="location?.is_main"
+                    v-if="location?.is_main || (!!location && !canChangeStatus)"
                     type="hidden"
                     name="status"
-                    value="active"
+                    :value="location?.status ?? 'active'"
                 />
                 <InputError :message="errors.status" />
             </div>

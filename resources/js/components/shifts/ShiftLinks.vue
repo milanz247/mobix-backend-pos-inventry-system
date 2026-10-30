@@ -26,7 +26,12 @@ const page = usePage<{ auth: Auth }>();
             as-child
             ><Link :href="closing(shift.id)">Close shift</Link></Button
         >
-        <Button v-if="shift.closed_at" as-child
+        <Button
+            v-if="
+                shift.closed_at &&
+                page.props.auth.permissions.includes('shifts.print')
+            "
+            as-child
             ><Link :href="report(shift.id)">Closing report</Link></Button
         >
     </nav>

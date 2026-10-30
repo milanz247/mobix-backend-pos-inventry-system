@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Role;
 use App\Models\User;
+use App\PermissionName;
 use App\SystemRole;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +87,20 @@ class RoleAdministrationService
      */
     private function permissions(array $permissionIds): Collection
     {
-        return Permission::query()->where('guard_name', 'web')->whereKey($permissionIds)->get();
+        $permissions = Permission::query()->where('guard_name', 'web')->whereKey($permissionIds)->get();
+        $names = $permissions->pluck('name')->all();
+        do {
+            $before = count($names);
+            foreach ($names as $name) {
+                foreach (PermissionName::tryFrom($name)?->dependencies() ?? [] as $dependency) {
+                    if (! in_array($dependency, $names, true)) {
+                        $names[] = $dependency;
+                    }
+                }
+            }
+        } while (count($names) !== $before);
+
+        return Permission::query()->where('guard_name', 'web')->whereIn('name', $names)->get();
     }
 
     /** @param Collection<int, Permission> $permissions */

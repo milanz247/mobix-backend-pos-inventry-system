@@ -14,6 +14,7 @@ import { edit } from '@/routes/invoice-settings';
 import type { InvoiceBusiness, InvoiceSale } from '@/types/invoice';
 
 const props = defineProps<{
+    canUpdate: boolean;
     invoice: {
         footer: string | null;
         return_policy: string | null;
@@ -151,351 +152,367 @@ defineOptions({
             class="grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_360px]"
             v-slot="{ errors, processing, recentlySuccessful }"
         >
-            <div class="space-y-5">
-                <section class="surface-panel space-y-5 p-5 sm:p-6">
-                    <div class="flex items-start gap-3">
-                        <span
-                            class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-                            ><FileText class="size-5"
-                        /></span>
+            <p
+                v-if="!canUpdate"
+                class="mb-4 rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground"
+            >
+                View only — this role cannot change these settings.
+            </p>
+            <fieldset :disabled="!canUpdate" class="contents">
+                <div class="space-y-5">
+                    <section class="surface-panel space-y-5 p-5 sm:p-6">
+                        <div class="flex items-start gap-3">
+                            <span
+                                class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                                ><FileText class="size-5"
+                            /></span>
+                            <div>
+                                <h2 class="font-semibold">Page identity</h2>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    Choose the heading, page format, and brand
+                                    color.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="grid gap-2">
+                                <Label for="invoice_title"
+                                    >Document title</Label
+                                >
+                                <Input
+                                    id="invoice_title"
+                                    v-model="title"
+                                    name="invoice_title"
+                                    maxlength="100"
+                                    placeholder="Sales receipt"
+                                />
+                                <InputError :message="errors.invoice_title" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="invoice_paper_size"
+                                    >Default print format</Label
+                                >
+                                <select
+                                    id="invoice_paper_size"
+                                    v-model="paperSize"
+                                    name="invoice_paper_size"
+                                    class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                    <option
+                                        v-for="layout in layoutOptions"
+                                        :key="layout.value"
+                                        :value="layout.value"
+                                    >
+                                        {{ layout.label }} ·
+                                        {{ layout.description }}
+                                    </option>
+                                </select>
+                                <InputError
+                                    :message="errors.invoice_paper_size"
+                                />
+                            </div>
+                            <div
+                                v-if="paperSize === 'thermal'"
+                                class="grid gap-2"
+                            >
+                                <Label for="invoice_thermal_width"
+                                    >Thermal paper width</Label
+                                >
+                                <select
+                                    id="invoice_thermal_width"
+                                    v-model="thermalWidth"
+                                    name="invoice_thermal_width"
+                                    class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                    <option :value="58">58 mm compact</option>
+                                    <option :value="80">80 mm standard</option>
+                                </select>
+                                <InputError
+                                    :message="errors.invoice_thermal_width"
+                                />
+                            </div>
+                            <input
+                                v-else
+                                type="hidden"
+                                name="invoice_thermal_width"
+                                :value="thermalWidth"
+                            />
+                            <div class="grid gap-2 sm:col-span-2">
+                                <Label for="invoice_accent_color"
+                                    >Brand accent</Label
+                                >
+                                <div class="flex items-center gap-3">
+                                    <Input
+                                        id="invoice_accent_color"
+                                        v-model="accentColor"
+                                        name="invoice_accent_color"
+                                        type="color"
+                                        class="h-11 w-16 cursor-pointer p-1"
+                                    />
+                                    <span
+                                        class="font-mono text-sm text-muted-foreground uppercase"
+                                        >{{ accentColor }}</span
+                                    >
+                                </div>
+                                <InputError
+                                    :message="errors.invoice_accent_color"
+                                />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="surface-panel space-y-4 p-5 sm:p-6">
                         <div>
-                            <h2 class="font-semibold">Page identity</h2>
+                            <h2 class="font-semibold">
+                                What appears on the invoice
+                            </h2>
                             <p class="mt-1 text-sm text-muted-foreground">
-                                Choose the heading, page format, and brand
-                                color.
+                                Keep the printed copy focused on the details
+                                your customers need.
                             </p>
                         </div>
-                    </div>
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div class="grid gap-2">
-                            <Label for="invoice_title">Document title</Label>
-                            <Input
-                                id="invoice_title"
-                                v-model="title"
-                                name="invoice_title"
-                                maxlength="100"
-                                placeholder="Sales receipt"
-                            />
-                            <InputError :message="errors.invoice_title" />
-                        </div>
-                        <div class="grid gap-2">
-                            <Label for="invoice_paper_size"
-                                >Default print format</Label
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            <label
+                                for="invoice_show_logo"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
                             >
-                            <select
-                                id="invoice_paper_size"
-                                v-model="paperSize"
-                                name="invoice_paper_size"
-                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                                <option
-                                    v-for="layout in layoutOptions"
-                                    :key="layout.value"
-                                    :value="layout.value"
-                                >
-                                    {{ layout.label }} ·
-                                    {{ layout.description }}
-                                </option>
-                            </select>
-                            <InputError :message="errors.invoice_paper_size" />
-                        </div>
-                        <div v-if="paperSize === 'thermal'" class="grid gap-2">
-                            <Label for="invoice_thermal_width"
-                                >Thermal paper width</Label
-                            >
-                            <select
-                                id="invoice_thermal_width"
-                                v-model="thermalWidth"
-                                name="invoice_thermal_width"
-                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                                <option :value="58">58 mm compact</option>
-                                <option :value="80">80 mm standard</option>
-                            </select>
-                            <InputError
-                                :message="errors.invoice_thermal_width"
-                            />
-                        </div>
-                        <input
-                            v-else
-                            type="hidden"
-                            name="invoice_thermal_width"
-                            :value="thermalWidth"
-                        />
-                        <div class="grid gap-2 sm:col-span-2">
-                            <Label for="invoice_accent_color"
-                                >Brand accent</Label
-                            >
-                            <div class="flex items-center gap-3">
-                                <Input
-                                    id="invoice_accent_color"
-                                    v-model="accentColor"
-                                    name="invoice_accent_color"
-                                    type="color"
-                                    class="h-11 w-16 cursor-pointer p-1"
+                                <Checkbox
+                                    id="invoice_show_logo"
+                                    v-model:checked="showLogo"
+                                    name="invoice_show_logo"
+                                    value="1"
                                 />
                                 <span
-                                    class="font-mono text-sm text-muted-foreground uppercase"
-                                    >{{ accentColor }}</span
+                                    ><span class="block text-sm font-medium"
+                                        >Business logo</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Use the logo from Business
+                                        settings</span
+                                    ></span
                                 >
-                            </div>
-                            <InputError
-                                :message="errors.invoice_accent_color"
-                            />
+                            </label>
+                            <label
+                                for="invoice_show_business_details"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                            >
+                                <Checkbox
+                                    id="invoice_show_business_details"
+                                    v-model:checked="showBusinessDetails"
+                                    name="invoice_show_business_details"
+                                    value="1"
+                                />
+                                <span
+                                    ><span class="block text-sm font-medium"
+                                        >Contact details</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Address, phone, and email</span
+                                    ></span
+                                >
+                            </label>
+                            <label
+                                for="invoice_show_customer"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                            >
+                                <Checkbox
+                                    id="invoice_show_customer"
+                                    v-model:checked="showCustomer"
+                                    name="invoice_show_customer"
+                                    value="1"
+                                />
+                                <span
+                                    ><span class="block text-sm font-medium"
+                                        >Customer information</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Name and contact number</span
+                                    ></span
+                                >
+                            </label>
+                            <label
+                                for="invoice_show_cashier"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                            >
+                                <Checkbox
+                                    id="invoice_show_cashier"
+                                    v-model:checked="showCashier"
+                                    name="invoice_show_cashier"
+                                    value="1"
+                                />
+                                <span
+                                    ><span class="block text-sm font-medium"
+                                        >Cashier name</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Show which team member completed the
+                                        sale</span
+                                    ></span
+                                >
+                            </label>
+                            <label
+                                for="invoice_show_payment_details"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                            >
+                                <Checkbox
+                                    id="invoice_show_payment_details"
+                                    v-model:checked="showPaymentDetails"
+                                    name="invoice_show_payment_details"
+                                    value="1"
+                                />
+                                <span
+                                    ><span class="block text-sm font-medium"
+                                        >Payment details</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Payment method and amount</span
+                                    ></span
+                                >
+                            </label>
+                            <label
+                                for="invoice_show_tax"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                            >
+                                <Checkbox
+                                    id="invoice_show_tax"
+                                    v-model:checked="showTax"
+                                    name="invoice_show_tax"
+                                    value="1"
+                                />
+                                <span
+                                    ><span class="block text-sm font-medium"
+                                        >Tax row</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Show the tax total</span
+                                    ></span
+                                >
+                            </label>
+                            <label
+                                for="invoice_show_product_codes"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                            >
+                                <Checkbox
+                                    id="invoice_show_product_codes"
+                                    v-model:checked="showProductCodes"
+                                    name="invoice_show_product_codes"
+                                    value="1"
+                                />
+                                <span
+                                    ><span class="block text-sm font-medium"
+                                        >SKU and IMEI</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Print product codes and device
+                                        identifiers</span
+                                    ></span
+                                >
+                            </label>
+                            <label
+                                for="invoice_show_line_discounts"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                            >
+                                <Checkbox
+                                    id="invoice_show_line_discounts"
+                                    v-model:checked="showLineDiscounts"
+                                    name="invoice_show_line_discounts"
+                                    value="1"
+                                />
+                                <span
+                                    ><span class="block text-sm font-medium"
+                                        >Line discounts</span
+                                    ><span class="text-xs text-muted-foreground"
+                                        >Show each product discount below its
+                                        item</span
+                                    ></span
+                                >
+                            </label>
                         </div>
-                    </div>
-                </section>
+                    </section>
 
-                <section class="surface-panel space-y-4 p-5 sm:p-6">
-                    <div>
-                        <h2 class="font-semibold">
-                            What appears on the invoice
-                        </h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            Keep the printed copy focused on the details your
-                            customers need.
-                        </p>
-                    </div>
-                    <div class="grid gap-2 sm:grid-cols-2">
-                        <label
-                            for="invoice_show_logo"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_logo"
-                                v-model:checked="showLogo"
-                                name="invoice_show_logo"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >Business logo</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Use the logo from Business settings</span
-                                ></span
-                            >
-                        </label>
-                        <label
-                            for="invoice_show_business_details"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_business_details"
-                                v-model:checked="showBusinessDetails"
-                                name="invoice_show_business_details"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >Contact details</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Address, phone, and email</span
-                                ></span
-                            >
-                        </label>
-                        <label
-                            for="invoice_show_customer"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_customer"
-                                v-model:checked="showCustomer"
-                                name="invoice_show_customer"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >Customer information</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Name and contact number</span
-                                ></span
-                            >
-                        </label>
-                        <label
-                            for="invoice_show_cashier"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_cashier"
-                                v-model:checked="showCashier"
-                                name="invoice_show_cashier"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >Cashier name</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Show which team member completed the
-                                    sale</span
-                                ></span
-                            >
-                        </label>
-                        <label
-                            for="invoice_show_payment_details"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_payment_details"
-                                v-model:checked="showPaymentDetails"
-                                name="invoice_show_payment_details"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >Payment details</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Payment method and amount</span
-                                ></span
-                            >
-                        </label>
-                        <label
-                            for="invoice_show_tax"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_tax"
-                                v-model:checked="showTax"
-                                name="invoice_show_tax"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >Tax row</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Show the tax total</span
-                                ></span
-                            >
-                        </label>
-                        <label
-                            for="invoice_show_product_codes"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_product_codes"
-                                v-model:checked="showProductCodes"
-                                name="invoice_show_product_codes"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >SKU and IMEI</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Print product codes and device
-                                    identifiers</span
-                                ></span
-                            >
-                        </label>
-                        <label
-                            for="invoice_show_line_discounts"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                        >
-                            <Checkbox
-                                id="invoice_show_line_discounts"
-                                v-model:checked="showLineDiscounts"
-                                name="invoice_show_line_discounts"
-                                value="1"
-                            />
-                            <span
-                                ><span class="block text-sm font-medium"
-                                    >Line discounts</span
-                                ><span class="text-xs text-muted-foreground"
-                                    >Show each product discount below its
-                                    item</span
-                                ></span
-                            >
-                        </label>
-                    </div>
-                </section>
-
-                <section class="surface-panel space-y-5 p-5 sm:p-6">
-                    <div>
-                        <h2 class="font-semibold">Messages and policies</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            Add your own customer-facing wording to the bottom
-                            of each printout.
-                        </p>
-                    </div>
-                    <div class="grid gap-4">
-                        <div class="grid gap-2">
-                            <Label for="invoice_footer"
-                                >Thank-you message</Label
-                            >
-                            <textarea
-                                id="invoice_footer"
-                                v-model="footerMessage"
-                                name="invoice_footer"
-                                rows="3"
-                                maxlength="2000"
-                                placeholder="Thank you for your purchase."
-                                class="w-full resize-y"
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                Leave blank to use the standard thank-you
-                                message.
+                    <section class="surface-panel space-y-5 p-5 sm:p-6">
+                        <div>
+                            <h2 class="font-semibold">Messages and policies</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Add your own customer-facing wording to the
+                                bottom of each printout.
                             </p>
-                            <InputError :message="errors.invoice_footer" />
                         </div>
-                        <div class="grid gap-2">
-                            <Label for="invoice_return_policy"
-                                >Return and service policy</Label
-                            >
-                            <textarea
-                                id="invoice_return_policy"
-                                v-model="returnPolicy"
-                                name="invoice_return_policy"
-                                rows="3"
-                                maxlength="2000"
-                                placeholder="Keep this receipt for service and return reference."
-                                class="w-full resize-y"
-                            />
-                            <InputError
-                                :message="errors.invoice_return_policy"
-                            />
+                        <div class="grid gap-4">
+                            <div class="grid gap-2">
+                                <Label for="invoice_footer"
+                                    >Thank-you message</Label
+                                >
+                                <textarea
+                                    id="invoice_footer"
+                                    v-model="footerMessage"
+                                    name="invoice_footer"
+                                    rows="3"
+                                    maxlength="2000"
+                                    placeholder="Thank you for your purchase."
+                                    class="w-full resize-y"
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    Leave blank to use the standard thank-you
+                                    message.
+                                </p>
+                                <InputError :message="errors.invoice_footer" />
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="invoice_return_policy"
+                                    >Return and service policy</Label
+                                >
+                                <textarea
+                                    id="invoice_return_policy"
+                                    v-model="returnPolicy"
+                                    name="invoice_return_policy"
+                                    rows="3"
+                                    maxlength="2000"
+                                    placeholder="Keep this receipt for service and return reference."
+                                    class="w-full resize-y"
+                                />
+                                <InputError
+                                    :message="errors.invoice_return_policy"
+                                />
+                            </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
 
-                <div
-                    class="flex flex-wrap items-center gap-4 border-t border-border/70 pt-5"
-                >
-                    <Button :disabled="processing"
-                        ><Printer class="size-4" />{{
-                            processing ? 'Saving…' : 'Save invoice design'
-                        }}</Button
-                    >
-                    <p
-                        v-if="recentlySuccessful"
-                        role="status"
-                        class="text-sm text-emerald-700 dark:text-emerald-400"
-                    >
-                        Invoice design saved.
-                    </p>
-                </div>
-            </div>
-
-            <aside class="space-y-3 2xl:sticky 2xl:top-20">
-                <div class="flex items-center gap-2 text-sm font-semibold">
-                    <Eye class="size-4 text-primary" /> Live preview
-                </div>
-                <div
-                    class="max-h-[calc(100vh-10rem)] overflow-auto rounded-2xl border border-border/70 bg-muted/30 p-4 sm:p-5"
-                >
                     <div
-                        class="mb-3 rounded-md bg-amber-100 px-2 py-1 text-center text-[10px] font-semibold tracking-wide text-amber-900 uppercase"
+                        class="flex flex-wrap items-center gap-4 border-t border-border/70 pt-5"
                     >
-                        Preview data — not a completed sale
+                        <Button v-if="canUpdate" :disabled="processing"
+                            ><Printer class="size-4" />{{
+                                processing ? 'Saving…' : 'Save invoice design'
+                            }}</Button
+                        >
+                        <p
+                            v-if="recentlySuccessful"
+                            role="status"
+                            class="text-sm text-emerald-700 dark:text-emerald-400"
+                        >
+                            Invoice design saved.
+                        </p>
                     </div>
-                    <InvoiceDocument
-                        :sale="previewSale"
-                        :business="previewBusiness"
-                        preview
-                    />
                 </div>
-                <p class="text-xs leading-5 text-muted-foreground">
-                    Preview uses sample sale data. Your saved template will be
-                    applied to printed sale receipts.
-                </p>
-            </aside>
+
+                <aside class="space-y-3 2xl:sticky 2xl:top-20">
+                    <div class="flex items-center gap-2 text-sm font-semibold">
+                        <Eye class="size-4 text-primary" /> Live preview
+                    </div>
+                    <div
+                        class="max-h-[calc(100vh-10rem)] overflow-auto rounded-2xl border border-border/70 bg-muted/30 p-4 sm:p-5"
+                    >
+                        <div
+                            class="mb-3 rounded-md bg-amber-100 px-2 py-1 text-center text-[10px] font-semibold tracking-wide text-amber-900 uppercase"
+                        >
+                            Preview data — not a completed sale
+                        </div>
+                        <InvoiceDocument
+                            :sale="previewSale"
+                            :business="previewBusiness"
+                            preview
+                        />
+                    </div>
+                    <p class="text-xs leading-5 text-muted-foreground">
+                        Preview uses sample sale data. Your saved template will
+                        be applied to printed sale receipts.
+                    </p>
+                </aside>
+            </fieldset>
         </Form>
     </div>
 </template>

@@ -17,7 +17,7 @@ class UpdateLocationStatusRequest extends FormRequest
     {
         $location = $this->route('location');
 
-        return $location instanceof Location && $this->user()->can('update', $location);
+        return $location instanceof Location && $this->user()->can('changeStatus', $location);
     }
 
     /**

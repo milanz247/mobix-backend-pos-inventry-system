@@ -27,7 +27,7 @@ function detailedReportContext(): array
     $location = Location::factory()->for($business)->create();
     $user = User::factory()->create();
     $location->users()->attach($user);
-    foreach (['inventory.view', 'inventory.opening', 'products.view', 'shifts.view', 'shifts.open', 'shifts.movements', 'shifts.close', 'sales.view', 'sales.pos', 'sales.create', 'sale-returns.create', 'sale-refunds.create'] as $permission) {
+    foreach (['stock-reports.view', 'expense-reports.view', 'shift-reports.view', 'shifts.print', 'sales-receipts.print', 'return-receipts.print', 'inventory.view', 'inventory.opening', 'products.view', 'shifts.view', 'shifts.open', 'shifts.movements', 'shifts.close', 'sales.view', 'sales.pos', 'sales.create', 'sale-returns.create', 'sale-refunds.create'] as $permission) {
         $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
     }
 
@@ -288,7 +288,7 @@ test('financial detail routes reject other cashier and unauthorized location rec
     $expense = reportExpense($context, $shift);
     $other = User::factory()->create();
     $context['location']->users()->attach($other);
-    $other->givePermissionTo(Permission::findOrCreate('shifts.view', 'web'));
+    $other->givePermissionTo(['shifts.view', 'shift-reports.view', 'expense-reports.view']);
     $this->actingAs($other)->get(route('shifts.movement', [$shift, $expense]))->assertNotFound();
     $this->get(route('reports.current-shift', ['shift_id' => $shift->id]))->assertNotFound();
     $this->get(route('reports.expenses'))->assertInertia(fn (Assert $page) => $page->has('rows.data', 0));

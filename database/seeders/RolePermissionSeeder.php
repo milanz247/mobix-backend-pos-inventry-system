@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Business;
 use App\Models\Role;
 use App\PermissionName;
+use App\Support\PermissionCatalog;
 use App\SystemRole;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
@@ -54,7 +55,7 @@ class RolePermissionSeeder extends Seeder
     /** @return list<string> */
     private function defaultPermissions(SystemRole $role): array
     {
-        return match ($role) {
+        $defaults = match ($role) {
             SystemRole::Owner, SystemRole::Admin => array_column(PermissionName::cases(), 'value'),
             SystemRole::Manager => [
                 PermissionName::ShiftsView->value,
@@ -91,5 +92,12 @@ class RolePermissionSeeder extends Seeder
             ],
             SystemRole::Technician => [PermissionName::DashboardView->value],
         };
+        foreach (PermissionCatalog::legacyGrants() as $old => $new) {
+            if (in_array($old, $defaults, true)) {
+                $defaults = [...$defaults, ...$new];
+            }
+        }
+
+        return array_values(array_unique($defaults));
     }
 }

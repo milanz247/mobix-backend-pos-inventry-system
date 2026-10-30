@@ -16,6 +16,10 @@ class StoreSaleReturnRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'is_exchange' => ['sometimes', 'boolean'],
+            'replacements' => ['nullable', 'array', 'max:100'],
+            'replacements.*.sale_line_id' => ['required', 'integer'],
+            'replacements.*.device_identifier' => ['nullable', 'string', 'max:32'],
             'operation_key' => ['required', 'uuid'],
             'location_id' => ['required', 'integer', 'exists:locations,id'],
             'reason' => ['required', 'string', 'max:100'],

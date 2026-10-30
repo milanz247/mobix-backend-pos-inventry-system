@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { Auth } from '@/types';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { Form, Link } from '@inertiajs/vue3';
+import { Form, Link, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -233,6 +234,9 @@ watch(productType, (type) => {
 onBeforeUnmount(() => {
     if (imageObjectUrl !== null) URL.revokeObjectURL(imageObjectUrl);
 });
+const canChangeStatus = usePage<{
+    auth: Auth;
+}>().props.auth.permissions.includes('products.deactivate');
 </script>
 
 <template>
@@ -341,6 +345,7 @@ onBeforeUnmount(() => {
                     <select
                         id="status"
                         name="status"
+                        :disabled="!!product && !canChangeStatus"
                         :value="product?.status ?? 'active'"
                         required
                         class="w-full"
@@ -353,6 +358,12 @@ onBeforeUnmount(() => {
                             {{ status.label }}
                         </option>
                     </select>
+                    <input
+                        v-if="product && !canChangeStatus"
+                        type="hidden"
+                        name="status"
+                        :value="product.status"
+                    />
                     <InputError :message="errors.status" />
                 </div>
                 <div class="grid gap-2 sm:col-span-2">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Form, Link } from '@inertiajs/vue3';
+import type { Auth } from '@/types';
+import { Form, Link, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,9 @@ const emit = defineEmits<{
     cancel: [];
     success: [];
 }>();
+const canChangeStatus = usePage<{
+    auth: Auth;
+}>().props.auth.permissions.includes('categories.deactivate');
 </script>
 
 <template>
@@ -48,6 +52,7 @@ const emit = defineEmits<{
                 <select
                     id="status"
                     name="status"
+                    :disabled="!!category && !canChangeStatus"
                     required
                     :value="category?.status ?? 'active'"
                     class="w-full"
@@ -60,6 +65,12 @@ const emit = defineEmits<{
                         {{ status.label }}
                     </option>
                 </select>
+                <input
+                    v-if="category && !canChangeStatus"
+                    type="hidden"
+                    name="status"
+                    :value="category.status"
+                />
                 <InputError :message="errors.status" />
             </div>
             <div class="grid gap-2 sm:col-span-2">

@@ -17,6 +17,9 @@ class CheckoutRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'credit_sale_id' => ['nullable', 'integer'],
+            'is_credit' => ['sometimes', 'boolean'],
+            'customer_id' => ['nullable', 'integer'],
             'operation_key' => ['required', 'uuid'],
             'location_id' => ['required', 'integer', 'exists:locations,id'],
             'source' => ['required', Rule::enum(SaleSource::class)],

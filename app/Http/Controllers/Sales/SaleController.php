@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Sales;
 
 use App\Http\Controllers\Controller;
 use App\Models\Sale;
-use App\Models\SaleLine;
 use App\Models\SalePayment;
 use App\Models\SaleRefund;
 use App\Models\SaleReturn;
@@ -12,6 +11,7 @@ use App\Models\User;
 use App\SalePaymentStatus;
 use App\SaleStatus;
 use App\Services\LocationAccessService;
+use App\Services\SalesActivityService;
 use App\Services\SaleService;
 use App\Support\SalePageData;
 use Brick\Math\BigDecimal;
@@ -23,7 +23,7 @@ use Inertia\Response;
 
 class SaleController extends Controller
 {
-    public function reports(Request $request, LocationAccessService $locationAccess): Response
+    public function reports(Request $request, LocationAccessService $locationAccess, SalesActivityService $activity): Response
     {
         $business = $locationAccess->business();
         $filters = $request->validate([
@@ -35,33 +35,34 @@ class SaleController extends Controller
         $dateTo = $filters['date_to'] ?? now()->toDateString();
         $locations = $locationAccess->accessibleQuery($request->user())->orderBy('name')->get(['id', 'name']);
         $locationIds = $locationAccess->accessibleQuery($request->user())->select('locations.id');
-        $sales = $business->sales()->whereIn('location_id', $locationIds)
-            ->whereDate('posted_at', '>=', $dateFrom)->whereDate('posted_at', '<=', $dateTo)
+        $sales = $activity->query($request->user(), $business, ! empty($filters['location_id']) ? (int) $filters['location_id'] : null)
+            ->whereDate('posted_at', '>=', $dateFrom)->whereDate('posted_at', '<=', $dateTo);
+        $scopedSales = $business->sales()->whereIn('location_id', $locationIds)
             ->when(! empty($filters['location_id']), fn (Builder $query): Builder => $query->where('location_id', (int) $filters['location_id']));
-        $saleIds = (clone $sales)->select('id');
+        $saleIds = (clone $scopedSales)->select('id');
         $grossSales = (string) (clone $sales)->sum('total');
-        $returnsTotal = (string) SaleReturn::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)->sum('total');
-        $paymentsTotal = (string) SalePayment::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)->sum('amount');
-        $refundsTotal = (string) SaleRefund::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)->sum('amount');
+        $returnsTotal = (string) SaleReturn::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)->whereDate('processed_at', '>=', $dateFrom)->whereDate('processed_at', '<=', $dateTo)->sum('total');
+        $paymentsTotal = (string) SalePayment::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)->whereDate('paid_at', '>=', $dateFrom)->whereDate('paid_at', '<=', $dateTo)->sum('amount');
+        $refundsTotal = (string) SaleRefund::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)->whereDate('refunded_at', '>=', $dateFrom)->whereDate('refunded_at', '<=', $dateTo)->sum('amount');
         $netSales = BigDecimal::of($grossSales)->minus($returnsTotal)->toScale(2, RoundingMode::HalfUp);
         $netReceived = BigDecimal::of($paymentsTotal)->minus($refundsTotal);
         $outstanding = BigDecimal::max($netSales->minus($netReceived), BigDecimal::zero())->toScale(2, RoundingMode::HalfUp);
-        $daily = (clone $sales)->selectRaw('DATE(posted_at) as day, COUNT(*) as sales_count, SUM(total) as gross_total')
+        $daily = (clone $sales)->selectRaw('DATE(posted_at) as day, SUM(initial_sale) as sales_count, SUM(total) as gross_total')
             ->groupByRaw('DATE(posted_at)')->orderBy('day')->get()
-            ->map(fn (Sale $row): array => ['day' => (string) $row->getAttribute('day'), 'sales_count' => (int) $row->getAttribute('sales_count'), 'gross_total' => (string) $row->getAttribute('gross_total')]);
-        $paymentMethods = SalePayment::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)
+            ->map(fn (object $row): array => ['day' => (string) $row->day, 'sales_count' => (int) $row->sales_count, 'gross_total' => (string) $row->gross_total]);
+        $paymentMethods = SalePayment::query()->where('business_id', $business->id)->whereIn('sale_id', $saleIds)->whereDate('paid_at', '>=', $dateFrom)->whereDate('paid_at', '<=', $dateTo)
             ->selectRaw('method, SUM(amount) as amount, SUM(change_given) as change_given')
             ->groupBy('method')->orderBy('method')->get()
             ->map(fn (object $row): array => ['method' => $row->method, 'amount' => (string) $row->amount, 'change_given' => (string) $row->change_given]);
-        $topProducts = SaleLine::query()->whereIn('sale_id', $saleIds)
+        $topProducts = $activity->lines($request->user(), $business, ! empty($filters['location_id']) ? (int) $filters['location_id'] : null)->whereDate('event_at', '>=', $dateFrom)->whereDate('event_at', '<=', $dateTo)
             ->selectRaw('product_name_snapshot, variant_name_snapshot, sku_snapshot, SUM(quantity) as quantity_sold, SUM(total) as gross_total')
             ->groupBy('product_name_snapshot', 'variant_name_snapshot', 'sku_snapshot')
             ->orderByDesc('quantity_sold')->limit(10)->get()
-            ->map(fn (SaleLine $row): array => ['product_name' => (string) $row->getAttribute('product_name_snapshot'), 'variant_name' => (string) $row->getAttribute('variant_name_snapshot'), 'sku' => (string) $row->getAttribute('sku_snapshot'), 'quantity_sold' => (string) $row->getAttribute('quantity_sold'), 'gross_total' => (string) $row->getAttribute('gross_total')]);
+            ->map(fn (object $row): array => ['product_name' => (string) $row->product_name_snapshot, 'variant_name' => (string) $row->variant_name_snapshot, 'sku' => (string) $row->sku_snapshot, 'quantity_sold' => (string) $row->quantity_sold, 'gross_total' => (string) $row->gross_total]);
 
         return Inertia::render('sales/Reports', [
             'summary' => [
-                'sales_count' => (int) (clone $sales)->count(),
+                'sales_count' => (int) (clone $sales)->sum('initial_sale'),
                 'gross_sales' => BigDecimal::of($grossSales)->toScale(2, RoundingMode::HalfUp)->__toString(),
                 'returns' => BigDecimal::of($returnsTotal)->toScale(2, RoundingMode::HalfUp)->__toString(),
                 'net_sales' => $netSales->__toString(),
@@ -95,6 +96,8 @@ class SaleController extends Controller
         $status = SaleStatus::tryFrom((string) ($filters['status'] ?? ''));
         $accessibleLocationIds = $locationAccess->accessibleQuery($request->user())->select('locations.id');
         $sales = $business->sales()->whereIn('location_id', $accessibleLocationIds)
+            ->when(! $request->user()->can('credit-sales.view'), fn (Builder $query): Builder => $query->where('is_credit', false))
+            ->when($request->route('credit'), fn (Builder $query): Builder => $query->where('is_credit', true))
             ->with(['location:id,name,code', 'cashier:id,name'])->withCount('lines')
             ->when($search !== '', fn (Builder $query): Builder => $query->where(function (Builder $query) use ($search): void {
                 $query->where('sale_number', 'like', "%{$search}%")
@@ -120,6 +123,8 @@ class SaleController extends Controller
                 'cashier' => $sale->cashier->name,
                 'location' => $sale->location->name,
                 'lines_count' => $sale->lines_count,
+                'outstanding' => app(SaleService::class)->outstanding($sale)->__toString(),
+                'paid_total' => $sale->paid_total,
                 'total' => $sale->total,
                 'payment_status' => $sale->payment_status->value,
                 'status' => $sale->status->value,
@@ -128,6 +133,7 @@ class SaleController extends Controller
         $cashierIds = $business->sales()->whereIn('location_id', $accessibleLocationIds)->select('cashier_id')->distinct();
 
         return Inertia::render('sales/Index', [
+            'creditOnly' => (bool) $request->route('credit'),
             'sales' => $sales,
             'locations' => $locationAccess->accessibleQuery($request->user())->orderBy('name')->get(['id', 'name']),
             'cashiers' => User::query()->whereIn('id', $cashierIds)->orderBy('name')->get(['id', 'name']),
@@ -154,6 +160,9 @@ class SaleController extends Controller
             'sale' => $pageData->sale($sale, request()->user()->can('sales.costs.view')),
             'currency' => $sale->business->currency,
             'outstanding' => $sales->outstanding($sale)->__toString(),
+            'canAddItems' => (bool) $sale->is_credit && $sale->customer_id !== null && $sale->status === SaleStatus::Completed && $sale->payment_status !== SalePaymentStatus::Paid && request()->user()->can('sales.credit') && request()->user()->can('credit-sales.add-items') && request()->user()->can('sales.pos') && request()->user()->can('sales.create'),
+            'canPrintReceipt' => request()->user()->can('sales-receipts.print'),
+            'canPrintReturn' => request()->user()->can('return-receipts.print'),
             'canRecordPayment' => request()->user()->can('sale-payments.create'),
             'canReturn' => request()->user()->can('sale-returns.create'),
             'canRefund' => request()->user()->can('sale-refunds.create'),

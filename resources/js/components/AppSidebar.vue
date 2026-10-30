@@ -97,6 +97,9 @@ const catalogNavItems = computed<NavItem[]>(() => [
     ...(can('brands.view') ? [{ title: 'Brands', href: brandsIndex() }] : []),
 ]);
 const inventoryNavItems = computed<NavItem[]>(() => [
+    ...(can('damaged-stock.view')
+        ? [{ title: 'Damaged stock', href: '/inventory/damaged' }]
+        : []),
     ...(can('inventory.view')
         ? [
               { title: 'Overview', href: inventoryIndex() },
@@ -134,6 +137,9 @@ const purchasingNavItems = computed<NavItem[]>(() => [
         : []),
 ]);
 const salesNavItems = computed<NavItem[]>(() => [
+    ...(can('sales.view') && can('credit-sales.view')
+        ? [{ title: 'Credit sales', href: '/sales/credit' }]
+        : []),
     ...(can('sales.pos') ? [{ title: 'POS checkout', href: posIndex() }] : []),
     ...(can('sales.view')
         ? [{ title: 'Sales history', href: salesIndex() }]
@@ -143,23 +149,28 @@ const reportNavItems = computed<NavItem[]>(() => [
     ...(can('sales.reports.view')
         ? [{ title: 'Sales reports', href: salesReports() }]
         : []),
-    ...(can('inventory.view')
+    ...(can('stock-reports.view')
         ? [{ title: 'Out-of-Stock Products', href: outOfStock() }]
         : []),
-    ...(can('shifts.view')
-        ? [
-              { title: 'Expenses', href: expenses() },
-              { title: 'Current Shift', href: currentShift() },
-          ]
+    ...(can('damaged-reports.view')
+        ? [{ title: 'Damaged stock report', href: '/reports/damaged-stock' }]
+        : []),
+    ...(can('shifts.view') && can('expense-reports.view')
+        ? [{ title: 'Expenses', href: expenses() }]
+        : []),
+    ...(can('shifts.view') && can('shift-reports.view')
+        ? [{ title: 'Current Shift', href: currentShift() }]
         : []),
 ]);
 const settingsNavItems = computed<NavItem[]>(() => [
+    ...(can('invoice-settings.view')
+        ? [{ title: 'Invoice settings', href: editInvoices() }]
+        : []),
+    ...(can('pos-settings.view')
+        ? [{ title: 'POS screen settings', href: editPosSettings() }]
+        : []),
     ...(can('business-settings.view')
-        ? [
-              { title: 'Business settings', href: editBusiness() },
-              { title: 'Invoice settings', href: editInvoices() },
-              { title: 'POS screen settings', href: editPosSettings() },
-          ]
+        ? [{ title: 'Business settings', href: editBusiness() }]
         : []),
     ...(can('locations.view')
         ? [{ title: 'Locations', href: locationsIndex() }]

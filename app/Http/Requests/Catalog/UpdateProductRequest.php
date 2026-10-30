@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Catalog;
 
 use App\Http\Requests\Catalog\Concerns\ValidatesProductPayload;
+use App\Http\Requests\Concerns\AuthorizesStatusChanges;
 use App\Models\Product;
 use App\PermissionName;
 use App\ProductType;
@@ -12,6 +13,7 @@ use Illuminate\Validation\Validator;
 
 class UpdateProductRequest extends FormRequest
 {
+    use AuthorizesStatusChanges;
     use ValidatesProductPayload;
 
     public function authorize(): bool
@@ -21,6 +23,7 @@ class UpdateProductRequest extends FormRequest
 
         return ($this->user()?->can(PermissionName::ProductsUpdate->value) ?? false)
             && $product instanceof Product
+            && $this->maySetStatus($product, 'products.deactivate')
             && $product->business_id === $this->currentBusiness()->id
             && $this->mayManageProduct($type);
     }

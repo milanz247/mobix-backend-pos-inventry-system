@@ -31,7 +31,7 @@ type PosSettings = {
     products_per_page: number;
 };
 
-const props = defineProps<{ settings: PosSettings }>();
+const props = defineProps<{ settings: PosSettings; canUpdate: boolean }>();
 const preferences = reactive({ ...props.settings });
 const toggles = [
     {
@@ -138,210 +138,226 @@ defineOptions({
             class="space-y-5"
             v-slot="{ errors, processing, recentlySuccessful }"
         >
-            <section class="surface-panel space-y-5 p-5 sm:p-6">
-                <div class="flex items-start gap-3">
-                    <span
-                        class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-                    >
-                        <MonitorCog class="size-5" />
-                    </span>
-                    <div>
-                        <h2 class="font-semibold">Visible POS controls</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            Untick anything that is not needed at the counter.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    <label
-                        v-for="toggle in toggles"
-                        :key="toggle.key"
-                        :for="toggle.name"
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                    >
-                        <Checkbox
-                            :id="toggle.name"
-                            v-model="preferences[toggle.key]"
-                            :name="toggle.name"
-                            value="1"
-                            class="mt-0.5"
-                        />
-                        <span>
-                            <span class="block text-sm font-medium">{{
-                                toggle.title
-                            }}</span>
-                            <span
-                                class="mt-0.5 block text-xs leading-5 text-muted-foreground"
-                                >{{ toggle.description }}</span
-                            >
-                        </span>
-                    </label>
-                </div>
-            </section>
-
-            <section class="surface-panel space-y-5 p-5 sm:p-6">
-                <div class="flex items-start gap-3">
-                    <span
-                        class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-                    >
-                        <Printer class="size-5" />
-                    </span>
-                    <div>
-                        <h2 class="font-semibold">Receipt after sale</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">
-                            Control the cashier prompt and the printer format
-                            used immediately after checkout.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="grid gap-3 lg:grid-cols-2">
-                    <label
-                        for="pos_show_receipt_after_sale"
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                    >
-                        <Checkbox
-                            id="pos_show_receipt_after_sale"
-                            v-model="preferences.show_receipt_after_sale"
-                            name="pos_show_receipt_after_sale"
-                            value="1"
-                            class="mt-0.5"
-                        />
-                        <span>
-                            <span class="block text-sm font-medium"
-                                >Show sale-completed summary</span
-                            >
-                            <span
-                                class="mt-0.5 block text-xs leading-5 text-muted-foreground"
-                            >
-                                Show totals, cash received, change, and the
-                                manual print button after checkout.
-                            </span>
-                        </span>
-                    </label>
-
-                    <label
-                        for="pos_auto_print_receipt"
-                        class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
-                    >
-                        <Checkbox
-                            id="pos_auto_print_receipt"
-                            v-model="preferences.auto_print_receipt"
-                            name="pos_auto_print_receipt"
-                            value="1"
-                            class="mt-0.5"
-                        />
-                        <span>
-                            <span class="block text-sm font-medium"
-                                >Prompt to print automatically</span
-                            >
-                            <span
-                                class="mt-0.5 block text-xs leading-5 text-muted-foreground"
-                            >
-                                Open the browser print dialog as soon as a sale
-                                completes successfully.
-                            </span>
-                        </span>
-                    </label>
-                </div>
-
-                <div
-                    class="grid gap-4 border-t border-border/70 pt-5 sm:grid-cols-2"
-                >
-                    <div class="grid gap-2">
-                        <Label for="invoice_paper_size">Print format</Label>
-                        <select
-                            id="invoice_paper_size"
-                            v-model="preferences.receipt_paper_size"
-                            name="invoice_paper_size"
-                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                            <option value="a4">A4 invoice</option>
-                            <option value="thermal">Thermal receipt</option>
-                        </select>
-                        <InputError :message="errors.invoice_paper_size" />
-                    </div>
-
-                    <div class="grid gap-2">
-                        <Label for="invoice_thermal_width"
-                            >Thermal paper width</Label
-                        >
-                        <select
-                            id="invoice_thermal_width"
-                            v-model="preferences.receipt_thermal_width"
-                            name="invoice_thermal_width"
-                            :disabled="
-                                preferences.receipt_paper_size !== 'thermal'
-                            "
-                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option :value="58">58 mm</option>
-                            <option :value="80">80 mm</option>
-                        </select>
-                        <input
-                            v-if="preferences.receipt_paper_size !== 'thermal'"
-                            type="hidden"
-                            name="invoice_thermal_width"
-                            :value="preferences.receipt_thermal_width"
-                        />
-                        <p class="text-xs text-muted-foreground">
-                            Used only when the print format is Thermal receipt.
-                        </p>
-                        <InputError :message="errors.invoice_thermal_width" />
-                    </div>
-                </div>
-            </section>
-
-            <section class="surface-panel p-5 sm:p-6">
-                <div
-                    class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-                >
+            <p
+                v-if="!canUpdate"
+                class="mb-4 rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground"
+            >
+                View only — this role cannot change these settings.
+            </p>
+            <fieldset :disabled="!canUpdate" class="contents">
+                <section class="surface-panel space-y-5 p-5 sm:p-6">
                     <div class="flex items-start gap-3">
                         <span
                             class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
                         >
-                            <LayoutDashboard class="size-5" />
+                            <MonitorCog class="size-5" />
                         </span>
                         <div>
-                            <Label for="pos_products_per_page"
-                                >Products loaded per page</Label
-                            >
+                            <h2 class="font-semibold">Visible POS controls</h2>
                             <p class="mt-1 text-sm text-muted-foreground">
-                                More products reduce scrolling but take longer
-                                to load on slower devices.
+                                Untick anything that is not needed at the
+                                counter.
                             </p>
                         </div>
                     </div>
-                    <div class="w-full sm:w-48">
-                        <select
-                            id="pos_products_per_page"
-                            v-model="preferences.products_per_page"
-                            name="pos_products_per_page"
-                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                            <option :value="12">12 products</option>
-                            <option :value="24">24 products</option>
-                            <option :value="36">36 products</option>
-                            <option :value="48">48 products</option>
-                        </select>
-                        <InputError
-                            class="mt-1"
-                            :message="errors.pos_products_per_page"
-                        />
-                    </div>
-                </div>
-            </section>
 
-            <div class="flex items-center justify-end gap-3">
-                <p
-                    v-if="recentlySuccessful"
-                    class="text-sm text-muted-foreground"
-                >
-                    Saved.
-                </p>
-                <Button :disabled="processing">Save POS settings</Button>
-            </div>
+                    <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                        <label
+                            v-for="toggle in toggles"
+                            :key="toggle.key"
+                            :for="toggle.name"
+                            class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                        >
+                            <Checkbox
+                                :id="toggle.name"
+                                v-model="preferences[toggle.key]"
+                                :name="toggle.name"
+                                value="1"
+                                class="mt-0.5"
+                            />
+                            <span>
+                                <span class="block text-sm font-medium">{{
+                                    toggle.title
+                                }}</span>
+                                <span
+                                    class="mt-0.5 block text-xs leading-5 text-muted-foreground"
+                                    >{{ toggle.description }}</span
+                                >
+                            </span>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="surface-panel space-y-5 p-5 sm:p-6">
+                    <div class="flex items-start gap-3">
+                        <span
+                            class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                        >
+                            <Printer class="size-5" />
+                        </span>
+                        <div>
+                            <h2 class="font-semibold">Receipt after sale</h2>
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                Control the cashier prompt and the printer
+                                format used immediately after checkout.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-3 lg:grid-cols-2">
+                        <label
+                            for="pos_show_receipt_after_sale"
+                            class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                        >
+                            <Checkbox
+                                id="pos_show_receipt_after_sale"
+                                v-model="preferences.show_receipt_after_sale"
+                                name="pos_show_receipt_after_sale"
+                                value="1"
+                                class="mt-0.5"
+                            />
+                            <span>
+                                <span class="block text-sm font-medium"
+                                    >Show sale-completed summary</span
+                                >
+                                <span
+                                    class="mt-0.5 block text-xs leading-5 text-muted-foreground"
+                                >
+                                    Show totals, cash received, change, and the
+                                    manual print button after checkout.
+                                </span>
+                            </span>
+                        </label>
+
+                        <label
+                            for="pos_auto_print_receipt"
+                            class="flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 p-3.5 transition-colors hover:bg-muted/40"
+                        >
+                            <Checkbox
+                                id="pos_auto_print_receipt"
+                                v-model="preferences.auto_print_receipt"
+                                name="pos_auto_print_receipt"
+                                value="1"
+                                class="mt-0.5"
+                            />
+                            <span>
+                                <span class="block text-sm font-medium"
+                                    >Prompt to print automatically</span
+                                >
+                                <span
+                                    class="mt-0.5 block text-xs leading-5 text-muted-foreground"
+                                >
+                                    Open the browser print dialog as soon as a
+                                    sale completes successfully.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div
+                        class="grid gap-4 border-t border-border/70 pt-5 sm:grid-cols-2"
+                    >
+                        <div class="grid gap-2">
+                            <Label for="invoice_paper_size">Print format</Label>
+                            <select
+                                id="invoice_paper_size"
+                                v-model="preferences.receipt_paper_size"
+                                name="invoice_paper_size"
+                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option value="a4">A4 invoice</option>
+                                <option value="thermal">Thermal receipt</option>
+                            </select>
+                            <InputError :message="errors.invoice_paper_size" />
+                        </div>
+
+                        <div class="grid gap-2">
+                            <Label for="invoice_thermal_width"
+                                >Thermal paper width</Label
+                            >
+                            <select
+                                id="invoice_thermal_width"
+                                v-model="preferences.receipt_thermal_width"
+                                name="invoice_thermal_width"
+                                :disabled="
+                                    preferences.receipt_paper_size !== 'thermal'
+                                "
+                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <option :value="58">58 mm</option>
+                                <option :value="80">80 mm</option>
+                            </select>
+                            <input
+                                v-if="
+                                    preferences.receipt_paper_size !== 'thermal'
+                                "
+                                type="hidden"
+                                name="invoice_thermal_width"
+                                :value="preferences.receipt_thermal_width"
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                Used only when the print format is Thermal
+                                receipt.
+                            </p>
+                            <InputError
+                                :message="errors.invoice_thermal_width"
+                            />
+                        </div>
+                    </div>
+                </section>
+
+                <section class="surface-panel p-5 sm:p-6">
+                    <div
+                        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                        <div class="flex items-start gap-3">
+                            <span
+                                class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                            >
+                                <LayoutDashboard class="size-5" />
+                            </span>
+                            <div>
+                                <Label for="pos_products_per_page"
+                                    >Products loaded per page</Label
+                                >
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    More products reduce scrolling but take
+                                    longer to load on slower devices.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="w-full sm:w-48">
+                            <select
+                                id="pos_products_per_page"
+                                v-model="preferences.products_per_page"
+                                name="pos_products_per_page"
+                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                                <option :value="12">12 products</option>
+                                <option :value="24">24 products</option>
+                                <option :value="36">36 products</option>
+                                <option :value="48">48 products</option>
+                            </select>
+                            <InputError
+                                class="mt-1"
+                                :message="errors.pos_products_per_page"
+                            />
+                        </div>
+                    </div>
+                </section>
+
+                <div class="flex items-center justify-end gap-3">
+                    <p
+                        v-if="recentlySuccessful"
+                        class="text-sm text-muted-foreground"
+                    >
+                        Saved.
+                    </p>
+                    <Button v-if="canUpdate" :disabled="processing"
+                        >Save POS settings</Button
+                    >
+                </div>
+            </fieldset>
         </Form>
     </div>
 </template>

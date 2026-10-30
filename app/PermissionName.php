@@ -72,10 +72,48 @@ enum PermissionName: string
     case SalesCostsView = 'sales.costs.view';
     case SalesReportsView = 'sales.reports.view';
 
+    case ProductsDelete = 'products.delete';
+    case CategoriesDelete = 'categories.delete';
+    case BrandsDelete = 'brands.delete';
+    case SuppliersDelete = 'suppliers.delete';
+    case PurchasesDelete = 'purchases.delete';
+    case InvoiceSettingsView = 'invoice-settings.view';
+    case InvoiceSettingsUpdate = 'invoice-settings.update';
+    case PosSettingsView = 'pos-settings.view';
+    case PosSettingsUpdate = 'pos-settings.update';
+    case DamagedStockView = 'damaged-stock.view';
+    case DamagedStockCreate = 'damaged-stock.create';
+    case DamagedStockRepair = 'damaged-stock.repair';
+    case DamagedStockWriteOff = 'damaged-stock.write-off';
+    case StockReportsView = 'stock-reports.view';
+    case DamagedReportsView = 'damaged-reports.view';
+    case DamagedReportsPrint = 'damaged-reports.print';
+    case CreditSalesView = 'credit-sales.view';
+    case CreditSalesAddItems = 'credit-sales.add-items';
+    case CustomersView = 'customers.view';
+    case CustomersCreate = 'customers.create';
+    case SalesReceiptsPrint = 'sales-receipts.print';
+    case ReturnReceiptsPrint = 'return-receipts.print';
+    case SaleReplacementsCreate = 'sale-replacements.create';
+    case ExpenseReportsView = 'expense-reports.view';
+    case ShiftReportsView = 'shift-reports.view';
+    case ShiftsPrint = 'shifts.print';
+    case UsersChangeStatus = 'users.change-status';
+    case LocationsChangeStatus = 'locations.change-status';
+
     public function module(): string
     {
         return match ($this) {
             self::DashboardView => 'Dashboard',
+            self::ProductsDelete => 'Products', self::CategoriesDelete => 'Categories', self::BrandsDelete => 'Brands',
+            self::SuppliersDelete => 'Suppliers', self::PurchasesDelete => 'Purchases',
+            self::InvoiceSettingsView, self::InvoiceSettingsUpdate => 'Invoice Settings',
+            self::PosSettingsView, self::PosSettingsUpdate => 'POS Settings',
+            self::DamagedStockView, self::DamagedStockCreate, self::DamagedStockRepair, self::DamagedStockWriteOff => 'Damaged Stock',
+            self::StockReportsView, self::DamagedReportsView, self::DamagedReportsPrint, self::ExpenseReportsView, self::ShiftReportsView => 'Reports',
+            self::CreditSalesView, self::CreditSalesAddItems, self::SalesReceiptsPrint, self::ReturnReceiptsPrint, self::SaleReplacementsCreate => 'POS & Sales',
+            self::CustomersView, self::CustomersCreate => 'Customers',
+            self::UsersChangeStatus => 'Users', self::LocationsChangeStatus => 'Locations', self::ShiftsPrint => 'Cashier Shifts',
             self::ShiftsView, self::ShiftsOpen, self::ShiftsMovements, self::ShiftsClose,
             self::ShiftsViewAll, self::ShiftsApprove, self::ShiftsCorrect => 'Cashier Shifts',
             self::UsersView,
@@ -143,18 +181,28 @@ enum PermissionName: string
     public function label(): string
     {
         return match ($this) {
+            self::ProductsDelete, self::CategoriesDelete, self::BrandsDelete, self::SuppliersDelete => 'Delete unused record',
+            self::PurchasesDelete => 'Delete draft invoice',
+            self::UsersChangeStatus, self::LocationsChangeStatus => 'Activate / deactivate',
+            self::DamagedStockCreate => 'Move stock to damaged', self::DamagedStockRepair => 'Return repaired stock', self::DamagedStockWriteOff => 'Write off damaged stock',
+            self::CreditSalesView => 'View credit invoices', self::CreditSalesAddItems => 'Add items to credit bill',
+            self::CustomersView => 'Find saved customers', self::CustomersCreate => 'Save new credit customer',
+            self::StockReportsView => 'View out-of-stock report', self::DamagedReportsView => 'View damaged stock report', self::DamagedReportsPrint => 'Print damaged stock report',
+            self::ExpenseReportsView => 'View expense report', self::ShiftReportsView => 'View current shift report', self::ShiftsPrint => 'Print shift report',
+            self::SalesReceiptsPrint => 'Print sale receipt', self::ReturnReceiptsPrint => 'Print return / replacement receipt',
+            self::SaleReplacementsCreate => 'Issue replacement',
             self::UsersAssignRoles => 'Assign roles',
             self::LocationsAssignUsers => 'Assign users',
             self::ProductsDeactivate,
             self::CategoriesDeactivate,
-            self::BrandsDeactivate => 'Deactivate',
+            self::BrandsDeactivate => 'Activate / deactivate',
             self::VariantsManage,
             self::BundlesManage,
             self::SerializedDevicesManage => 'Manage',
             self::PurchasePaymentsCreate => 'Record payment',
             self::PurchaseReturnsCreate => 'Create return',
             self::PurchasesPost => 'Post invoice',
-            self::SuppliersDeactivate => 'Deactivate',
+            self::SuppliersDeactivate => 'Activate / deactivate',
             self::PosAccess => 'Access POS',
             self::SalesPriceOverride => 'Override prices',
             self::SalesDiscount => 'Apply discounts',
@@ -164,7 +212,93 @@ enum PermissionName: string
             self::SaleRefundsCreate => 'Issue refunds',
             self::SalesCostsView => 'View costs and profit',
             self::SalesReportsView => 'View sales reports',
-            default => ucfirst(str_replace('-', ' ', str($this->value)->after('.')->toString())),
+            default => match (str($this->value)->after('.')->toString()) {
+                'create' => 'Add', 'update' => 'Edit', 'delete' => 'Delete', default => ucfirst(str_replace('-', ' ', str($this->value)->after('.')->toString()))
+            },
         };
+    }
+
+    public function feature(): string
+    {
+        return match ($this) {
+            self::PosAccess => 'POS checkout',
+            self::SalesCredit, self::CreditSalesView, self::CreditSalesAddItems => 'Credit sales',
+            self::SalesReceiptsPrint => 'Sales invoices',
+            self::SalePaymentsCreate => 'Customer payments',
+            self::SaleReturnsCreate, self::ReturnReceiptsPrint => 'Sales returns',
+            self::SaleReplacementsCreate => 'Warranty replacements',
+            self::SaleRefundsCreate => 'Customer refunds',
+            self::SalesCostsView => 'Cost and profit information',
+            self::SalesReportsView => 'Sales report',
+            self::StockReportsView => 'Out-of-stock report', self::DamagedReportsView, self::DamagedReportsPrint => 'Damaged stock report',
+            self::ExpenseReportsView => 'Expense report', self::ShiftReportsView => 'Current shift report',
+            self::InventoryReceive => 'Stock receiving', self::InventoryOpening => 'Opening stock',
+            self::InventoryAdjust => 'Stock adjustments', self::InventoryTransfer => 'Stock transfers',
+            self::InventoryView => 'Stock overview / location balances',
+            self::PurchasePaymentsCreate => 'Supplier payments', self::PurchaseReturnsCreate => 'Purchase returns',
+            self::SalesView, self::SalesCreate, self::SalesPriceOverride, self::SalesDiscount => 'Sales invoices',
+            default => $this->module(),
+        };
+    }
+
+    public function action(): string
+    {
+        return match (true) {
+            $this === self::PosAccess => 'view',
+            $this === self::SalesCredit => 'add',
+            str_ends_with($this->value, '.view') => 'view',
+            str_ends_with($this->value, '.create') => 'add',
+            str_ends_with($this->value, '.update') => 'edit',
+            str_ends_with($this->value, '.delete') => 'delete',
+            default => 'actions',
+        };
+    }
+
+    public function description(): string
+    {
+        return match ($this) {
+            self::ProductsDelete => 'Permanently remove an inactive product only when it has no inventory or transaction history.',
+            self::CategoriesDelete, self::BrandsDelete, self::SuppliersDelete => 'Remove an unused record; records referenced by transactions remain protected.',
+            self::PurchasesDelete => 'Delete draft purchases only. Posted invoices retain their transaction history.',
+            self::DamagedStockCreate => 'Deduct available stock and place faulty items in the damaged stock list.',
+            self::DamagedStockRepair => 'Move a repaired quantity from damaged stock back to available stock.',
+            self::DamagedStockWriteOff => 'Remove unusable damaged quantity without increasing available stock.',
+            self::SalesCostsView => 'Reveal buying costs, damaged-stock valuation and gross profit.',
+            self::SaleReplacementsCreate => 'Return faulty goods and issue a matching replacement without a cash refund.',
+            self::ShiftsViewAll => 'View other cashiers’ shifts within assigned locations.',
+            self::UsersAssignRoles => 'Assign permitted roles to user accounts.',
+            default => $this->label().' for '.$this->feature().'.',
+        };
+    }
+
+    /** @return list<string> */
+    public function dependencies(): array
+    {
+        $specific = match ($this) {
+            self::UsersCreate, self::UsersUpdate => ['users.view', 'users.assign-roles'],
+            self::ProductsCreate, self::ProductsUpdate => ['products.view', 'variants.manage'],
+            self::VariantsManage, self::BundlesManage => ['products.view'],
+            self::PosAccess => ['shifts.view'],
+            self::SalesCreate => ['sales.view', 'sales.pos', 'shifts.view'],
+            self::SalesCredit => ['sales.create', 'credit-sales.view', 'customers.view'],
+            self::CreditSalesView => ['sales.view'],
+            self::CreditSalesAddItems => ['sales.credit', 'sales.create', 'credit-sales.view'],
+            self::SalePaymentsCreate, self::SaleReturnsCreate, self::SaleRefundsCreate, self::SalesReceiptsPrint, self::ReturnReceiptsPrint => ['sales.view'],
+            self::SaleReplacementsCreate => ['sales.view', 'sales.create', 'sale-returns.create', 'shifts.view'],
+            self::PurchasesPost => ['purchases.view', 'inventory.receive'],
+            self::PurchasePaymentsCreate, self::PurchaseReturnsCreate => ['purchases.view'],
+            self::DamagedStockCreate, self::DamagedStockRepair, self::DamagedStockWriteOff => ['damaged-stock.view'],
+            self::DamagedReportsPrint => ['damaged-reports.view'],
+            self::ExpenseReportsView, self::ShiftReportsView, self::ShiftsPrint, self::ShiftsOpen, self::ShiftsMovements, self::ShiftsClose => ['shifts.view'],
+            self::ShiftsApprove, self::ShiftsCorrect => ['shifts.view', 'shifts.view-all'],
+            self::UsersChangeStatus => ['users.view'], self::LocationsChangeStatus => ['locations.view'],
+            default => [],
+        };
+        $view = explode('.', $this->value)[0].'.view';
+        if ($view !== $this->value && self::tryFrom($view) !== null && in_array($this->action(), ['add', 'edit', 'delete'], true)) {
+            $specific[] = $view;
+        }
+
+        return array_values(array_unique($specific));
     }
 }

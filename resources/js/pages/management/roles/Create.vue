@@ -4,8 +4,8 @@ import Heading from '@/components/Heading.vue';
 import RoleForm from '@/components/management/RoleForm.vue';
 import { create, store } from '@/routes/roles';
 
-type Permission = { id: number; name: string; label: string };
-defineProps<{ permissionGroups: Record<string, Permission[]> }>();
+import type { PermissionGroups } from '@/types/permissions';
+defineProps<{ permissionGroups: PermissionGroups }>();
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Create role', href: create() }] },
 });
@@ -16,7 +16,7 @@ defineOptions({
     <section class="page-shell">
         <Heading
             title="Create role"
-            description="Create a role from the available implemented permissions."
+            description="Create a role and tick View, Add, Edit, Delete and action permissions by function."
         />
         <RoleForm
             :action="store.url()"

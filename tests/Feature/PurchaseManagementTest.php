@@ -15,6 +15,7 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\InventoryService;
 use App\Services\PurchaseService;
+use App\Support\PermissionCatalog;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -36,6 +37,11 @@ function purchaseTestContext(string ...$permissions): array
     $serializedProduct = Product::factory()->serialized()->for($business)->for($category)->create(['name' => 'Serialized Phone']);
     $serializedVariant = ProductVariant::factory()->serialized()->for($business)->for($serializedProduct)->create(['sku' => 'PUR-IMEI-001', 'cost_price' => '500.00']);
 
+    foreach (PermissionCatalog::legacyGrants() as $old => $new) {
+        if (in_array($old, $permissions, true)) {
+            $permissions = [...$permissions, ...$new];
+        }
+    }
     foreach ($permissions as $permission) {
         $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
     }

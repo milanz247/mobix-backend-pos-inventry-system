@@ -10,6 +10,7 @@ use App\Models\ProductVariant;
 use App\Models\Sale;
 use App\Models\SaleLine;
 use App\Models\User;
+use App\Support\PermissionCatalog;
 use Database\Seeders\CatalogDefaultsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
@@ -24,6 +25,11 @@ function catalogManager(string ...$permissions): User
     $user = User::factory()->create();
     Business::factory()->for($owner, 'owner')->create();
 
+    foreach (PermissionCatalog::legacyGrants() as $old => $new) {
+        if (in_array($old, $permissions, true)) {
+            $permissions = [...$permissions, ...$new];
+        }
+    }
     foreach ($permissions as $permission) {
         $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
     }

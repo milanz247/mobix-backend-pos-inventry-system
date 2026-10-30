@@ -283,7 +283,9 @@ defineOptions({
                             <RowActions
                                 v-if="
                                     user.can_manage &&
-                                    (can('users.update') || can('users.delete'))
+                                    (can('users.update') ||
+                                        can('users.change-status') ||
+                                        can('users.delete'))
                                 "
                                 :label="user.name"
                             >
@@ -307,7 +309,7 @@ defineOptions({
                                 </Button>
                                 <Button
                                     v-if="
-                                        can('users.update') &&
+                                        can('users.change-status') &&
                                         user.id !== auth.user.id
                                     "
                                     type="button"

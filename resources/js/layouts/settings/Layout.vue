@@ -36,12 +36,20 @@ const settingsGroups = computed<SettingsNavGroup[]>(() => [
                           href: editBusiness(),
                           icon: Building2,
                       },
+                  ]
+                : []),
+            ...(auth.value.permissions.includes('invoice-settings.view')
+                ? [
                       {
                           title: 'Invoices',
                           description: 'Receipt design and print details',
                           href: editInvoices(),
                           icon: FileText,
                       },
+                  ]
+                : []),
+            ...(auth.value.permissions.includes('pos-settings.view')
+                ? [
                       {
                           title: 'POS screen',
                           description: 'Checkout layout and controls',

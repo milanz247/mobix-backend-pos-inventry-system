@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
+ * @property int|null $customer_id
+ * @property bool $is_credit
  * @property int $id
  * @property int $business_id
  * @property int $location_id
@@ -35,11 +37,17 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, SaleReturn> $returns
  * @property-read Collection<int, SaleRefund> $refunds
  */
-#[Fillable(['cashier_shift_id', 'business_id', 'location_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
+#[Fillable(['customer_id', 'is_credit', 'cashier_shift_id', 'business_id', 'location_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
 class Sale extends Model
 {
     /** @use HasFactory<SaleFactory> */
     use HasFactory;
+
+    /** @return BelongsTo<Customer, $this> */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
 
     /** @return BelongsTo<Business, $this> */
     public function business(): BelongsTo

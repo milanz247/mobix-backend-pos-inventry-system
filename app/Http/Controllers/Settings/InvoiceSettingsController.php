@@ -17,6 +17,7 @@ class InvoiceSettingsController extends Controller
         $business = Business::query()->where('setup_key', 'initial')->sole();
 
         return Inertia::render('settings/Invoices', [
+            'canUpdate' => request()->user()->can('invoice-settings.update'),
             'invoice' => [
                 'footer' => $business->invoice_footer,
                 'return_policy' => $business->invoice_return_policy,

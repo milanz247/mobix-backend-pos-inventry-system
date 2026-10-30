@@ -9,11 +9,11 @@ use App\Models\Role;
 use App\Models\User;
 use App\PermissionName;
 use App\Services\RoleAdministrationService;
+use App\Support\PermissionCatalog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Spatie\Permission\Models\Permission;
 
 class RoleController extends Controller
 {
@@ -89,29 +89,9 @@ class RoleController extends Controller
         return to_route('roles.index');
     }
 
-    /** @return array<string, array<int, array{id: int, name: string, label: string}>> */
+    /** @return array<string, list<array<string, mixed>>> */
     private function permissionGroups(User $actor): array
     {
-        $groups = [];
-
-        foreach (Permission::query()->orderBy('name')->get() as $permission) {
-            if (! $actor->can($permission->name)) {
-                continue;
-            }
-            $permissionName = PermissionName::from($permission->name);
-            $permissionId = $permission->getKey();
-
-            if (! is_int($permissionId)) {
-                throw new \UnexpectedValueException('Permission primary keys must be integers.');
-            }
-
-            $groups[$permissionName->module()][] = [
-                'id' => $permissionId,
-                'name' => $permission->name,
-                'label' => $permissionName->label(),
-            ];
-        }
-
-        return $groups;
+        return app(PermissionCatalog::class)->groups($actor);
     }
 }

@@ -1,0 +1,33 @@
+export type ReturnReceiptLine = {
+    id: number;
+    product: string;
+    variant: string;
+    sku: string;
+    model_number: string | null;
+    imei: string | null;
+    quantity: string;
+    total: string;
+    condition?: string;
+};
+export type ReturnReceipt = {
+    id: number;
+    return_number: string;
+    sale_id: number;
+    sale_number: string;
+    date: string;
+    processed_by: string;
+    is_exchange: boolean;
+    reason: string;
+    notes: string | null;
+    location: string;
+    customer: { name: string; phone: string | null };
+    total: string;
+    refund_total: string;
+    balance: string;
+    balance_is_snapshot: boolean;
+    net_total: string;
+    net_paid: string;
+    lines: ReturnReceiptLine[];
+    replacements: ReturnReceiptLine[];
+    refunds: { amount: string; method: string; reference: string | null }[];
+};

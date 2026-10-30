@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 import { RefreshCw } from '@lucide/vue';
@@ -36,6 +37,9 @@ const emit = defineEmits<{
 const modal = ref<Mode | null>(null);
 const refreshing = ref(false);
 const refreshError = ref('');
+const canPrintReport = (
+    usePage().props.auth as { permissions: string[] }
+).permissions.includes('shifts.print');
 const lastClosed = ref<{ id: number; reference: string } | null>(null);
 const opening = useForm({
     operation_key: crypto.randomUUID(),
@@ -336,7 +340,7 @@ function closeShift(): void {
                 manager.
             </p>
             <p
-                v-if="lastClosed && !active"
+                v-if="lastClosed && !active && canPrintReport"
                 class="mt-2 text-xs text-muted-foreground"
             >
                 Shift closed. Open a new shift before the next sale.

@@ -37,6 +37,7 @@ function auditAccessContext(): array
         'dashboard.view', 'sales.pos', 'sales.view', 'sales.create', 'sales.reports.view',
         'inventory.view', 'inventory.transfer', 'serialized-devices.view', 'serialized-devices.manage',
         'stock-movements.view', 'purchases.view', 'suppliers.view', 'shifts.view',
+        'sales-receipts.print', 'return-receipts.print', 'credit-sales.view', 'stock-reports.view', 'damaged-reports.view', 'damaged-reports.print', 'damaged-stock.view', 'shifts.print', 'shift-reports.view', 'expense-reports.view',
         'shifts.open', 'shifts.movements', 'shifts.close',
     ]);
 

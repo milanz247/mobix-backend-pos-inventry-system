@@ -26,3 +26,15 @@ Edit a role from **Role Management → All roles** (`roles.update`). System role
 ## Key permission examples
 
 Permission names are listed in the UI, grouped by module. Examples include `sales.pos`, `sales.create`, `sales.discount`, `sales.credit`, `sale-returns.create`, `sale-refunds.create`, `inventory.receive`, `inventory.adjust`, `purchases.post`, and `locations.assign-users`. A multi-step action can require more than one permission: POS checkout requires POS access, sale creation, and sales view. A missing permission may hide a button or cause an access-denied response.
+
+## Assign function permissions with the role matrix
+
+Open **Role Management → All roles**, create a role or edit a non-Owner role, and use **Function permissions**. Each function has separate **View**, **Add**, **Edit**, **Delete** and **Other actions** columns. Tick only the capabilities the role needs. Missing operations appear as **—**: posted invoices, payments and stock movements keep their history and use explicit return/refund/correction actions.
+
+Search by module or function; use **Select module**, **Select visible**, **View only** or **Clear visible** to work in bulk. Required permissions are included automatically (for example, editing products also needs viewing products and managing variants). Unticking a required permission also removes the dependent selections. **Save role permissions** applies the selection to all users assigned that role. An empty selection is valid. The Owner role remains protected with full access.
+
+Delete is separate from activate/deactivate for products, categories, brands and suppliers. Purchase deletion applies only to drafts. Damaged stock has independent view, move-to-damaged, repair and write-off permissions. Report viewing and printing, sale/return receipt printing, credit-invoice viewing/additions, saved-customer lookup/creation, and business/invoice/POS settings are separately configurable. View-only settings do not show a save action.
+
+Limited administrators can assign only access they already hold, including prerequisites. Users cannot add permissions to their own role, delete system roles, delete assigned roles, or remove protected Owner access. Personal profile/security remain available to the signed-in user rather than being controlled as another staff-management permission.
+
+The permission upgrade retains the equivalent capabilities previously granted to existing roles and direct users. After the upgrade, individual checkboxes can be revoked independently; reseeding does not restore customized non-Owner assignments. Review the complete [function permission reference](../permissions-and-roles.md) for the current actions.

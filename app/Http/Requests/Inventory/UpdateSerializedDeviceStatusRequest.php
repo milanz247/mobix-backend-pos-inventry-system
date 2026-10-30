@@ -18,7 +18,7 @@ class UpdateSerializedDeviceStatusRequest extends FormRequest
     {
         return [
             'operation_key' => ['required', 'uuid'],
-            'status' => ['required', Rule::in([SerializedDeviceStatus::InStock->value, SerializedDeviceStatus::InRepair->value])],
+            'status' => ['required', Rule::in([SerializedDeviceStatus::InStock->value, SerializedDeviceStatus::InRepair->value, SerializedDeviceStatus::Damaged->value])],
             'reason' => ['required', 'string', 'max:80'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
