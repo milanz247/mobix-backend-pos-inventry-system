@@ -54,6 +54,7 @@ class HeldCartController extends Controller
                 'minimum_selling_price' => $variant->minimum_selling_price, 'image_url' => null,
                 'quantity_on_hand' => $variant->getAttribute('quantity_on_hand'), 'devices_in_stock' => (int) $variant->getAttribute('devices_in_stock'),
                 'is_virtual_combo' => $variant->product->product_type === ProductType::Combo,
+                'is_service' => $variant->product->product_type === ProductType::Service,
                 ...$availability->describe($variant),
             ];
         }

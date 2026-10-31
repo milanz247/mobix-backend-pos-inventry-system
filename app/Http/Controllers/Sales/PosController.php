@@ -98,6 +98,7 @@ class PosController extends Controller
                 'quantity_on_hand' => $variant->quantity_on_hand ?? '0.000',
                 'devices_in_stock' => (int) $variant->getAttribute('devices_in_stock'),
                 'is_virtual_combo' => $variant->product->product_type === ProductType::Combo,
+                'is_service' => $variant->product->product_type === ProductType::Service,
             ]);
 
         return Inertia::render('sales/Pos', [

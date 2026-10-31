@@ -30,7 +30,7 @@ class InventoryPageData
             ->where('status', CatalogStatus::Active->value)
             ->whereHas('product', fn ($query) => $query
                 ->where('status', CatalogStatus::Active->value)
-                ->where('product_type', '!=', ProductType::Combo->value))
+                ->whereNotIn('product_type', [ProductType::Combo->value, ProductType::Service->value]))
             ->when($trackingMode !== null, fn ($query) => $query->where('tracking_mode', $trackingMode->value))
             ->orderBy('sku')->get()->map(fn ($variant): array => [
                 'id' => $variant->id,

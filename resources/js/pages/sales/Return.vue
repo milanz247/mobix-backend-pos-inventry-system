@@ -19,6 +19,7 @@ type SaleLine = {
     sku: string;
     tracking_mode: string;
     is_combo: boolean;
+    is_service: boolean;
     imei: string | null;
     quantity: string;
     unit_price: string;
@@ -62,7 +63,7 @@ const form = useForm({
     lines: props.sale.lines.map((line) => ({
         sale_line_id: line.id,
         quantity: '0.000',
-        restock: true,
+        restock: !line.is_service,
         replacement_identifier: '',
     })),
     refund_amount: '0.00',
@@ -138,7 +139,7 @@ function lineInput(line: SaleLine): {
         form.lines.find((item) => item.sale_line_id === line.id) ?? {
             sale_line_id: line.id,
             quantity: '0.000',
-            restock: true,
+        restock: !line.is_service,
             replacement_identifier: '',
         }
     );
@@ -268,7 +269,7 @@ defineOptions({
                                         :aria-label="`Return quantity for ${line.product_name}`"
                                         :max="line.returnable_quantity"
                                     />
-                                    <label class="grid gap-1 text-xs"
+                                    <label v-if="!line.is_service" class="grid gap-1 text-xs"
                                         >Returned item condition
                                         <select
                                             v-model="lineInput(line).restock"
@@ -287,6 +288,7 @@ defineOptions({
                                             </option>
                                         </select>
                                     </label>
+                                    <p v-else class="text-xs text-muted-foreground">Service refund · no inventory is returned.</p>
                                     <p
                                         v-if="!lineInput(line).restock"
                                         class="text-xs text-amber-700"

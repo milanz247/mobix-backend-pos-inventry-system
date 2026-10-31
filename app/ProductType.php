@@ -8,6 +8,7 @@ enum ProductType: string
     case Variable = 'variable';
     case Serialized = 'serialized';
     case Combo = 'combo';
+    case Service = 'service';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum ProductType: string
             self::Variable => 'Variable product',
             self::Serialized => 'Serialized device',
             self::Combo => 'Combo / bundle',
+            self::Service => 'Service / labour',
         };
     }
 }

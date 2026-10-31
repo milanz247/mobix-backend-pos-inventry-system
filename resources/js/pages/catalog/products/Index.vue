@@ -494,7 +494,32 @@ defineOptions({
             </div>
         </div>
 
-        <div class="table-panel">
+        <div class="grid gap-3 md:hidden">
+            <article v-for="product in products.data" :key="product.id" class="rounded-xl border border-border bg-card p-4 shadow-sm">
+                <div class="flex items-start gap-3">
+                    <img v-if="product.image_url" :src="product.image_url" :alt="`${product.name} image`" class="size-12 rounded-lg border border-border object-contain p-1" />
+                    <div v-else class="grid size-12 shrink-0 place-items-center rounded-lg bg-muted text-xs font-semibold text-muted-foreground">{{ product.name.slice(0, 2).toUpperCase() }}</div>
+                    <div class="min-w-0 flex-1">
+                        <Link :href="show(product.id)" class="font-semibold hover:text-primary">{{ product.name }}</Link>
+                        <p class="truncate text-xs text-muted-foreground">{{ product.primary_sku || 'No SKU' }} · {{ product.category }}<span v-if="product.brand"> · {{ product.brand }}</span></p>
+                    </div>
+                    <Badge :variant="product.status === 'active' ? 'success' : 'secondary'">{{ product.status }}</Badge>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span>{{ typeLabel(product.product_type) }} · {{ product.variants_count }} active</span>
+                    <span class="font-semibold">{{ formatPrice(product.lowest_variant_price) }}</span>
+                </div>
+                <div class="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                    <Button v-if="can('products.view')" as-child size="sm" variant="outline"><Link :href="show(product.id)"><Eye class="mr-1 size-4" />View</Link></Button>
+                    <Button v-if="can('products.update') && can('variants.manage')" as-child size="sm" variant="outline"><Link :href="edit(product.id)"><Pencil class="mr-1 size-4" />Edit</Link></Button>
+                    <Button v-if="can('products.deactivate')" size="sm" variant="outline" @click="changeStatus(product)"><Power class="mr-1 size-4" />{{ product.status === 'active' ? 'Deactivate' : 'Activate' }}</Button>
+                    <Button v-if="can('products.delete') && product.status === 'inactive'" size="sm" variant="outline" class="text-destructive" @click="remove(product)"><Trash2 class="mr-1 size-4" />Delete</Button>
+                </div>
+            </article>
+            <div v-if="products.data.length === 0" class="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No products found. Try a shorter search or clear a filter.</div>
+        </div>
+
+        <div class="table-panel hidden md:block">
             <table class="data-table min-w-[760px]">
                 <thead>
                     <tr>

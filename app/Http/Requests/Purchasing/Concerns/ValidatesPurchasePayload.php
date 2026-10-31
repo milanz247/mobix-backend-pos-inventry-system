@@ -59,8 +59,8 @@ trait ValidatesPurchasePayload
             foreach ($lines as $index => $line) {
                 $variantId = (int) ($line['product_variant_id'] ?? 0);
                 $variant = $variants->get($variantId);
-                if ($variant === null || $variant->status->value !== 'active' || $variant->product->status->value !== 'active' || $variant->product->product_type === ProductType::Combo) {
-                    $validator->errors()->add("lines.{$index}.product_variant_id", __('Choose an active, non-combo product variant.'));
+                if ($variant === null || $variant->status->value !== 'active' || $variant->product->status->value !== 'active' || in_array($variant->product->product_type, [ProductType::Combo, ProductType::Service], true)) {
+                    $validator->errors()->add("lines.{$index}.product_variant_id", __('Choose an active, stock-tracked product variant.'));
 
                     continue;
                 }

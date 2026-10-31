@@ -25,6 +25,7 @@ use LogicException;
  * @property string $sku_snapshot
  * @property VariantTrackingMode $tracking_mode
  * @property bool $is_combo
+ * @property bool $is_service
  * @property numeric-string $quantity
  * @property numeric-string $unit_price
  * @property numeric-string $discount_amount
@@ -34,7 +35,7 @@ use LogicException;
  * @property-read Collection<int, SaleLineComponent> $components
  * @property-read Collection<int, SaleReturnLine> $returnLines
  */
-#[Fillable(['tax_total', 'sale_addition_id', 'sale_return_id', 'business_id', 'product_variant_id', 'serialized_device_id', 'product_name_snapshot', 'variant_name_snapshot', 'sku_snapshot', 'barcode_snapshot', 'tracking_mode', 'is_combo', 'imei_snapshot', 'quantity', 'unit_price', 'discount_amount', 'cost_snapshot', 'subtotal', 'total'])]
+#[Fillable(['tax_total', 'sale_addition_id', 'sale_return_id', 'business_id', 'product_variant_id', 'serialized_device_id', 'product_name_snapshot', 'variant_name_snapshot', 'sku_snapshot', 'barcode_snapshot', 'tracking_mode', 'is_combo', 'is_service', 'imei_snapshot', 'quantity', 'unit_price', 'discount_amount', 'cost_snapshot', 'subtotal', 'total'])]
 class SaleLine extends Model
 {
     /** @use HasFactory<SaleLineFactory> */
@@ -75,6 +76,7 @@ class SaleLine extends Model
         return [
             'tax_total' => 'decimal:2',            'tracking_mode' => VariantTrackingMode::class,
             'is_combo' => 'boolean',
+            'is_service' => 'boolean',
             'quantity' => 'decimal:3',
             'unit_price' => 'decimal:2',
             'discount_amount' => 'decimal:2',

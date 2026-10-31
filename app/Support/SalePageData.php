@@ -66,6 +66,7 @@ class SalePageData
                     'barcode' => $line->barcode_snapshot,
                     'tracking_mode' => $line->tracking_mode->value,
                     'is_combo' => $line->is_combo,
+                    'is_service' => $line->is_service,
                     'imei' => $line->imei_snapshot,
                     'quantity' => $line->quantity,
                     'unit_price' => $line->unit_price,

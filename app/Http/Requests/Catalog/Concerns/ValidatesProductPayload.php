@@ -13,6 +13,7 @@ use App\ProductType;
 use App\VariantTrackingMode;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -166,6 +167,11 @@ trait ValidatesProductPayload
                 $validator->errors()->add('variants', 'A variable product must have at least two variants.');
             }
 
+            if ($type === ProductType::Service && (count($variants) !== 1
+                || ($variants[0]['tracking_mode'] ?? null) !== VariantTrackingMode::QuantityBased->value)) {
+                $validator->errors()->add('variants', 'A service must have one quantity-based variant and is never stock tracked.');
+            }
+
             if ($type === ProductType::Simple && ($variants[0]['tracking_mode'] ?? null) !== VariantTrackingMode::QuantityBased->value) {
                 $validator->errors()->add('variants.0.tracking_mode', 'Simple products must use quantity-based tracking.');
             }
@@ -197,6 +203,10 @@ trait ValidatesProductPayload
             }
 
             if ($product instanceof Product) {
+                if ($product->product_type->value !== $type?->value && $this->productHasHistory($product)) {
+                    $validator->errors()->add('product_type', 'Product type cannot change after stock or transaction history exists. Create a new product and deactivate this one instead.');
+                }
+
                 $submittedVariantIds = collect($variants)
                     ->pluck('id')
                     ->filter(fn (mixed $id): bool => filter_var($id, FILTER_VALIDATE_INT) !== false)
@@ -240,6 +250,15 @@ trait ValidatesProductPayload
                 }
 
                 $variantId = filter_var($variant['id'] ?? null, FILTER_VALIDATE_INT);
+
+                if ($product instanceof Product && $variantId !== false) {
+                    $savedVariant = $product->variants()->whereKey($variantId)->first();
+                    if ($savedVariant !== null
+                        && $savedVariant->tracking_mode->value !== ($variant['tracking_mode'] ?? null)
+                        && $this->variantHasHistory($savedVariant->id)) {
+                        $validator->errors()->add("variants.{$index}.tracking_mode", 'Tracking mode cannot change after stock or transaction history exists. Create a new variant instead.');
+                    }
+                }
 
                 if ($product instanceof Product
                     && $variantId !== false
@@ -288,7 +307,7 @@ trait ValidatesProductPayload
                     ->whereIn('id', array_keys($selectedComponentIds))
                     ->where('business_id', $this->currentBusiness()->id)
                     ->whereHas('product', fn (EloquentBuilder $query) => $query
-                        ->where('product_type', '!=', ProductType::Combo->value)
+                        ->whereNotIn('product_type', [ProductType::Combo->value, ProductType::Service->value])
                         ->when($product instanceof Product, fn (EloquentBuilder $query) => $query->where('id', '!=', $product->id)))
                     ->pluck('id')
                     ->map(fn (int|string $id): int => (int) $id)
@@ -314,7 +333,7 @@ trait ValidatesProductPayload
                             ->where('status', CatalogStatus::Active->value)
                             ->whereHas('product', fn (EloquentBuilder $query) => $query
                                 ->where('status', CatalogStatus::Active->value)
-                                ->where('product_type', '!=', ProductType::Combo->value)
+                                ->whereNotIn('product_type', [ProductType::Combo->value, ProductType::Service->value])
                                 ->where('id', '!=', $product->id))
                             ->exists();
 
@@ -342,6 +361,37 @@ trait ValidatesProductPayload
         return $user !== null
             && $user->can(PermissionName::VariantsManage->value)
             && ($type !== ProductType::Combo || $user->can(PermissionName::BundlesManage->value));
+    }
+
+    private function productHasHistory(Product $product): bool
+    {
+        foreach ($product->variants()->pluck('id') as $variantId) {
+            if ($this->variantHasHistory((int) $variantId)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function variantHasHistory(int $variantId): bool
+    {
+        foreach ([
+            'inventory_stocks',
+            'inventory_operation_lines',
+            'stock_movements',
+            'serialized_devices',
+            'purchase_lines',
+            'sale_lines',
+            'sale_line_components',
+            'damaged_stock_entries',
+        ] as $table) {
+            if (DB::table($table)->where('product_variant_id', $variantId)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function decimalIsGreater(string $left, string $right): bool

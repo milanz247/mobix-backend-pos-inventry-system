@@ -10,6 +10,7 @@ use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnLine;
 use App\Models\Supplier;
 use App\Models\User;
+use App\ProductType;
 use App\PurchasePaymentStatus;
 use App\PurchaseStatus;
 use App\SupplierStatus;
@@ -279,8 +280,8 @@ class PurchaseService
             $trackingMode = $variant->tracking_mode;
             $devices = $lineData['devices'] ?? [];
 
-            if ($variant->status->value !== 'active' || $variant->product->status->value !== 'active' || $variant->product->product_type->value === 'combo') {
-                throw ValidationException::withMessages(['lines' => __('Only active, non-combo variants can be purchased.')]);
+            if ($variant->status->value !== 'active' || $variant->product->status->value !== 'active' || in_array($variant->product->product_type, [ProductType::Combo, ProductType::Service], true)) {
+                throw ValidationException::withMessages(['lines' => __('Only active, stock-tracked variants can be purchased.')]);
             }
 
             if ($trackingMode === VariantTrackingMode::QuantityBased) {

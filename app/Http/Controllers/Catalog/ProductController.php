@@ -49,7 +49,7 @@ class ProductController extends Controller
             ->with(['category:id,name', 'brand:id,name'])
             ->withCount(['variants as active_variants_count' => fn (Builder $query) => $query->where('status', CatalogStatus::Active->value)])
             ->withMin(['variants as lowest_variant_price' => fn (Builder $query) => $query->where('status', CatalogStatus::Active->value)], 'selling_price')
-            ->withMin('variants as primary_sku', 'sku')
+            ->withMin(['variants as primary_sku' => fn (Builder $query) => $query->where('status', CatalogStatus::Active->value)], 'sku')
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('name', 'like', "%{$search}%")
@@ -115,11 +115,17 @@ class ProductController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $business = Business::query()->where('setup_key', 'initial')->sole();
 
-        return Inertia::render('catalog/products/Create', $this->formOptions($business));
+        return Inertia::render('catalog/products/Create', [
+            ...$this->formOptions(
+                $business,
+                canViewCosts: $request->user()->can('sales.costs.view'),
+            ),
+            'canViewCosts' => $request->user()->can('sales.costs.view'),
+        ]);
     }
 
     public function show(Request $request, Product $product): Response
@@ -214,7 +220,7 @@ class ProductController extends Controller
         return to_route('products.index');
     }
 
-    public function edit(Product $product): Response
+    public function edit(Request $request, Product $product): Response
     {
         $business = Business::query()->where('setup_key', 'initial')->sole();
         $product = $business->products()
@@ -227,6 +233,7 @@ class ProductController extends Controller
             ->values()
             ->all();
         $existingComponentIds = array_values($existingComponentIds);
+        $canViewCosts = $request->user()->can('sales.costs.view');
 
         return Inertia::render('catalog/products/Edit', [
             ...$this->formOptions(
@@ -234,6 +241,7 @@ class ProductController extends Controller
                 $existingComponentIds,
                 $product->category_id,
                 $product->brand_id,
+                $canViewCosts,
             ),
             'product' => [
                 'id' => $product->id,
@@ -256,7 +264,7 @@ class ProductController extends Controller
                     'tracking_mode' => $variant->tracking_mode->value,
                     'unit' => $variant->unit,
                     'condition' => $variant->condition?->value,
-                    'cost_price' => $variant->cost_price,
+                    'cost_price' => $canViewCosts ? $variant->cost_price : '',
                     'selling_price' => $variant->selling_price,
                     'minimum_selling_price' => $variant->minimum_selling_price,
                     'status' => $variant->status->value,
@@ -267,6 +275,7 @@ class ProductController extends Controller
                 ])->values()->all(),
             ],
             'currency' => $business->currency,
+            'canViewCosts' => $canViewCosts,
         ]);
     }
 
@@ -323,6 +332,7 @@ class ProductController extends Controller
         array $existingComponentIds = [],
         ?int $retainedCategoryId = null,
         ?int $retainedBrandId = null,
+        bool $canViewCosts = true,
     ): array {
         return [
             'categories' => $this->categoryOptions($business, $retainedCategoryId),
@@ -331,7 +341,7 @@ class ProductController extends Controller
             'conditions' => $this->options(ProductCondition::cases()),
             'trackingModes' => $this->options(VariantTrackingMode::cases()),
             'statuses' => $this->options(CatalogStatus::cases()),
-            'componentVariants' => $this->componentVariantOptions($business, $existingComponentIds),
+            'componentVariants' => $this->componentVariantOptions($business, $existingComponentIds, $canViewCosts),
             'currency' => $business->currency,
         ];
     }
@@ -368,9 +378,9 @@ class ProductController extends Controller
 
     /**
      * @param  list<int>  $existingComponentIds
-     * @return list<array{id: int, name: string, sku: string, cost_price: string, product: string}>
+     * @return list<array{id: int, name: string, sku: string, cost_price: string|null, product: string}>
      */
-    private function componentVariantOptions(Business $business, array $existingComponentIds = []): array
+    private function componentVariantOptions(Business $business, array $existingComponentIds = [], bool $canViewCosts = true): array
     {
         return array_values($business->productVariants()
             ->where(function (Builder $query) use ($existingComponentIds): void {
@@ -384,15 +394,15 @@ class ProductController extends Controller
                 }
             })
             ->whereHas('product', fn (Builder $query) => $query
-                ->where('product_type', '!=', ProductType::Combo->value))
+                ->whereNotIn('product_type', [ProductType::Combo->value, ProductType::Service->value]))
             ->with(['product' => fn (BelongsTo $relation) => $relation->select(['id', 'name'])])
             ->orderBy('sku')
-            ->get(['id', 'business_id', 'product_id', 'name', 'sku', 'cost_price'])
+            ->get(['id', 'business_id', 'product_id', 'name', 'sku', ...($canViewCosts ? ['cost_price'] : [])])
             ->map(fn (ProductVariant $variant): array => [
                 'id' => $variant->id,
                 'name' => $variant->name,
                 'sku' => $variant->sku,
-                'cost_price' => $variant->cost_price,
+                'cost_price' => $canViewCosts ? $variant->cost_price : null,
                 'product' => $variant->product->name,
             ])->all());
     }

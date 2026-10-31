@@ -21,6 +21,26 @@ class StoreProductRequest extends FormRequest
             && $this->mayManageProduct($type);
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->user()?->can('sales.costs.view')) {
+            return;
+        }
+
+        $variants = $this->input('variants', []);
+        if (! is_array($variants)) {
+            return;
+        }
+
+        foreach ($variants as $index => $variant) {
+            if (is_array($variant)) {
+                $variants[$index]['cost_price'] = '0.00';
+            }
+        }
+
+        $this->merge(['variants' => $variants]);
+    }
+
     /** @return array<string, ValidationRule|array<mixed>|string> */
     public function rules(): array
     {

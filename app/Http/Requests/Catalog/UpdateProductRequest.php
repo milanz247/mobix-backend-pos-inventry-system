@@ -28,6 +28,32 @@ class UpdateProductRequest extends FormRequest
             && $this->mayManageProduct($type);
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->user()?->can('sales.costs.view')) {
+            return;
+        }
+
+        $product = $this->route('product');
+        $variants = $this->input('variants', []);
+        if (! $product instanceof Product || ! is_array($variants)) {
+            return;
+        }
+
+        $savedCosts = $product->variants()->pluck('cost_price', 'id');
+        foreach ($variants as $index => $variant) {
+            if (! is_array($variant)) {
+                continue;
+            }
+            $id = filter_var($variant['id'] ?? null, FILTER_VALIDATE_INT);
+            $variants[$index]['cost_price'] = $id !== false && $savedCosts->has($id)
+                ? (string) $savedCosts->get($id)
+                : '0.00';
+        }
+
+        $this->merge(['variants' => $variants]);
+    }
+
     /** @return array<string, ValidationRule|array<mixed>|string> */
     public function rules(): array
     {

@@ -6,6 +6,7 @@ use App\CatalogStatus;
 use App\Models\Business;
 use App\Models\Location;
 use App\Models\ProductVariant;
+use App\ProductType;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,7 @@ class StockAvailabilityService
             ->where('status', 'in_stock')->selectRaw('product_variant_id, COUNT(*) as device_count')->groupBy('product_variant_id');
         $movements = DB::table('stock_movements')->where('business_id', $business->id)->where('location_id', $location->id)
             ->selectRaw('product_variant_id, MAX(created_at) as last_movement_at')->groupBy('product_variant_id');
-        $invalidComponent = "cv.status <> 'active' OR cp.status <> 'active' OR cp.product_type = 'combo' OR cv.business_id <> ? OR bc.quantity <= 0 OR (cv.tracking_mode = 'serialized' AND MOD(bc.quantity, 1) <> 0)";
+        $invalidComponent = "cv.status <> 'active' OR cp.status <> 'active' OR cp.product_type IN ('combo', 'service') OR cv.business_id <> ? OR bc.quantity <= 0 OR (cv.tracking_mode = 'serialized' AND MOD(bc.quantity, 1) <> 0)";
         $componentQuantity = "CASE WHEN cv.tracking_mode = 'serialized' THEN COALESCE(cd.device_count, 0) ELSE COALESCE(cq.quantity, 0) END";
         $bundles = DB::table('bundle_components as bc')
             ->join('product_variants as cv', 'cv.id', '=', 'bc.component_variant_id')
@@ -54,6 +55,9 @@ class StockAvailabilityService
     /** @return array{available_quantity: string, stock_status: string, can_sell: bool} */
     public function describe(ProductVariant $variant): array
     {
+        if ($variant->product->product_type === ProductType::Service) {
+            return ['available_quantity' => '0.000', 'stock_status' => 'service', 'can_sell' => $variant->status === CatalogStatus::Active && $variant->product->status === CatalogStatus::Active];
+        }
         $quantity = BigDecimal::of((string) $variant->getAttribute('available_quantity'))->toScale(3);
         $inconsistent = (bool) $variant->getAttribute('stock_inconsistent') || $quantity->isNegative();
 

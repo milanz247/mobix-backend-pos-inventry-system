@@ -10,7 +10,7 @@ type ComponentOption = {
     id: number;
     name: string;
     sku: string;
-    cost_price: string;
+    cost_price: string | null;
     product: string;
 };
 defineProps<{
@@ -22,6 +22,7 @@ defineProps<{
     statuses: Option[];
     componentVariants: ComponentOption[];
     currency: string;
+    canViewCosts: boolean;
 }>();
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Create product', href: create() }] },
@@ -46,6 +47,7 @@ defineOptions({
             :statuses="statuses"
             :component-variants="componentVariants"
             :currency="currency"
+            :can-view-costs="canViewCosts"
         />
     </section>
 </template>

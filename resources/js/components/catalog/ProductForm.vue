@@ -14,7 +14,7 @@ type ComponentOption = {
     id: number;
     name: string;
     sku: string;
-    cost_price: string;
+    cost_price: string | null;
     product: string;
 };
 type ComponentInput = { component_variant_id: number | ''; quantity: string };
@@ -77,6 +77,7 @@ const props = defineProps<{
     statuses: Option[];
     componentVariants: ComponentOption[];
     currency: string;
+    canViewCosts: boolean;
     product?: Product;
 }>();
 
@@ -99,6 +100,7 @@ const variants = ref<VariantInput[]>(
 const imagePreview = ref<string | null>(props.product?.image_url ?? null);
 let imageObjectUrl: string | null = null;
 const isCombo = computed(() => productType.value === 'combo');
+const isService = computed(() => productType.value === 'service');
 const normalizedIdentifier = (value: string): string =>
     value.trim().toLocaleLowerCase();
 const duplicateBarcodeAt = (index: number): boolean => {
@@ -130,7 +132,7 @@ function newVariant(): VariantInput {
         color: '',
         other_attributes: '',
         tracking_mode: serialized ? 'serialized' : 'quantity_based',
-        unit: 'piece',
+        unit: serialized ? 'piece' : isService.value ? 'service' : 'piece',
         condition: serialized ? 'new' : '',
         cost_price: '',
         selling_price: '',
@@ -196,7 +198,7 @@ function estimatedCost(variant: VariantInput): string {
 
         return item
             ? sum +
-                  scaledDecimal(item.cost_price, 2) *
+                  scaledDecimal(item.cost_price ?? '0', 2) *
                       scaledDecimal(component.quantity || '0', 3)
             : sum;
     }, 0n);
@@ -223,10 +225,15 @@ watch(productType, (type) => {
             variant.tracking_mode = 'serialized';
             variant.condition ||= 'new';
         });
-    } else if (type === 'simple' || type === 'combo') {
+    } else if (type === 'simple' || type === 'combo' || type === 'service') {
         variants.value.forEach((variant) => {
             variant.tracking_mode = 'quantity_based';
             variant.condition = '';
+            if (type === 'service' && variant.unit === 'piece') {
+                variant.unit = 'service';
+            } else if (type !== 'service' && variant.unit === 'service') {
+                variant.unit = 'piece';
+            }
         });
     }
 });
@@ -414,7 +421,7 @@ const canChangeStatus = usePage<{
                     variant="outline"
                     size="sm"
                     @click="addVariant"
-                    >Add variant</Button
+                        >Add variant</Button
                 >
             </div>
             <InputError :message="errors.variants" />
@@ -434,6 +441,15 @@ const canChangeStatus = usePage<{
                                   : `Variant ${variantIndex + 1}`
                         }}
                     </h3>
+                    <Button
+                        v-if="variant.id"
+                        type="button"
+                        size="sm"
+                        :variant="variant.status === 'active' ? 'outline' : 'secondary'"
+                        @click="variant.status = variant.status === 'active' ? 'inactive' : 'active'"
+                    >
+                        {{ variant.status === 'active' ? 'Deactivate variant' : 'Reactivate variant' }}
+                    </Button>
                     <Button
                         v-if="
                             productType !== 'combo' &&
@@ -610,10 +626,14 @@ const canChangeStatus = usePage<{
                             :id="`unit-${variantIndex}`"
                             :name="`variants[${variantIndex}][unit]`"
                             v-model="variant.unit"
+                            list="product-unit-suggestions"
                             maxlength="24"
                             required
                             placeholder="piece"
                         />
+                        <datalist id="product-unit-suggestions">
+                            <option v-for="unit in ['piece', 'pair', 'set', 'box', 'pack', 'meter', 'ml', 'gram', 'kg', 'hour', 'service']" :key="unit" :value="unit" />
+                        </datalist>
                         <InputError
                             :message="errors[`variants.${variantIndex}.unit`]"
                         />
@@ -652,7 +672,7 @@ const canChangeStatus = usePage<{
                         :name="`variants[${variantIndex}][condition]`"
                         value=""
                     />
-                    <div class="grid gap-2">
+                    <div v-if="canViewCosts" class="grid gap-2">
                         <Label :for="`cost-${variantIndex}`"
                             >Default buying / cost price</Label
                         >
@@ -672,6 +692,12 @@ const canChangeStatus = usePage<{
                                 errors[`variants.${variantIndex}.cost_price`]
                             "
                         />
+                    </div>
+                    <div v-else class="grid gap-2">
+                        <Label>Buying cost</Label>
+                        <div class="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                            Cost is managed by a user with cost access.
+                        </div>
                     </div>
                     <div class="grid gap-2">
                         <Label :for="`selling-${variantIndex}`"
@@ -847,6 +873,7 @@ const canChangeStatus = usePage<{
                         >
                     </div>
                     <div class="rounded-lg bg-muted/60 px-4 py-3 text-sm">
+                        <template v-if="canViewCosts">
                         Estimated component cost:
                         <span class="font-semibold">{{
                             formatCurrency(estimatedCost(variant))
@@ -855,6 +882,8 @@ const canChangeStatus = usePage<{
                             Estimate uses current default variant costs; it is
                             not actual purchase cost or accounting cost.
                         </p>
+                        </template>
+                        <p v-else class="text-sm text-muted-foreground">Component costs are hidden for your account.</p>
                     </div>
                 </section>
             </article>

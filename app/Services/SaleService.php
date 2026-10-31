@@ -487,6 +487,7 @@ class SaleService
                 throw ValidationException::withMessages(["lines.{$index}.product_variant_id" => __('This product is inactive.')]);
             }
             $isCombo = $variant->product->product_type === ProductType::Combo;
+            $isService = $variant->product->product_type === ProductType::Service;
             if (! $isCombo && $variant->tracking_mode === VariantTrackingMode::Serialized && BigDecimal::of((string) $item['quantity'])->compareTo('1') !== 0) {
                 throw ValidationException::withMessages(["lines.{$index}.quantity" => __('Each serialized phone must be added as one IMEI-tracked item.')]);
             }
@@ -572,6 +573,7 @@ class SaleService
                 'barcode_snapshot' => $variant->barcode,
                 'tracking_mode' => $variant->tracking_mode,
                 'is_combo' => $isCombo,
+                'is_service' => $isService,
                 'imei_snapshot' => $device?->imei,
                 'quantity' => $quantity,
                 'unit_price' => $requestedPrice,

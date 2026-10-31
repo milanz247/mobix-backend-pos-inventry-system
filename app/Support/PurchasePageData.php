@@ -44,7 +44,7 @@ class PurchasePageData
             ->where('status', CatalogStatus::Active->value)
             ->whereHas('product', fn ($query) => $query
                 ->where('status', CatalogStatus::Active->value)
-                ->where('product_type', '!=', ProductType::Combo->value))
+                ->whereNotIn('product_type', [ProductType::Combo->value, ProductType::Service->value]))
             ->orderBy('sku')->get()->map(fn ($variant): array => [
                 'id' => $variant->id,
                 'label' => $variant->product->name.' — '.$variant->name,

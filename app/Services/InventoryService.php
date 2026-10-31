@@ -186,8 +186,8 @@ class InventoryService
 
             foreach ($items as $item) {
                 $variant = $business->productVariants()->with('product')->findOrFail((int) $item['product_variant_id']);
-                if ($variant->product->product_type === ProductType::Combo) {
-                    throw ValidationException::withMessages(['lines' => __('Virtual combo products cannot be returned as stock.')]);
+                if (in_array($variant->product->product_type, [ProductType::Combo, ProductType::Service], true)) {
+                    throw ValidationException::withMessages(['lines' => __('Virtual or service products cannot be returned as stock.')]);
                 }
 
                 if ($item['serialized_device_id'] === null) {
@@ -276,6 +276,10 @@ class InventoryService
                     continue;
                 }
 
+                if ($line->is_service) {
+                    continue;
+                }
+
                 if ($line->serialized_device_id !== null) {
                     $device = SerializedDevice::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($line->serialized_device_id);
                     $this->markDeviceSold($user, $operation, $sale, $location, $device, $line->unit_price);
@@ -326,6 +330,9 @@ class InventoryService
             $returnLines = $saleReturn->lines()->with(['saleLine.variant.product', 'component.variant.product', 'serializedDevice'])->get();
 
             foreach ($returnLines as $returnLine) {
+                if (! $returnLine->is_component && $returnLine->saleLine?->is_service) {
+                    continue;
+                }
                 if (! $returnLine->restock) {
                     if ($returnLine->serialized_device_id !== null) {
                         $device = SerializedDevice::query()->where('business_id', $business->id)
@@ -745,7 +752,7 @@ class InventoryService
         return array_values($bundleVariant->bundleComponents->map(function ($component) use ($location, $multiplier): array {
             $variant = $component->componentVariant;
 
-            if ($variant->product->product_type === ProductType::Combo || $variant->status !== CatalogStatus::Active
+            if (in_array($variant->product->product_type, [ProductType::Combo, ProductType::Service], true) || $variant->status !== CatalogStatus::Active
                 || $variant->product->status !== CatalogStatus::Active || $variant->business_id !== $location->business_id) {
                 throw ValidationException::withMessages(['components' => __('The combo contains an inactive or nested combo component.')]);
             }
@@ -808,14 +815,14 @@ class InventoryService
 
     private function assertQuantityVariant(ProductVariant $variant, string $field = 'product_variant_id'): void
     {
-        if ($variant->tracking_mode !== VariantTrackingMode::QuantityBased || $variant->product->product_type === ProductType::Combo) {
-            throw ValidationException::withMessages([$field => __('Choose an active quantity-tracked, non-combo variant.')]);
+        if ($variant->tracking_mode !== VariantTrackingMode::QuantityBased || in_array($variant->product->product_type, [ProductType::Combo, ProductType::Service], true)) {
+            throw ValidationException::withMessages([$field => __('Choose an active, stock-tracked quantity variant.')]);
         }
     }
 
     private function assertSerializedVariant(ProductVariant $variant): void
     {
-        if ($variant->tracking_mode !== VariantTrackingMode::Serialized || $variant->product->product_type === ProductType::Combo) {
+        if ($variant->tracking_mode !== VariantTrackingMode::Serialized || in_array($variant->product->product_type, [ProductType::Combo, ProductType::Service], true)) {
             throw ValidationException::withMessages(['product_variant_id' => __('Choose an active serialized variant.')]);
         }
     }

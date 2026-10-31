@@ -66,6 +66,7 @@ type Variant = {
     quantity_on_hand: string;
     devices_in_stock: number;
     is_virtual_combo: boolean;
+    is_service: boolean;
     available_quantity: string;
     stock_status: string;
     can_sell: boolean;
@@ -508,6 +509,7 @@ function canAddVariant(variant: Variant): boolean {
     return variant.can_sell;
 }
 function variantStockLabel(variant: Variant): string {
+    if (variant.is_service) return 'Service · no stock tracking';
     if (variant.stock_status === 'inconsistent')
         return 'Check stock / components';
     if (thousandths(variant.available_quantity) <= 0n) return 'Out of stock';
@@ -629,6 +631,7 @@ function restoreCartLine(value: unknown): CartLine | null {
                     ? storedVariant.devices_in_stock
                     : 0,
             is_virtual_combo: storedVariant.is_virtual_combo === true,
+            is_service: storedVariant.is_service === true,
             available_quantity: isQuantityValue(
                 storedVariant.available_quantity,
             )
@@ -1120,6 +1123,7 @@ function scanSearch(): void {
             quantity_on_hand: '0.000',
             devices_in_stock: 1,
             is_virtual_combo: false,
+            is_service: false,
             available_quantity: '1.000',
             stock_status: 'in_stock',
             can_sell: true,
