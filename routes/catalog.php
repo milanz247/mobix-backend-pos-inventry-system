@@ -4,6 +4,7 @@ use App\Http\Controllers\Catalog\BrandController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Catalog\ProductActivityController;
 use App\Http\Controllers\Catalog\ProductController;
+use App\Http\Controllers\Catalog\VariantSearchController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function (): void {
@@ -31,3 +32,5 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('brands/{brand}/status', [BrandController::class, 'updateStatus'])->middleware('can:brands.deactivate')->name('brands.status.update');
     Route::delete('brands/{brand}', [BrandController::class, 'destroy'])->middleware('can:brands.delete')->name('brands.destroy');
 });
+
+Route::get('catalog/variant-search', VariantSearchController::class)->middleware('auth')->name('catalog.variant-search');

@@ -213,6 +213,7 @@ class ProductController extends Controller
             Business::query()->where('setup_key', 'initial')->sole(),
             $request->safe()->all(),
             image: $request->file('image'),
+            mayEditCosts: $request->user()->can('sales.costs.view'),
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Product and variants created.')]);
@@ -288,6 +289,7 @@ class ProductController extends Controller
             $request->safe()->all(),
             $product,
             $request->file('image'),
+            mayEditCosts: $request->user()->can('sales.costs.view'),
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Product and variants updated.')]);

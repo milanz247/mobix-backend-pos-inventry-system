@@ -253,8 +253,9 @@ const paymentMethods = [
 ];
 const confirmation = useConfirmationDialog();
 const heldCartStorageKey = `nalakamobile:pos-held-carts:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
-const activeCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
-const activeCartLifetime = 12 * 60 * 60 * 1000;
+const activeCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}:location:${props.selectedLocation.id}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
+const legacyActiveCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
+const activeCartLifetime = 7 * 24 * 60 * 60 * 1000;
 let activeCartRestored = false;
 function newOperationKey(): string {
     return crypto.randomUUID();
@@ -682,11 +683,11 @@ function restoreHeldCart(value: unknown): HeldCart | null {
         order_discount: value.order_discount,
     };
 }
-function saveActiveCart(): void {
+function saveActiveCart(): boolean {
     try {
         if (cart.value.length === 0) {
             clearActiveCart();
-            return;
+            return true;
         }
 
         const snapshot: ActiveCartSnapshot = {
@@ -704,17 +705,36 @@ function saveActiveCart(): void {
             sale_source: saleSource.value,
         };
 
-        window.sessionStorage.setItem(
+        window.localStorage.setItem(
             activeCartStorageKey,
             JSON.stringify(snapshot),
         );
+        return true;
     } catch {
-        // Storage may be unavailable in restricted browser modes.
+        return false;
     }
 }
 function restoreActiveCart(): void {
     try {
-        const stored = window.sessionStorage.getItem(activeCartStorageKey);
+        const legacy = window.sessionStorage.getItem(
+            legacyActiveCartStorageKey,
+        );
+        let legacyLocation: number | null = null;
+        if (legacy) {
+            try {
+                const previous: unknown = JSON.parse(legacy);
+                legacyLocation =
+                    isRecord(previous) &&
+                    typeof previous.location_id === 'number'
+                        ? previous.location_id
+                        : null;
+            } catch {
+                window.sessionStorage.removeItem(legacyActiveCartStorageKey);
+            }
+        }
+        const stored =
+            window.localStorage.getItem(activeCartStorageKey) ??
+            (legacyLocation === Number(locationId.value) ? legacy : null);
         const parsed: unknown = stored ? JSON.parse(stored) : null;
 
         if (!isRecord(parsed) || !Array.isArray(parsed.lines)) {
@@ -743,6 +763,11 @@ function restoreActiveCart(): void {
         ) {
             clearActiveCart();
             return;
+        }
+
+        if (legacy && stored === legacy) {
+            window.localStorage.setItem(activeCartStorageKey, legacy);
+            window.sessionStorage.removeItem(legacyActiveCartStorageKey);
         }
 
         if (
@@ -798,7 +823,7 @@ function restoreActiveCart(): void {
 }
 function clearActiveCart(): void {
     try {
-        window.sessionStorage.removeItem(activeCartStorageKey);
+        window.localStorage.removeItem(activeCartStorageKey);
     } catch {
         // Storage may be unavailable in restricted browser modes.
     }
@@ -935,6 +960,7 @@ async function resumeHeldCart(id: string): Promise<void> {
         const held = await api<HeldCart>(`/pos/held-carts/${id}/claim`, {
             method: 'POST',
         });
+        form.operation_key = held.id;
         cart.value = held.lines;
         orderDiscount.value = held.order_discount;
         customerName.value = held.customer_name ?? '';
@@ -953,7 +979,13 @@ async function resumeHeldCart(id: string): Promise<void> {
               }
             : null;
         resetCashPayment();
-        saveActiveCart();
+        if (saveActiveCart()) {
+            await api(`/pos/held-carts/${id}/acknowledge`, { method: 'POST' });
+        } else {
+            toast.warning(
+                'Browser storage is unavailable. The held cart is retained for recovery.',
+            );
+        }
         mobileCartOpen.value = true;
         await loadHeldCarts();
     } catch (error) {

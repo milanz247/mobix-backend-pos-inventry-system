@@ -377,6 +377,7 @@ test('shift management requires ownership permission and location access', funct
     $shift = app(CashierShiftService::class)->open($other, ['operation_key' => (string) Str::uuid(), 'location_id' => $c['b']->id, 'opening_cash' => '500.00']);
     $movement = app(CashierShiftService::class)->movement($other, $shift, ['operation_key' => (string) Str::uuid(), 'type' => 'expense', 'amount' => '75.00', 'reason' => 'Private shop expense']);
 
+    $this->actingAs($c['user']);
     $this->get(route('shifts.movement', [$shift, $movement]))->assertNotFound();
     $this->post(route('pos.shifts.movements', $shift), ['operation_key' => (string) Str::uuid(), 'location_id' => $c['b']->id, 'type' => 'cash_out', 'amount' => '1.00', 'reason' => 'Forged cash movement'])->assertNotFound();
     $this->post(route('pos.shifts.close', $shift), ['location_id' => $c['b']->id, 'actual_cash' => '425.00'])->assertNotFound();

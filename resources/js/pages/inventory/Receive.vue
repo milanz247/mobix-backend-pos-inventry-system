@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useVariantSearch } from '@/composables/useVariantSearch';
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
@@ -50,8 +51,16 @@ const form = useForm({
     reason: props.opening ? 'Initial inventory setup' : '',
     notes: '',
 });
+const search = ref('');
+const { variants, searchError } = useVariantSearch<Variant>(
+    props.variants,
+    search,
+    false,
+    true,
+    () => [Number(form.product_variant_id)],
+);
 const selectedVariant = computed(() =>
-    props.variants.find((item) => item.id === Number(form.product_variant_id)),
+    variants.value.find((item) => item.id === Number(form.product_variant_id)),
 );
 watch(selectedVariant, (variant) => {
     if (variant)
@@ -105,10 +114,13 @@ defineOptions({
                         </option></select
                     ><InputError :message="form.errors.location_id" /></label
                 ><label class="grid gap-2 text-sm font-medium"
-                    >Product variant<select
-                        v-model="form.product_variant_id"
-                        required
-                    >
+                    >Product variant<Input
+                        v-model="search"
+                        placeholder="Search product, SKU or barcode" /><span
+                        v-if="searchError"
+                        role="alert"
+                        >{{ searchError }}</span
+                    ><select v-model="form.product_variant_id" required>
                         <option disabled value="">Choose active variant</option>
                         <option
                             v-for="variant in variants"

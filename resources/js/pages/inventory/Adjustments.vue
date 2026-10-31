@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useVariantSearch } from '@/composables/useVariantSearch';
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges';
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { Plus, Search, Trash2 } from '@lucide/vue';
@@ -10,7 +12,13 @@ import { Label } from '@/components/ui/label';
 import { create, store } from '@/routes/inventory/adjustments';
 
 type Location = { id: number; name: string; code?: string };
-type Variant = { id: number; label: string; sku: string };
+type Variant = {
+    id: number;
+    label: string;
+    sku: string;
+    barcode?: string | null;
+    stock?: Record<number, string>;
+};
 type AdjustmentLine = { product_variant_id: number | ''; quantity: string };
 
 const props = defineProps<{ locations: Location[]; variants: Variant[] }>();
@@ -24,7 +32,22 @@ const form = useForm({
     notes: '',
 });
 const productSearch = ref('');
+const { variants, searchError } = useVariantSearch<Variant>(
+    props.variants,
+    productSearch,
+    false,
+    false,
+    () => form.items.map((item) => Number(item.product_variant_id)),
+);
+useUnsavedChanges(
+    () => form.isDirty,
+    () => form.processing,
+);
 const productPickerOpen = ref(false);
+const stockAt = (id: number | string, location: number | string): number => {
+    const stock = variants.value.find((v) => v.id === Number(id))?.stock;
+    return stock === undefined ? NaN : Number(stock[Number(location)] ?? 0);
+};
 const confirming = ref(false);
 const selectedVariants = computed(
     () => new Set(form.items.map((item) => Number(item.product_variant_id))),
@@ -32,11 +55,11 @@ const selectedVariants = computed(
 const matchingVariants = computed(() => {
     const query = productSearch.value.trim().toLocaleLowerCase();
 
-    return props.variants
+    return variants.value
         .filter(
             (variant) =>
                 !selectedVariants.value.has(variant.id) &&
-                `${variant.label} ${variant.sku}`
+                `${variant.label} ${variant.sku} ${variant.barcode ?? ''}`
                     .toLocaleLowerCase()
                     .includes(query),
         )
@@ -71,6 +94,7 @@ function submit(): void {
         onSuccess: () => {
             form.reset();
             form.operation_key = crypto.randomUUID();
+            form.defaults();
             productSearch.value = '';
             confirming.value = false;
         },
@@ -92,6 +116,9 @@ defineOptions({
             description="Add or remove counted stock with a recorded reason."
         />
 
+        <p v-if="searchError" role="alert" class="text-sm text-destructive">
+            {{ searchError }}
+        </p>
         <form
             class="surface-panel flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4"
             @submit.prevent="confirming ? submit() : (confirming = true)"
@@ -246,6 +273,34 @@ defineOptions({
                             </p>
                         </div>
                         <label class="grid gap-1 text-xs font-medium">
+                            <span
+                                v-if="
+                                    Number.isFinite(
+                                        stockAt(
+                                            item.product_variant_id,
+                                            form.location_id,
+                                        ),
+                                    )
+                                "
+                                class="text-xs text-muted-foreground"
+                                >Current
+                                {{
+                                    stockAt(
+                                        item.product_variant_id,
+                                        form.location_id,
+                                    )
+                                }}
+                                → {{ form.direction === 'increase' ? '+' : '−'
+                                }}{{ item.quantity }} →
+                                {{
+                                    stockAt(
+                                        item.product_variant_id,
+                                        form.location_id,
+                                    ) +
+                                    (form.direction === 'increase' ? 1 : -1) *
+                                        Number(item.quantity)
+                                }}</span
+                            >
                             Quantity
                             <Input
                                 v-model="item.quantity"

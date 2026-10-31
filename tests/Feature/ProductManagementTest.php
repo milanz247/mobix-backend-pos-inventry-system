@@ -67,7 +67,7 @@ function validProductPayload(Category $category, array $overrides = []): array
 }
 
 test('creating a simple product creates one default sellable variant with separate prices', function () {
-    $user = catalogManager('products.create', 'variants.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage');
     $category = Category::factory()->for(Business::query()->sole())->create();
     $brand = Brand::factory()->for(Business::query()->sole())->create();
 
@@ -90,7 +90,7 @@ test('creating a simple product creates one default sellable variant with separa
 });
 
 test('creating a variable product saves distinct variant identifiers and prices', function () {
-    $user = catalogManager('products.create', 'variants.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage');
     $category = Category::factory()->for(Business::query()->sole())->create();
     $payload = validProductPayload($category, [
         'name' => 'Galaxy S25',
@@ -115,7 +115,7 @@ test('creating a variable product saves distinct variant identifiers and prices'
 });
 
 test('creating a serialized product configures its model variants without creating device or stock records', function () {
-    $user = catalogManager('products.create', 'variants.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage');
     $category = Category::factory()->for(Business::query()->sole())->create();
     $payload = validProductPayload($category, [
         'name' => 'iPhone 16 Pro',
@@ -150,7 +150,7 @@ test('creating a serialized product configures its model variants without creati
 });
 
 test('variant validation rejects duplicate barcode and a minimum above selling price', function () {
-    $user = catalogManager('products.create', 'variants.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage');
     $business = Business::query()->sole();
     $category = Category::factory()->for($business)->create();
     $payload = validProductPayload($category, [
@@ -173,7 +173,7 @@ test('variant validation rejects duplicate barcode and a minimum above selling p
 });
 
 test('variant validation rejects an existing barcode and negative prices', function () {
-    $user = catalogManager('products.create', 'variants.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage');
     $business = Business::query()->sole();
     $category = Category::factory()->for($business)->create();
     $existingProduct = Product::factory()->for($business)->for($category)->create();
@@ -315,7 +315,7 @@ test('authorized users can create categories and brands and duplicate names are 
 });
 
 test('combo products save component quantities without creating their own stock', function () {
-    $user = catalogManager('products.view', 'products.create', 'variants.manage', 'bundles.manage');
+    $user = catalogManager('sales.costs.view', 'products.view', 'products.create', 'variants.manage', 'bundles.manage');
     $business = Business::query()->sole();
     $category = Category::factory()->for($business)->create();
     $componentProduct = Product::factory()->for($business)->for($category)->create(['name' => 'Protective case']);
@@ -353,7 +353,7 @@ test('combo products save component quantities without creating their own stock'
 });
 
 test('combo validation refuses nested bundles and bundle permission is required', function () {
-    $user = catalogManager('products.create', 'variants.manage', 'bundles.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage', 'bundles.manage');
     $business = Business::query()->sole();
     $category = Category::factory()->for($business)->create();
     $comboProduct = Product::factory()->for($business)->for($category)->combo()->create();
@@ -382,7 +382,7 @@ test('combo validation refuses nested bundles and bundle permission is required'
 });
 
 test('active combos reject inactive component variants', function () {
-    $user = catalogManager('products.create', 'variants.manage', 'bundles.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage', 'bundles.manage');
     $business = Business::query()->sole();
     $category = Category::factory()->for($business)->create();
     $componentProduct = Product::factory()->for($business)->for($category)->create();
@@ -410,7 +410,7 @@ test('active combos reject inactive component variants', function () {
 
 test('product update keeps variant identity and safely replaces its image', function () {
     Storage::fake('public');
-    $user = catalogManager('products.create', 'products.update', 'variants.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'products.update', 'variants.manage');
     $business = Business::query()->sole();
     $category = Category::factory()->for($business)->create();
     $payload = validProductPayload($category, [
@@ -457,7 +457,7 @@ test('product update keeps variant identity and safely replaces its image', func
 });
 
 test('product image validation checks image content extension and size', function () {
-    $user = catalogManager('products.create', 'variants.manage');
+    $user = catalogManager('sales.costs.view', 'products.create', 'variants.manage');
     $category = Category::factory()->for(Business::query()->sole())->create();
 
     $this->actingAs($user)->post(route('products.store'), validProductPayload($category, [

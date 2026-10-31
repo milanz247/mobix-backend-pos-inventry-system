@@ -24,7 +24,7 @@ class InventoryPageData
     }
 
     /** @return list<array{id: int, label: string, sku: string, tracking_mode: string}> */
-    public function variants(Business $business, ?VariantTrackingMode $trackingMode = null): array
+    public function variants(Business $business, ?VariantTrackingMode $trackingMode = null, ?int $limit = null): array
     {
         return array_values($business->productVariants()->with('product:id,name,product_type,status')
             ->where('status', CatalogStatus::Active->value)
@@ -32,7 +32,7 @@ class InventoryPageData
                 ->where('status', CatalogStatus::Active->value)
                 ->whereNotIn('product_type', [ProductType::Combo->value, ProductType::Service->value]))
             ->when($trackingMode !== null, fn ($query) => $query->where('tracking_mode', $trackingMode->value))
-            ->orderBy('sku')->get()->map(fn ($variant): array => [
+            ->orderBy('sku')->when($limit !== null, fn ($query) => $query->limit($limit))->get()->map(fn ($variant): array => [
                 'id' => $variant->id,
                 'label' => $variant->product->name.' — '.$variant->name,
                 'sku' => $variant->sku,

@@ -158,6 +158,8 @@ test('shared carts are durable idempotent and can only be claimed once at an acc
     $location->users()->attach($otherUser);
     $this->getJson('/pos/held-carts?location_id='.$location->id)->assertJsonCount(1);
     $this->postJson('/pos/held-carts/'.$id.'/claim')->assertOk()->assertJsonPath('customer_name', 'Counter customer');
+    $this->postJson('/pos/held-carts/'.$id.'/claim')->assertOk();
+    $this->postJson('/pos/held-carts/'.$id.'/acknowledge')->assertOk();
     $this->postJson('/pos/held-carts/'.$id.'/claim')->assertNotFound();
 });
 

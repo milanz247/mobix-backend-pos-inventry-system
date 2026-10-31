@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useVariantSearch } from '@/composables/useVariantSearch';
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges';
 import { computed, ref } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import { Plus, Search, Trash2 } from '@lucide/vue';
@@ -14,6 +16,7 @@ type Variant = {
     id: number;
     label: string;
     sku: string;
+    barcode?: string | null;
     tracking_mode: 'quantity_based' | 'serialized';
     cost_price: string;
     selling_price: string;
@@ -45,6 +48,7 @@ type PurchaseLine = {
     product_variant_id: number;
     label: string;
     sku: string;
+    barcode?: string | null;
     tracking_mode: string;
     quantity: string;
     unit_cost: string;
@@ -107,9 +111,30 @@ const form = useForm({
     lines: initialLines,
 });
 const productSearch = ref('');
+const { variants, searchError } = useVariantSearch<Variant>(
+    [
+        ...props.variants,
+        ...(props.purchase?.lines ?? []).map((line) => ({
+            id: line.product_variant_id,
+            label: line.label,
+            sku: line.sku,
+            tracking_mode: line.tracking_mode as Variant['tracking_mode'],
+            cost_price: line.unit_cost,
+            selling_price: '0.00',
+        })),
+    ],
+    productSearch,
+    true,
+    false,
+    () => form.lines.map((line) => Number(line.product_variant_id)),
+);
+useUnsavedChanges(
+    () => form.isDirty,
+    () => form.processing,
+);
 const productPickerOpen = ref(false);
 const selectedVariant = (line: LineInput): Variant | undefined =>
-    props.variants.find(
+    variants.value.find(
         (variant) => variant.id === Number(line.product_variant_id),
     );
 const isSerialized = (line: LineInput): boolean =>
@@ -154,14 +179,14 @@ function addDevice(line: LineInput): void {
 }
 function matchingVariants(): Variant[] {
     const search = productSearch.value.trim().toLocaleLowerCase();
-    return props.variants
+    return variants.value
         .filter(
             (variant) =>
                 !form.lines.some(
                     (line) => Number(line.product_variant_id) === variant.id,
                 ) &&
                 (search === '' ||
-                    `${variant.label} ${variant.sku}`
+                    `${variant.label} ${variant.sku} ${variant.barcode ?? ''}`
                         .toLocaleLowerCase()
                         .includes(search)),
         )
@@ -217,6 +242,9 @@ function submit(): void {
 </script>
 
 <template>
+    <p v-if="searchError" role="alert" class="text-sm text-destructive">
+        {{ searchError }}
+    </p>
     <form
         class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden"
         @submit.prevent="submit"

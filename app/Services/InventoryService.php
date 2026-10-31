@@ -42,6 +42,9 @@ class InventoryService
 
         return DB::transaction(function () use ($user, $data, $type): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $operation = $this->existingOrNewOperation($business, $user, $data, $type);
 
             if ($operation->exists && $operation->lines()->exists()) {
@@ -89,6 +92,9 @@ class InventoryService
     {
         return DB::transaction(function () use ($user, $purchase): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $purchase = $business->purchases()->with(['lines.devices'])->lockForUpdate()->findOrFail($purchase->id);
             $location = $this->authorizedLocation($user, $purchase->location_id);
             $lines = $purchase->lines->map(fn ($line): array => [
@@ -166,6 +172,9 @@ class InventoryService
     {
         return DB::transaction(function () use ($user, $purchase, $purchaseReturn, $items): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $location = $this->authorizedLocation($user, $purchaseReturn->location_id);
             $data = [
                 'operation_key' => $purchaseReturn->operation_key,
@@ -249,6 +258,9 @@ class InventoryService
     {
         return DB::transaction(function () use ($user, $sale, $lineIds, $operationKey): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $sale = $business->sales()->with(['lines.variant.product', 'lines.serializedDevice', 'lines.components.variant.product'])
                 ->lockForUpdate()->findOrFail($sale->id);
             $location = $this->authorizedLocation($user, $sale->location_id);
@@ -311,6 +323,9 @@ class InventoryService
     {
         return DB::transaction(function () use ($user, $saleReturn): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $saleReturn = SaleReturn::query()->where('business_id', $business->id)
                 ->with('sale')->lockForUpdate()->findOrFail($saleReturn->id);
             $location = $this->authorizedLocation($user, $saleReturn->location_id);
@@ -514,6 +529,9 @@ class InventoryService
     {
         return DB::transaction(function () use ($user, $data): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $operation = $this->existingOrNewOperation($business, $user, $data, InventoryOperationType::Adjustment);
 
             if ($operation->exists && $operation->lines()->exists()) {
@@ -577,6 +595,9 @@ class InventoryService
 
         return DB::transaction(function () use ($user, $entry, $data): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $entry = DamagedStockEntry::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($entry->id);
             $location = $this->authorizedLocation($user, $entry->location_id);
             $payload = [...$data, 'damage_entry_id' => $entry->id, 'location_id' => $location->id, 'reference' => 'DAMAGE-'.$entry->id, 'reason' => $data['action'] === 'repair' ? 'Damaged stock repaired' : 'Damaged stock written off'];
@@ -608,6 +629,9 @@ class InventoryService
     {
         return DB::transaction(function () use ($user, $data): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $operation = $this->existingOrNewOperation($business, $user, $data, InventoryOperationType::Transfer);
 
             if ($operation->exists && ($operation->lines()->exists() || $operation->deviceEvents()->exists())) {
@@ -698,6 +722,9 @@ class InventoryService
     {
         return DB::transaction(function () use ($user, $device, $data): InventoryOperation {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $device = SerializedDevice::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail($device->id);
             $this->authorizedLocation($user, $device->location_id);
             $operation = $this->existingOrNewOperation($business, $user, $data, InventoryOperationType::DeviceStatus);

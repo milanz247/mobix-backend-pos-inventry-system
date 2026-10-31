@@ -395,3 +395,11 @@
         }
     }
 }
+
+/* Keep compact desktop workspaces accessible at zoom and on mobile keyboards. */
+@media (max-width: 767px), (max-height: 650px) {
+    .page-shell { height: auto !important; min-height: min-content !important; overflow: visible !important; flex: none !important; }
+    .page-shell .overflow-hidden { overflow: visible !important; }
+    .page-shell .grid-rows-\[minmax\(0\,1fr\)_minmax\(0\,1fr\)\] { grid-template-rows: auto auto !important; }
+    .page-shell .overflow-y-auto { max-height: 60dvh; }
+}

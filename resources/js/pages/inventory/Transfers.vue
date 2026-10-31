@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useVariantSearch } from '@/composables/useVariantSearch';
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges';
 import { Head, useForm } from '@inertiajs/vue3';
 import { Search, Trash2 } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
@@ -8,7 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { create, store } from '@/routes/inventory/transfers';
 type Location = { id: number; name: string; code: string };
-type Variant = { id: number; label: string; sku: string };
+type Variant = {
+    id: number;
+    label: string;
+    sku: string;
+    barcode?: string | null;
+    stock?: Record<number, string>;
+};
 type Device = { id: number; location_id: number; label: string };
 const props = defineProps<{
     locations: Location[];
@@ -37,17 +45,28 @@ const sameLocation = computed(
 );
 const selectedDeviceCount = computed(() => form.device_ids.length);
 const search = ref('');
+const { variants, searchError } = useVariantSearch<Variant>(
+    props.variants,
+    search,
+    false,
+    false,
+    () => form.items.map((item) => Number(item.product_variant_id)),
+);
+useUnsavedChanges(
+    () => form.isDirty,
+    () => form.processing,
+);
 const pickerOpen = ref(false);
 const selectedVariants = computed(
     () => new Set(form.items.map((item) => Number(item.product_variant_id))),
 );
 const matchingVariants = computed(() => {
     const q = search.value.trim().toLocaleLowerCase();
-    return props.variants
+    return variants.value
         .filter(
             (variant) =>
                 !selectedVariants.value.has(variant.id) &&
-                `${variant.label} ${variant.sku}`
+                `${variant.label} ${variant.sku} ${variant.barcode ?? ''}`
                     .toLocaleLowerCase()
                     .includes(q),
         )
@@ -65,6 +84,10 @@ watch(
         }
     },
 );
+const stockAt = (id: number | string, location: number | string): number => {
+    const stock = variants.value.find((v) => v.id === Number(id))?.stock;
+    return stock === undefined ? NaN : Number(stock[Number(location)] ?? 0);
+};
 const confirming = ref(false);
 const addItem = (variant: Variant): void => {
     if (selectedVariants.value.has(variant.id)) return;
@@ -77,6 +100,7 @@ const submit = (): void =>
         onSuccess: () => {
             form.reset();
             form.operation_key = crypto.randomUUID();
+            form.defaults();
             confirming.value = false;
         },
     });
@@ -91,6 +115,9 @@ defineOptions({
             title="Transfer stock"
             description="Move quantity stock or exact serialized devices between active locations."
         />
+        <p v-if="searchError" role="alert" class="text-sm text-destructive">
+            {{ searchError }}
+        </p>
         <form
             class="surface-panel flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3 sm:p-4"
             @submit.prevent="confirming ? submit() : (confirming = true)"
@@ -236,7 +263,45 @@ defineOptions({
                                 }}
                             </p>
                         </div>
-                        <label class="grid gap-1.5 text-xs font-medium"
+                        <label class="grid gap-1.5 text-xs font-medium">
+                            <span
+                                v-if="
+                                    Number.isFinite(
+                                        stockAt(
+                                            item.product_variant_id,
+                                            form.source_location_id,
+                                        ),
+                                    )
+                                "
+                                class="text-xs text-muted-foreground"
+                                >Source
+                                {{
+                                    stockAt(
+                                        item.product_variant_id,
+                                        form.source_location_id,
+                                    )
+                                }}
+                                →
+                                {{
+                                    stockAt(
+                                        item.product_variant_id,
+                                        form.source_location_id,
+                                    ) - Number(item.quantity)
+                                }}
+                                · Destination
+                                {{
+                                    stockAt(
+                                        item.product_variant_id,
+                                        form.destination_location_id,
+                                    )
+                                }}
+                                →
+                                {{
+                                    stockAt(
+                                        item.product_variant_id,
+                                        form.destination_location_id,
+                                    ) + Number(item.quantity)
+                                }}</span
                             >Quantity<Input
                                 v-model="item.quantity"
                                 type="number"

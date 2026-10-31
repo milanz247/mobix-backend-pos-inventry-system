@@ -35,6 +35,9 @@ class PurchaseService
     {
         return DB::transaction(function () use ($user, $data): Purchase {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $this->assertSupplier($business, (int) $data['supplier_id']);
             $this->assertLocation($user, (int) $data['location_id']);
             $purchase = $business->purchases()->create([
@@ -60,6 +63,9 @@ class PurchaseService
     {
         return DB::transaction(function () use ($user, $purchase, $data): Purchase {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $purchase = $business->purchases()->lockForUpdate()->findOrFail($purchase->id);
             $this->assertPurchaseLocation($user, $purchase);
             $this->assertDraft($purchase);
@@ -78,6 +84,9 @@ class PurchaseService
     {
         DB::transaction(function () use ($user, $purchase): void {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $purchase = $business->purchases()->lockForUpdate()->findOrFail($purchase->id);
             $this->assertPurchaseLocation($user, $purchase);
 
@@ -95,6 +104,9 @@ class PurchaseService
     {
         return DB::transaction(function () use ($user, $purchase): Purchase {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $purchase = $business->purchases()->with(['supplier', 'location', 'lines.devices'])->lockForUpdate()->findOrFail($purchase->id);
             $this->assertPurchaseLocation($user, $purchase);
 
@@ -122,6 +134,9 @@ class PurchaseService
     {
         return DB::transaction(function () use ($user, $purchase, $data): PurchasePayment {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $purchase = $business->purchases()->lockForUpdate()->findOrFail($purchase->id);
             $this->assertPurchaseLocation($user, $purchase);
 
@@ -175,6 +190,9 @@ class PurchaseService
     {
         return DB::transaction(function () use ($user, $purchase, $data): PurchaseReturn {
             $business = $this->locationAccess->business();
+            if (DB::transactionLevel() > 0) {
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+            }
             $purchase = $business->purchases()->with(['lines.devices.serializedDevice'])->lockForUpdate()->findOrFail($purchase->id);
             $this->assertPurchaseLocation($user, $purchase);
 
@@ -250,6 +268,9 @@ class PurchaseService
     public function scoped(User $user, Purchase $purchase): Purchase
     {
         $business = $this->locationAccess->business();
+        if (DB::transactionLevel() > 0) {
+            Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+        }
         $purchase = $business->purchases()->with(['location', 'supplier'])->findOrFail($purchase->id);
         $this->assertPurchaseLocation($user, $purchase);
 

@@ -13,6 +13,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -23,7 +24,7 @@ class SaveProduct
      *
      * @param  array<string, mixed>  $attributes
      */
-    public function handle(Business $business, array $attributes, ?Product $product = null, ?UploadedFile $image = null, ?ProductActivityLogger $activity = null): Product
+    public function handle(Business $business, array $attributes, ?Product $product = null, ?UploadedFile $image = null, ?ProductActivityLogger $activity = null, bool $mayEditCosts = true): Product
     {
         $activity ??= app(ProductActivityLogger::class);
         $variantRows = $attributes['variants'];
@@ -42,7 +43,24 @@ class SaveProduct
         }
 
         try {
-            $product = DB::transaction(function () use ($business, $attributes, $product, $variantRows, $activity): Product {
+            $product = DB::transaction(function () use ($business, $attributes, $product, $variantRows, $activity, $mayEditCosts): Product {
+                // All catalogue and stock writes acquire the business row first.
+                Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+                if ($product !== null) {
+                    $product = $business->products()->lockForUpdate()->findOrFail($product->id);
+                    foreach ($product->variants()->lockForUpdate()->get() as $saved) {
+                        $submitted = collect($variantRows)->firstWhere('id', $saved->id);
+                        $changesTracking = $submitted !== null && $submitted['tracking_mode'] !== $saved->tracking_mode->value;
+                        $changesType = $attributes['product_type'] !== $product->product_type->value;
+                        if ($changesTracking || $changesType) {
+                            foreach (['inventory_stocks', 'inventory_operation_lines', 'stock_movements', 'serialized_devices', 'purchase_lines', 'sale_lines', 'sale_line_components', 'damaged_stock_entries'] as $table) {
+                                if (DB::table($table)->where('product_variant_id', $saved->id)->exists()) {
+                                    throw ValidationException::withMessages(['product_type' => 'Tracking and product type cannot change after stock or transaction history exists.']);
+                                }
+                            }
+                        }
+                    }
+                }
                 $productBefore = $product?->getAttributes() ?? [];
                 $isNewProduct = $product === null;
                 if ($product === null) {
@@ -70,6 +88,10 @@ class SaveProduct
                         'variant_attributes', 'condition', 'tracking_mode', 'unit', 'cost_price',
                         'selling_price', 'minimum_selling_price', 'status',
                     ]);
+
+                    if (! $mayEditCosts) {
+                        $variantAttributes['cost_price'] = $variantId === null ? '0.00' : $existingVariant->cost_price;
+                    }
 
                     if (! empty($variantRow['other_attributes'])) {
                         $variantAttributes['variant_attributes'] = array_merge(

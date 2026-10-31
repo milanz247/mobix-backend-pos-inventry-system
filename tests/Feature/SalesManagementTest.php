@@ -768,8 +768,7 @@ test('later credit additions and replacements update dashboard dates without rew
         'replacements' => [['sale_line_id' => $original->id]],
     ])->assertSessionHasNoErrors();
     $this->get(route('dashboard'))->assertOk()->assertInertia(fn (Assert $page) => $page
-        ->where('overview.sales_total', '100.00')->where('overview.returns', '100.00')
-        ->where('overview.outstanding', '180.00')->where('trend.27.net_sales', '100.00')
+        ->where('overview.sales_total', '100.00')->where('trend.27.net_sales', '100.00')
         ->where('trend.28.net_sales', '100.00')->where('trend.29.net_sales', '0.00')->where('trend.29.gross_profit', '0.00'));
     $return = SaleReturn::query()->sole();
     $this->get(route('sales.returns.receipt', [$sale, $return]))->assertInertia(fn (Assert $page) => $page

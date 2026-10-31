@@ -29,7 +29,7 @@ class StockTransferController extends Controller
 
         return Inertia::render('inventory/Transfers', [
             'locations' => $pageData->locations($request->user()),
-            'variants' => $pageData->variants($locationAccess->business(), VariantTrackingMode::QuantityBased),
+            'variants' => $pageData->variants($locationAccess->business(), VariantTrackingMode::QuantityBased, 25),
             'devices' => $devices,
         ]);
     }

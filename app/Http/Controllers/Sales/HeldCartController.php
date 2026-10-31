@@ -80,14 +80,30 @@ class HeldCartController extends Controller
         return response()->json(['id' => $cart->id], 201);
     }
 
+    public function acknowledge(Request $request, string $cart, LocationAccessService $access): JsonResponse
+    {
+        return DB::transaction(function () use ($request, $cart, $access) {
+            $held = HeldCart::query()->lockForUpdate()->find($cart);
+            if ($held === null) {
+                return response()->json(['acknowledged' => true]);
+            }
+            abort_unless($held->business_id === $access->business()->id && $access->accessibleQuery($request->user())->whereKey($held->location_id)->exists(), 404);
+            abort_unless((int) $held->claimed_by === $request->user()->id, 403);
+            $held->delete();
+
+            return response()->json(['acknowledged' => true]);
+        });
+    }
+
     public function claim(Request $request, HeldCart $cart, LocationAccessService $access): JsonResponse
     {
         abort_unless($cart->business_id === $access->business()->id && $access->accessibleQuery($request->user())->whereKey($cart->location_id)->exists(), 404);
 
-        return DB::transaction(function () use ($cart): JsonResponse {
+        return DB::transaction(function () use ($cart, $request): JsonResponse {
             $locked = HeldCart::query()->whereKey($cart->id)->lockForUpdate()->firstOrFail();
             $payload = [...$locked->payload, 'id' => $locked->id, 'location_id' => $locked->location_id, 'held_at' => $locked->created_at->toIso8601String()];
-            $locked->delete();
+            abort_if($locked->claimed_by !== null && (int) $locked->claimed_by !== $request->user()->id && $locked->claimed_at > now()->subMinutes(5)->toDateTimeString(), 409, 'Another cashier is resuming this cart.');
+            $locked->forceFill(['claimed_by' => $request->user()->id, 'claimed_at' => now()])->save();
 
             return response()->json($payload);
         });

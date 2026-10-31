@@ -16,7 +16,7 @@ class OpeningStockController extends Controller
 {
     public function create(Request $request, InventoryPageData $pageData, LocationAccessService $locationAccess): Response
     {
-        return Inertia::render('inventory/Receive', ['locations' => $pageData->locations($request->user()), 'variants' => $pageData->variants($locationAccess->business()), 'opening' => true]);
+        return Inertia::render('inventory/Receive', ['locations' => $pageData->locations($request->user()), 'variants' => $pageData->variants($locationAccess->business(), limit: 25), 'opening' => true]);
     }
 
     public function store(StoreOpeningStockRequest $request, InventoryService $inventory): RedirectResponse

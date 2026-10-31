@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Download, Printer } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
@@ -23,6 +23,21 @@ type Row = {
 type Option = { id: number; name: string };
 const props = defineProps<{
     rows: Row[];
+    canViewCosts: boolean;
+    totals: {
+        quantity: number;
+        cost: number | null;
+        retail: number;
+        products: number;
+    };
+    locationSummary: {
+        location: string;
+        quantity: number;
+        cost: number | null;
+        retail: number;
+        products: number;
+    }[];
+    pagination: { previous: string | null; next: string | null; total: number };
     locations: Option[];
     categories: Option[];
     brands: Option[];
@@ -58,61 +73,22 @@ const pdfUrl = computed(() => {
         if (value) query.set(key, String(value));
     return `/inventory/reports/stock-overview/pdf${query.size ? `?${query.toString()}` : ''}`;
 });
-const formatMoney = (value: number): string =>
+const formatMoney = (value: number | null): string =>
     new Intl.NumberFormat(undefined, {
         style: 'currency',
         currency: props.currency,
         maximumFractionDigits: 2,
-    }).format(value);
-const printReport = (): void => window.print();
-const quantityTotal = computed(() =>
-    props.rows.reduce((sum, row) => sum + row.quantity, 0),
+    }).format(value ?? 0);
+const printReport = (): void => {
+    window.open(pdfUrl.value, '_blank', 'noopener');
+};
+const quantityTotal = computed(() => props.totals.quantity);
+const costTotal = computed(() => props.totals.cost ?? 0);
+const retailTotal = computed(() => props.totals.retail);
+const marginTotal = computed(
+    () => props.totals.retail - (props.totals.cost ?? 0),
 );
-const costTotal = computed(() =>
-    props.rows.reduce((sum, row) => sum + row.cost_value, 0),
-);
-const retailTotal = computed(() =>
-    props.rows.reduce((sum, row) => sum + row.retail_value, 0),
-);
-const marginTotal = computed(() =>
-    props.rows.reduce((sum, row) => sum + row.margin, 0),
-);
-const locationTotals = computed(() => {
-    const totals = new Map<
-        string,
-        { quantity: number; cost: number; retail: number; products: number }
-    >();
-    const visibleLocations = filters.value.location_id
-        ? props.locations.filter(
-              (location) => location.id === Number(filters.value.location_id),
-          )
-        : props.locations;
-    for (const location of visibleLocations) {
-        totals.set(location.name, {
-            quantity: 0,
-            cost: 0,
-            retail: 0,
-            products: 0,
-        });
-    }
-    for (const row of props.rows) {
-        const current = totals.get(row.location) ?? {
-            quantity: 0,
-            cost: 0,
-            retail: 0,
-            products: 0,
-        };
-        current.quantity += row.quantity;
-        current.cost += row.cost_value;
-        current.retail += row.retail_value;
-        current.products++;
-        totals.set(row.location, current);
-    }
-    return Array.from(totals.entries()).map(([location, total]) => ({
-        location,
-        ...total,
-    }));
-});
+const locationTotals = computed(() => props.locationSummary);
 let timer: ReturnType<typeof setTimeout> | undefined;
 watch(
     filters,
@@ -132,7 +108,14 @@ watch(
                     {
                         preserveState: true,
                         replace: true,
-                        only: ['rows', 'filters'],
+                        only: [
+                            'rows',
+                            'filters',
+                            'totals',
+                            'locationSummary',
+                            'pagination',
+                            'generatedAt',
+                        ],
                     },
                 ),
             250,
@@ -158,7 +141,7 @@ defineOptions({
         >
             <Heading
                 title="Stock overview report"
-                description="Detailed on-hand stock and its current cost and selling value, grouped by location."
+                description="Quantity stock uses current catalogue cost estimates; serialized stock uses recorded device costs. This is not an accounting inventory valuation."
             />
             <div class="flex shrink-0 gap-2">
                 <a
@@ -168,8 +151,10 @@ defineOptions({
                 >
                 <a
                     :href="pdfUrl"
+                    target="_blank"
+                    rel="noopener"
                     class="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium hover:bg-muted"
-                    ><Download class="size-4" />Download PDF</a
+                    ><Download class="size-4" />Print-ready PDF view</a
                 >
                 <button
                     type="button"
@@ -234,7 +219,7 @@ defineOptions({
                     }}
                 </p>
             </article>
-            <article class="surface-panel p-3">
+            <article v-if="canViewCosts" class="surface-panel p-3">
                 <p class="text-xs text-muted-foreground">Stock cost value</p>
                 <p class="mt-1 text-xl font-semibold tabular-nums">
                     {{ formatMoney(costTotal) }}
@@ -246,7 +231,7 @@ defineOptions({
                     {{ formatMoney(retailTotal) }}
                 </p>
             </article>
-            <article class="surface-panel p-3">
+            <article v-if="canViewCosts" class="surface-panel p-3">
                 <p class="text-xs text-muted-foreground">Potential margin</p>
                 <p class="mt-1 text-xl font-semibold tabular-nums">
                     {{ formatMoney(marginTotal) }}
@@ -277,7 +262,7 @@ defineOptions({
                         units
                     </p>
                     <dl class="mt-2 grid grid-cols-2 gap-2 text-sm">
-                        <div>
+                        <div v-if="canViewCosts">
                             <dt class="text-xs text-muted-foreground">
                                 Cost value
                             </dt>
@@ -302,7 +287,7 @@ defineOptions({
                 <div>
                     <h2 class="text-base font-semibold">Stock details</h2>
                     <p class="text-sm text-muted-foreground">
-                        {{ rows.length }} location and product lines · unit
+                        {{ pagination.total }} location and product lines · unit
                         costs are weighted averages for serialized devices.
                     </p>
                 </div>
@@ -322,11 +307,17 @@ defineOptions({
                                 <th>Category / brand</th>
                                 <th>Tracking</th>
                                 <th class="text-right">Qty</th>
-                                <th class="text-right">Unit cost</th>
+                                <th v-if="canViewCosts" class="text-right">
+                                    Unit cost
+                                </th>
                                 <th class="text-right">Unit price</th>
-                                <th class="text-right">Cost value</th>
+                                <th v-if="canViewCosts" class="text-right">
+                                    Cost value
+                                </th>
                                 <th class="text-right">Selling value</th>
-                                <th class="text-right">Margin</th>
+                                <th v-if="canViewCosts" class="text-right">
+                                    Margin
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -370,6 +361,7 @@ defineOptions({
                                     }}
                                 </td>
                                 <td
+                                    v-if="canViewCosts"
                                     data-label="Unit cost"
                                     class="text-right tabular-nums"
                                 >
@@ -382,6 +374,7 @@ defineOptions({
                                     {{ formatMoney(row.unit_selling_price) }}
                                 </td>
                                 <td
+                                    v-if="canViewCosts"
                                     data-label="Cost value"
                                     class="text-right tabular-nums"
                                 >
@@ -394,6 +387,7 @@ defineOptions({
                                     {{ formatMoney(row.retail_value) }}
                                 </td>
                                 <td
+                                    v-if="canViewCosts"
                                     data-label="Margin"
                                     class="text-right tabular-nums"
                                 >
@@ -409,7 +403,10 @@ defineOptions({
                                 </td>
                             </tr>
                         </tbody>
-                        <tfoot v-if="rows.length" class="font-semibold">
+                        <tfoot
+                            v-if="rows.length && canViewCosts"
+                            class="font-semibold"
+                        >
                             <tr>
                                 <td colspan="4">Total</td>
                                 <td class="text-right tabular-nums">
@@ -435,6 +432,13 @@ defineOptions({
                     </table>
                 </div>
             </div>
+            <nav class="flex gap-3 print:hidden" aria-label="Report pages">
+                <Link v-if="pagination.previous" :href="pagination.previous"
+                    >Previous</Link
+                ><Link v-if="pagination.next" :href="pagination.next"
+                    >Next</Link
+                >
+            </nav>
         </section>
     </section>
 </template>

@@ -42,6 +42,9 @@ class SaleService
         try {
             return DB::transaction(function () use ($user, $data, $requireActiveShift): Sale {
                 $business = $this->locationAccess->business();
+                if (DB::transactionLevel() > 0) {
+                    Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+                }
                 $location = $this->authorizedLocation($user, $business, (int) $data['location_id']);
                 $shiftId = $this->shifts->activeId($user, $location->id);
                 $payloadHash = $this->payloadHash(Arr::except($data, ['operation_key']));
@@ -259,6 +262,9 @@ class SaleService
             return DB::transaction(function () use ($user, $sale, $data): SalePayment {
                 $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $business = $this->locationAccess->business();
+                if (DB::transactionLevel() > 0) {
+                    Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+                }
                 $sale = $business->sales()->lockForUpdate()->findOrFail($sale->id);
                 $this->assertSaleLocation($user, $sale);
                 $amount = $this->money((string) $data['amount']);
@@ -315,6 +321,9 @@ class SaleService
             return DB::transaction(function () use ($user, $sale, $data): SaleReturn {
                 $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $business = $this->locationAccess->business();
+                if (DB::transactionLevel() > 0) {
+                    Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+                }
                 $sale = $business->sales()->with(['lines.variant.product', 'lines.components.variant.product'])->lockForUpdate()->findOrFail($sale->id);
                 $this->assertSaleLocation($user, $sale);
                 $location = $this->authorizedLocation($user, $business, (int) $data['location_id']);
@@ -456,6 +465,9 @@ class SaleService
     public function scoped(User $user, Sale $sale): Sale
     {
         $business = $this->locationAccess->business();
+        if (DB::transactionLevel() > 0) {
+            Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
+        }
         $sale = $business->sales()->with(['location', 'cashier'])->findOrFail($sale->id);
         $this->assertSaleLocation($user, $sale);
 

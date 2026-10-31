@@ -21,7 +21,7 @@ class StockReceivingController extends Controller
 
         return Inertia::render('inventory/Receive', [
             'locations' => $locations,
-            'variants' => $pageData->variants($locationAccess->business()),
+            'variants' => $pageData->variants($locationAccess->business(), limit: 25),
             'opening' => false,
             'selectedLocationId' => $requestedLocation['id'] ?? $locationAccess->selectedLocationId($request) ?? $locations[0]['id'] ?? null,
         ]);

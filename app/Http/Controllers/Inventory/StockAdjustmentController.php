@@ -19,7 +19,7 @@ class StockAdjustmentController extends Controller
     {
         return Inertia::render('inventory/Adjustments', [
             'locations' => $pageData->locations($request->user()),
-            'variants' => $pageData->variants($locationAccess->business(), VariantTrackingMode::QuantityBased),
+            'variants' => $pageData->variants($locationAccess->business(), VariantTrackingMode::QuantityBased, 25),
         ]);
     }
 
