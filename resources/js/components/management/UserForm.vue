@@ -63,14 +63,19 @@ const canChangeStatus = usePage<{
                     : {}),
             })
         "
-        class="form-section space-y-7"
+        class="form-section"
+        :class="
+            embedded
+                ? 'space-y-3 border-0 bg-transparent p-0 shadow-none'
+                : 'space-y-7'
+        "
         :reset-on-success="
             method === 'post' ? ['password', 'password_confirmation'] : []
         "
         @success="emit('success')"
         v-slot="{ errors, processing }"
     >
-        <div class="grid gap-5 sm:grid-cols-2">
+        <div class="grid gap-3 sm:grid-cols-2">
             <div class="grid gap-2">
                 <Label for="name">Full name</Label>
                 <Input
@@ -176,11 +181,11 @@ const canChangeStatus = usePage<{
 
         <div class="grid gap-2">
             <Label>Roles</Label>
-            <div class="grid gap-2 sm:grid-cols-2">
+            <div class="grid gap-2 sm:grid-cols-3">
                 <label
                     v-for="role in roles"
                     :key="role.id"
-                    class="choice-card gap-2"
+                    class="choice-card gap-2 p-2.5"
                 >
                     <input
                         v-model="selectedRoleIds"
@@ -201,11 +206,11 @@ const canChangeStatus = usePage<{
                 location-dependent operations. Owners retain all-location
                 access.
             </p>
-            <div class="grid gap-2 sm:grid-cols-2">
+            <div class="grid gap-2 sm:grid-cols-3">
                 <label
                     v-for="location in locations"
                     :key="location.id"
-                    class="choice-card gap-2"
+                    class="choice-card gap-2 p-2.5"
                 >
                     <input
                         v-model="selectedLocationIds"
@@ -230,7 +235,7 @@ const canChangeStatus = usePage<{
             />
         </div>
 
-        <div class="flex flex-wrap gap-3 border-t border-border/70 pt-6">
+        <div class="flex flex-wrap gap-2 border-t border-border/70 pt-3">
             <Button :disabled="processing">{{
                 managedUser
                     ? 'Save changes'

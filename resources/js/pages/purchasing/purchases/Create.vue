@@ -32,10 +32,12 @@ defineOptions({
 </script>
 <template>
     <Head title="Create purchase" />
-    <section class="page-shell">
+    <section class="page-shell h-0 min-h-0 overflow-hidden">
         <Heading
+            class="shrink-0"
+            variant="small"
             title="Create purchase"
-            description="Enter a supplier invoice and keep it as a draft until it is ready to receive."
+            description="Add invoice details and products, then save as a draft."
         /><PurchaseForm
             :action="store().url"
             method="post"

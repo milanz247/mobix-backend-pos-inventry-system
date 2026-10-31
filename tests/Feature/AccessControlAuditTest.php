@@ -34,10 +34,10 @@ function auditAccessContext(): array
     $user = User::factory()->create();
     $a->users()->attach($user);
     $user->givePermissionTo([
-        'dashboard.view', 'sales.pos', 'sales.view', 'sales.create', 'sales.reports.view',
+        'dashboard.view', 'sales.pos', 'sales.view', 'sales.create',
         'inventory.view', 'inventory.transfer', 'serialized-devices.view', 'serialized-devices.manage',
         'stock-movements.view', 'purchases.view', 'suppliers.view', 'shifts.view',
-        'sales-receipts.print', 'return-receipts.print', 'credit-sales.view', 'stock-reports.view', 'damaged-reports.view', 'damaged-reports.print', 'damaged-stock.view', 'shifts.print', 'shift-reports.view', 'expense-reports.view',
+        'sales-receipts.print', 'return-receipts.print', 'credit-sales.view', 'damaged-stock.view',
         'shifts.open', 'shifts.movements', 'shifts.close',
     ]);
 
@@ -78,7 +78,7 @@ test('location filters reject unassigned locations rather than returning unrestr
     $c = auditAccessContext();
 
     $this->actingAs($c['user'])->get(route($route, ['location_id' => $c['b']->id]))->assertNotFound();
-})->with(['pos.index', 'inventory.locations.index', 'inventory.devices.index', 'inventory.movements.index', 'sales.index', 'sales.reports', 'purchases.index', 'reports.out-of-stock', 'reports.expenses', 'shifts.index', 'reports.current-shift']);
+})->with(['pos.index', 'inventory.locations.index', 'inventory.devices.index', 'inventory.movements.index', 'sales.index', 'purchases.index', 'shifts.index']);
 
 test('location permission and assignment are both required', function () {
     $c = auditAccessContext();
@@ -105,7 +105,7 @@ test('selected authorized location persists and revoked assignments immediately 
     $this->get(route('pos.index', ['location_id' => $c['b']->id]))->assertNotFound();
 });
 
-test('dashboard and report aggregates include only authorized locations and hide unauthorized costs', function () {
+test('dashboard aggregates include only authorized locations and hide unauthorized costs', function () {
     $c = auditAccessContext();
     Sale::factory()->for($c['business'])->for($c['a'])->for($c['user'], 'cashier')->create(['total' => '120.00']);
     Sale::factory()->for($c['business'])->for($c['b'])->create(['total' => '990.00']);
@@ -113,7 +113,6 @@ test('dashboard and report aggregates include only authorized locations and hide
     $this->actingAs($c['user'])->get(route('dashboard'))->assertOk()->assertInertia(fn (Assert $page) => $page
         ->where('overview.sales_total', '120.00')->where('overview.completed_sales', 1)
         ->where('canViewCosts', false)->where('performance.gross_profit_30_days', null)->where('trend.29.gross_profit', null));
-    $this->get(route('sales.reports'))->assertOk()->assertInertia(fn (Assert $page) => $page->where('summary.gross_sales', '120.00')->where('summary.sales_count', 1));
     $this->actingAs($c['owner'])->get(route('dashboard'))->assertOk()->assertInertia(fn (Assert $page) => $page
         ->where('overview.sales_total', '1110.00')->where('canViewCosts', true));
     $this->get(route('dashboard', ['location_id' => $c['b']->id]))->assertOk()->assertInertia(fn (Assert $page) => $page->where('overview.sales_total', '990.00'));
@@ -129,7 +128,6 @@ test('direct sale receipt purchase and shift URLs cannot expose another location
     $this->get(route('sales.receipt', $sale))->assertNotFound();
     $this->get(route('purchases.show', $purchase))->assertNotFound();
     $this->get(route('shifts.show', $shift))->assertNotFound();
-    $this->get(route('shifts.report', $shift))->assertNotFound();
 });
 
 test('POS search and stock totals do not reveal another locations devices or balances', function () {
@@ -371,7 +369,7 @@ test('a guessed device status URL cannot change stock in another location', func
     expect($device->refresh()->status->value)->toBe('in_stock');
 });
 
-test('expenses and shift management require ownership permission and location access', function () {
+test('shift management requires ownership permission and location access', function () {
     $c = auditAccessContext();
     $other = User::factory()->create();
     $other->givePermissionTo(['shifts.view', 'shifts.open', 'shifts.movements', 'shifts.close']);
@@ -379,7 +377,6 @@ test('expenses and shift management require ownership permission and location ac
     $shift = app(CashierShiftService::class)->open($other, ['operation_key' => (string) Str::uuid(), 'location_id' => $c['b']->id, 'opening_cash' => '500.00']);
     $movement = app(CashierShiftService::class)->movement($other, $shift, ['operation_key' => (string) Str::uuid(), 'type' => 'expense', 'amount' => '75.00', 'reason' => 'Private shop expense']);
 
-    $this->actingAs($c['user'])->get(route('reports.expenses'))->assertOk()->assertInertia(fn (Assert $page) => $page->has('rows.data', 0)->where('summary.total_expenses', '0.00'));
     $this->get(route('shifts.movement', [$shift, $movement]))->assertNotFound();
     $this->post(route('pos.shifts.movements', $shift), ['operation_key' => (string) Str::uuid(), 'location_id' => $c['b']->id, 'type' => 'cash_out', 'amount' => '1.00', 'reason' => 'Forged cash movement'])->assertNotFound();
     $this->post(route('pos.shifts.close', $shift), ['location_id' => $c['b']->id, 'actual_cash' => '425.00'])->assertNotFound();
@@ -399,13 +396,10 @@ test('location scoped user lists omit users with wider location assignments', fu
 
 test('partial reloads refresh permission and location navigation props', function () {
     $c = auditAccessContext();
-    $c['user']->revokePermissionTo('sales.reports.view');
-
     $this->actingAs($c['user'])->get(route('sales.index'), [
         'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(request()),
         'X-Inertia' => 'true', 'X-Inertia-Partial-Component' => 'sales/Index', 'X-Inertia-Partial-Data' => 'sales',
-    ])->assertOk()->assertJsonPath('props.locationAccess.locations.0.id', $c['a']->id)
-        ->assertJsonPath('props.auth.permissions', fn (array $permissions): bool => ! in_array('sales.reports.view', $permissions, true));
+    ])->assertOk()->assertJsonPath('props.locationAccess.locations.0.id', $c['a']->id);
 });
 
 test('personal profile payload cannot change roles or location access', function () {

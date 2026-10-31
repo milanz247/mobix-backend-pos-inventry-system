@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { usePage } from '@inertiajs/vue3';
-import { Link, router, useForm } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 import { RefreshCw } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,6 @@ import {
 import ShiftSummaryPanel from '@/components/shifts/ShiftSummary.vue';
 import ShiftPayments from '@/components/shifts/ShiftPayments.vue';
 import { store, movements, close } from '@/routes/pos/shifts';
-import { report } from '@/routes/shifts';
 import { cashCents, signedCents, shiftMoney } from '@/lib/shift';
 import type { PosDrawer } from '@/types/shift';
 
@@ -37,10 +35,7 @@ const emit = defineEmits<{
 const modal = ref<Mode | null>(null);
 const refreshing = ref(false);
 const refreshError = ref('');
-const canPrintReport = (
-    usePage().props.auth as { permissions: string[] }
-).permissions.includes('shifts.print');
-const lastClosed = ref<{ id: number; reference: string } | null>(null);
+const justClosed = ref(false);
 const opening = useForm({
     operation_key: crypto.randomUUID(),
     location_id: props.locationId,
@@ -220,10 +215,7 @@ function closeShift(): void {
         preserveScroll: true,
         onFlash: (flash) => {
             if (flash.closedShift) {
-                lastClosed.value = flash.closedShift as {
-                    id: number;
-                    reference: string;
-                };
+                justClosed.value = true;
             }
         },
         onSuccess: () => {
@@ -340,15 +332,10 @@ function closeShift(): void {
                 manager.
             </p>
             <p
-                v-if="lastClosed && !active && canPrintReport"
+                v-if="justClosed && !active"
                 class="mt-2 text-xs text-muted-foreground"
             >
                 Shift closed. Open a new shift before the next sale.
-                <Link
-                    :href="report(lastClosed.id)"
-                    class="font-medium text-primary underline"
-                    >View closing report</Link
-                >
             </p>
             <p
                 v-if="refreshError"

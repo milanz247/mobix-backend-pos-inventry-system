@@ -50,6 +50,7 @@ class LocationController extends Controller
             'locations' => $locations,
             'filters' => $filters,
             'statuses' => $this->statuses(),
+            'reportOnly' => $request->routeIs('reports.locations.status'),
         ]);
     }
 

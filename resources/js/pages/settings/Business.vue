@@ -54,15 +54,15 @@ defineOptions({
     <div class="space-y-6">
         <Heading
             variant="small"
-            title="Business details"
-            description="Update the details used throughout NalakaMobile"
+            title="Business settings"
+            description="Manage your business profile, regional defaults, and tax settings."
         />
 
         <Form
             v-bind="BusinessSettingsController.update.form()"
             :options="{ preserveScroll: true }"
             set-defaults-on-success
-            class="form-section space-y-7"
+            class="form-section space-y-5"
             v-slot="{ errors, processing, recentlySuccessful }"
         >
             <p
@@ -72,8 +72,8 @@ defineOptions({
                 View only — this role cannot change these settings.
             </p>
             <fieldset :disabled="!canUpdate" class="contents">
-                <div class="grid gap-5 sm:grid-cols-2">
-                    <div class="grid gap-2 sm:col-span-2">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="grid gap-2">
                         <Label for="tax_rate"
                             >Tax included in selling prices (%)</Label
                         >
@@ -254,14 +254,14 @@ defineOptions({
                     </div>
                 </div>
 
-                <div class="space-y-5 border-t pt-6">
+                <div class="space-y-4 border-t pt-5">
                     <Heading
                         variant="small"
                         title="Date and time"
                         description="These preferences apply across the system"
                     />
 
-                    <div class="grid gap-5 sm:grid-cols-2">
+                    <div class="grid gap-4 sm:grid-cols-2">
                         <div class="grid gap-2">
                             <Label for="timezone">Timezone</Label>
                             <select
@@ -307,7 +307,7 @@ defineOptions({
                 </div>
 
                 <div
-                    class="flex flex-wrap items-center gap-4 border-t border-border/70 pt-6"
+                    class="flex flex-wrap items-center justify-end gap-3 border-t border-border/70 pt-5"
                 >
                     <Button v-if="canUpdate" :disabled="processing"
                         >Save changes</Button

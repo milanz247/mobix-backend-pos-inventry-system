@@ -333,6 +333,51 @@
     }
 }
 
+.settings-page
+    :is(
+        input:not([type='checkbox']):not([type='radio']):not(
+                [type='color']
+            ):not([type='hidden']),
+        select
+    ) {
+    box-sizing: border-box;
+    height: 2.5rem;
+    font-size: 1rem;
+}
+
+.settings-page [data-slot='label'] {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.settings-page textarea {
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.settings-page .surface-panel,
+.settings-page .form-section {
+    padding: 1rem;
+}
+
+@media (min-width: 640px) {
+    .settings-page
+        :is(
+            input:not([type='checkbox']):not([type='radio']):not(
+                    [type='color']
+                ):not([type='hidden']),
+            select,
+            textarea
+        ) {
+        font-size: 0.875rem;
+    }
+
+    .settings-page .surface-panel,
+    .settings-page .form-section {
+        padding: 1.25rem;
+    }
+}
+
 @layer components {
     .responsive-table [data-slot='badge'] {
         max-width: 100%;

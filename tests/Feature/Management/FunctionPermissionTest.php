@@ -107,9 +107,9 @@ test('broad legacy view permissions do not bypass newly separated function endpo
     $user->givePermissionTo($permission);
     $this->actingAs($user)->get(route($route))->assertForbidden();
 })->with([
-    ['inventory.view', 'inventory.damaged.index'], ['inventory.view', 'reports.damaged'], ['inventory.view', 'reports.out-of-stock'],
+    ['inventory.view', 'inventory.damaged.index'],
     ['business-settings.view', 'invoice-settings.edit'], ['business-settings.view', 'pos-settings.edit'],
-    ['shifts.view', 'reports.expenses'], ['shifts.view', 'reports.current-shift'], ['sales.view', 'sales.credit'],
+    ['sales.view', 'sales.credit'],
 ]);
 
 test('deactivate access cannot delete a product and editor access cannot change its status', function () {
@@ -151,18 +151,4 @@ test('damaged stock repair and write-off permissions are independent even on a f
     expect($entry->fresh()->remaining_quantity)->toBe('2.000');
     $this->post(route('inventory.damaged.resolve', $entry), ['operation_key' => (string) Str::uuid(), 'action' => 'repair', 'quantity' => '1.000', 'notes' => 'Repaired and tested'])->assertSessionHasNoErrors();
     expect($entry->fresh()->remaining_quantity)->toBe('1.000')->and(InventoryStock::query()->sole()->quantity_on_hand)->toBe('1.000');
-});
-
-test('a report-only role can inspect the stock report without being offered unauthorized inventory links', function () {
-    functionPermissionOwner();
-    $business = Business::query()->sole();
-    $location = Location::factory()->for($business)->create();
-    $product = Product::factory()->for($business)->create();
-    ProductVariant::factory()->for($business)->for($product)->create();
-    $user = User::factory()->create();
-    $location->users()->attach($user);
-    $user->givePermissionTo('stock-reports.view');
-    $this->actingAs($user)->get(route('reports.out-of-stock'))->assertOk()->assertInertia(fn (Assert $page) => $page
-        ->component('reports/OutOfStock')->has('rows.data', 1)->where('rows.data.0.url', null));
-    $this->get(route('inventory.locations.index'))->assertForbidden();
 });

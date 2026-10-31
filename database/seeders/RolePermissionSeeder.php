@@ -77,7 +77,6 @@ class RolePermissionSeeder extends Seeder
                 PermissionName::SalesDiscount->value,
                 PermissionName::SalePaymentsCreate->value,
                 PermissionName::SaleReturnsCreate->value,
-                PermissionName::SalesReportsView->value,
             ],
             SystemRole::Cashier => [
                 PermissionName::ShiftsView->value,

@@ -27,7 +27,6 @@ require __DIR__.'/inventory.php';
 require __DIR__.'/purchasing.php';
 require __DIR__.'/sales.php';
 require __DIR__.'/shifts.php';
-require __DIR__.'/reports.php';
 require __DIR__.'/settings.php';
 
 require __DIR__.'/customers.php';

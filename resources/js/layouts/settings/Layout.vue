@@ -1,5 +1,7 @@
 <template>
-    <div class="page-shell">
-        <section class="max-w-6xl min-w-0 space-y-6"><slot /></section>
+    <div class="page-shell settings-page w-full min-w-0">
+        <section class="flex w-full min-w-0 flex-1 flex-col gap-6">
+            <slot />
+        </section>
     </div>
 </template>

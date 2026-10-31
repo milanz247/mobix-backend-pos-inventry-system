@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DamagedStockEntry;
 use App\Models\ProductVariant;
 use App\Models\SerializedDevice;
-use App\Services\DamagedStockReportService;
+use App\Services\DamagedStockListService;
 use App\Services\InventoryService;
 use App\Services\LocationAccessService;
 use App\Support\InventoryPageData;
@@ -20,7 +20,7 @@ use Inertia\Response;
 
 class DamagedStockController extends Controller
 {
-    public function index(Request $request, LocationAccessService $access, InventoryPageData $pageData, DamagedStockReportService $report): Response
+    public function index(Request $request, LocationAccessService $access, InventoryPageData $pageData, DamagedStockListService $listing): Response
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'], 'location_id' => ['nullable', 'integer'],
@@ -72,13 +72,12 @@ class DamagedStockController extends Controller
             'filters' => [...$filters, 'search' => $search, 'location_id' => $filters['location_id'] ?? '', 'status' => $filters['status'] ?? 'active'],
             'categories' => $business->categories()->orderBy('name')->get(['id', 'name']),
             'brands' => $business->brands()->orderBy('name')->get(['id', 'name']),
-            'summary' => $report->summary($report->query($request->user(), $business, array_diff_key($filters, ['search' => true])), false),
+            'summary' => $listing->summary($listing->query($request->user(), $business, array_diff_key($filters, ['search' => true])), false),
             'canViewDevices' => $request->user()->can('serialized-devices.view'),
             'canAdjust' => $request->user()->canAny(['damaged-stock.repair', 'damaged-stock.write-off']),
             'canCreate' => $request->user()->can('damaged-stock.create'),
             'canRepair' => $request->user()->can('damaged-stock.repair'),
             'canWriteOff' => $request->user()->can('damaged-stock.write-off'),
-            'canViewReport' => $request->user()->can('damaged-reports.view'),
             'canManageDevices' => $request->user()->can('serialized-devices.manage'),
             'canViewSales' => $request->user()->can('sales.view'),
         ]);

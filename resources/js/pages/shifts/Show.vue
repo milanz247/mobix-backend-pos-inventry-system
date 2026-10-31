@@ -44,7 +44,7 @@ usePoll(15000, {
         <Heading
             :title="
                 shift.closed_at
-                    ? 'Shift Report · ' + shift.reference
+                    ? 'Shift Summary · ' + shift.reference
                     : 'Current Shift · ' + shift.reference
             "
             :description="`${summary.identity?.cashier ?? shift.cashier.name} · ${summary.identity?.location ?? shift.location.name} · ${shift.status.replaceAll('_', ' ')}`"

@@ -23,6 +23,8 @@ type Purchase = {
     notes: string | null;
     lines: {
         product_variant_id: number;
+        label: string;
+        sku: string;
         tracking_mode: string;
         quantity: string;
         unit_cost: string;
@@ -55,8 +57,9 @@ defineOptions({
 </script>
 <template>
     <Head :title="`Edit ${purchase.invoice_number}`" />
-    <section class="page-shell">
+    <section class="page-shell h-0 min-h-0 overflow-hidden">
         <Heading
+            class="shrink-0"
             title="Edit purchase draft"
             :description="`Update invoice ${purchase.invoice_number}. Draft changes do not affect stock.`"
         /><PurchaseForm

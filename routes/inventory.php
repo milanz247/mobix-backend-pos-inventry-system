@@ -2,12 +2,14 @@
 
 use App\Http\Controllers\Inventory\DamagedStockController;
 use App\Http\Controllers\Inventory\InventoryOverviewController;
+use App\Http\Controllers\Inventory\InventoryOperationReportController;
 use App\Http\Controllers\Inventory\LocationInventoryController;
 use App\Http\Controllers\Inventory\OpeningStockController;
 use App\Http\Controllers\Inventory\ReorderLevelController;
 use App\Http\Controllers\Inventory\SerializedDeviceController;
 use App\Http\Controllers\Inventory\StockAdjustmentController;
 use App\Http\Controllers\Inventory\StockMovementController;
+use App\Http\Controllers\Inventory\StockOverviewReportController;
 use App\Http\Controllers\Inventory\StockReceivingController;
 use App\Http\Controllers\Inventory\StockTransferController;
 use Illuminate\Support\Facades\Route;
@@ -33,4 +35,8 @@ Route::prefix('inventory')->name('inventory.')->middleware('auth')->group(functi
     Route::get('devices', [SerializedDeviceController::class, 'index'])->middleware('can:serialized-devices.view')->name('devices.index');
     Route::patch('devices/{serializedDevice}/status', [SerializedDeviceController::class, 'updateStatus'])->middleware('can:serialized-devices.manage')->name('devices.status.update');
     Route::get('movements', StockMovementController::class)->middleware('can:stock-movements.view')->name('movements.index');
+    Route::get('reports/stock-overview', StockOverviewReportController::class)->middleware('can:inventory.view')->name('reports.stock-overview');
+    Route::get('reports/stock-overview/excel', [StockOverviewReportController::class, 'excel'])->middleware('can:inventory.view')->name('reports.stock-overview.excel');
+    Route::get('reports/stock-overview/pdf', [StockOverviewReportController::class, 'pdf'])->middleware('can:inventory.view')->name('reports.stock-overview.pdf');
+    Route::get('reports/{type}', InventoryOperationReportController::class)->whereIn('type', ['adjustments', 'transfers'])->middleware('can:inventory.view')->name('reports.operations');
 });

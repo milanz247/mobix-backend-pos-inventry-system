@@ -372,7 +372,7 @@ defineOptions({
         </nav>
 
         <Dialog v-model:open="addUserOpen">
-            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+            <DialogContent class="sm:max-w-5xl sm:p-5">
                 <DialogHeader>
                     <DialogTitle>Add user</DialogTitle>
                     <DialogDescription>

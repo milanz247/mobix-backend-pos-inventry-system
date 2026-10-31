@@ -134,8 +134,8 @@ defineOptions({
         <div class="flex flex-wrap items-end justify-between gap-3">
             <Heading
                 variant="small"
-                title="Invoice designer"
-                description="Shape the look and content of every customer receipt. Changes appear in the live preview."
+                title="Invoice settings"
+                description="Set the receipt layout and review the live preview."
             />
             <span
                 class="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground"
@@ -149,18 +149,18 @@ defineOptions({
             v-bind="InvoiceSettingsController.update.form()"
             :options="{ preserveScroll: true }"
             set-defaults-on-success
-            class="grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_360px]"
+            class="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]"
             v-slot="{ errors, processing, recentlySuccessful }"
         >
             <p
                 v-if="!canUpdate"
-                class="mb-4 rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground"
+                class="mb-0 rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground xl:col-span-2"
             >
                 View only — this role cannot change these settings.
             </p>
             <fieldset :disabled="!canUpdate" class="contents">
-                <div class="space-y-5">
-                    <section class="surface-panel space-y-5 p-5 sm:p-6">
+                <div class="space-y-4">
+                    <section class="surface-panel space-y-5">
                         <div class="flex items-start gap-3">
                             <span
                                 class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
@@ -261,7 +261,7 @@ defineOptions({
                         </div>
                     </section>
 
-                    <section class="surface-panel space-y-4 p-5 sm:p-6">
+                    <section class="surface-panel space-y-4">
                         <div>
                             <h2 class="font-semibold">
                                 What appears on the invoice
@@ -423,7 +423,7 @@ defineOptions({
                         </div>
                     </section>
 
-                    <section class="surface-panel space-y-5 p-5 sm:p-6">
+                    <section class="surface-panel space-y-5">
                         <div>
                             <h2 class="font-semibold">Messages and policies</h2>
                             <p class="mt-1 text-sm text-muted-foreground">
@@ -472,7 +472,7 @@ defineOptions({
                     </section>
 
                     <div
-                        class="flex flex-wrap items-center gap-4 border-t border-border/70 pt-5"
+                        class="flex flex-wrap items-center justify-end gap-4 border-t border-border/70 pt-5"
                     >
                         <Button v-if="canUpdate" :disabled="processing"
                             ><Printer class="size-4" />{{
@@ -489,12 +489,12 @@ defineOptions({
                     </div>
                 </div>
 
-                <aside class="space-y-3 2xl:sticky 2xl:top-20">
+                <aside class="space-y-3 xl:sticky xl:top-20">
                     <div class="flex items-center gap-2 text-sm font-semibold">
                         <Eye class="size-4 text-primary" /> Live preview
                     </div>
                     <div
-                        class="max-h-[calc(100vh-10rem)] overflow-auto rounded-2xl border border-border/70 bg-muted/30 p-4 sm:p-5"
+                        class="min-h-[calc(100dvh-12rem)] rounded-2xl border border-border/70 bg-muted/30 p-4 sm:p-5"
                     >
                         <div
                             class="mb-3 rounded-md bg-amber-100 px-2 py-1 text-center text-[10px] font-semibold tracking-wide text-amber-900 uppercase"

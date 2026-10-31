@@ -4,9 +4,7 @@ use App\Models\Business;
 use App\Models\CashierShift;
 use App\Models\Category;
 use App\Models\Customer;
-use App\Models\DamagedStockEntry;
 use App\Models\HeldCart;
-use App\Models\InventoryOperation;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -14,7 +12,6 @@ use App\Models\Sale;
 use App\Models\User;
 use App\Services\InventoryService;
 use App\Services\SaleService;
-use App\Support\CsvDownload;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
@@ -27,7 +24,7 @@ function shopOperationsContext(): array
     $location = Location::factory()->for($business)->create();
     $user = User::factory()->create();
     $location->users()->attach($user);
-    foreach (['shifts.view', 'sales.pos', 'sales.create', 'sales.view', 'sales.credit', 'credit-sales.view', 'customers.view', 'customers.create', 'sales.discount', 'inventory.opening', 'inventory.view', 'inventory.adjust', 'sale-returns.create', 'sale-refunds.create', 'sales.reports.view'] as $permission) {
+    foreach (['shifts.view', 'sales.pos', 'sales.create', 'sales.view', 'sales.credit', 'credit-sales.view', 'customers.view', 'customers.create', 'sales.discount', 'inventory.opening', 'inventory.view', 'inventory.adjust', 'sale-returns.create', 'sale-refunds.create'] as $permission) {
         $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
     }
     CashierShift::factory()->for($business)->for($location)->for($user, 'cashier')->create();
@@ -164,22 +161,6 @@ test('shared carts are durable idempotent and can only be claimed once at an acc
     $this->postJson('/pos/held-carts/'.$id.'/claim')->assertNotFound();
 });
 
-test('CSV report export respects permissions and neutralizes spreadsheet formulas', function () {
-    [$user, $business, $location, $variant] = shopOperationsContext();
-    $payload = shopOperationsSale($location, $variant);
-    $payload['customer_name'] = '=HYPERLINK("evil")';
-    $this->actingAs($user)->post(route('pos.checkout'), $payload)->assertSessionHasNoErrors();
-    $csv = $this->get('/sales/reports?export=1')->assertOk()->assertDownload('sales-report.csv')->streamedContent();
-    expect($csv)->toContain("'=HYPERLINK")->toContain(Sale::query()->sole()->sale_number);
-    $user->revokePermissionTo('sales.reports.view');
-    $this->get('/sales/reports?export=1')->assertForbidden();
-    $response = CsvDownload::make('test.csv', [['=1+1', '+cmd', '-5.00', '@bad']]);
-    ob_start();
-    $response->sendContent();
-    $content = ob_get_clean();
-    expect($content)->toContain("'=1+1")->toContain("'+cmd")->toContain('-5.00')->toContain("'@bad");
-});
-
 test('legacy local phone records are reused and duplicates are rejected in customer management', function () {
     [$user, $business, $location, $variant] = shopOperationsContext();
     $customer = Customer::query()->create(['business_id' => $business->id, 'name' => 'Existing customer', 'phone' => '0771234567']);
@@ -219,21 +200,4 @@ test('tax and invoice value remain unchanged by a warranty replacement at a new 
     $replacement = $sale->fresh()->lines()->where('sale_return_id', $return->id)->sole();
     expect($replacement->tax_total)->toBe('10.00')->and($replacement->total)->toBe('110.00')
         ->and((string) app(SaleService::class)->outstanding($sale->fresh()))->toBe('0.00');
-});
-
-test('damaged stock CSV excludes costs without cost permission and includes all matching rows', function () {
-    [$user, $business, $location, $variant] = shopOperationsContext();
-    $user->givePermissionTo(Permission::findOrCreate('damaged-reports.view', 'web'));
-    $operation = InventoryOperation::query()->where('business_id', $business->id)->firstOrFail();
-    $lastSku = '';
-    for ($i = 0; $i < 26; $i++) {
-        $item = $i === 0 ? $variant : ProductVariant::factory()->for($business)->for($variant->product)->create(['sku' => 'EXPORT-'.str_pad((string) $i, 3, '0', STR_PAD_LEFT)]);
-        DamagedStockEntry::query()->create(['business_id' => $business->id, 'location_id' => $location->id, 'product_variant_id' => $item->id, 'inventory_operation_id' => $operation->id, 'quantity' => '1.000', 'remaining_quantity' => '1.000', 'unit_cost' => '123.45', 'reason' => 'Faulty', 'recorded_by' => $user->id]);
-        $lastSku = $item->sku;
-    }
-    $csv = $this->actingAs($user)->get('/reports/damaged-stock?export=1')->assertOk()->assertDownload('damaged-stock.csv')->streamedContent();
-    expect($csv)->toContain($variant->sku)->toContain($lastSku)->not->toContain('Damaged value')->not->toContain('123.45');
-    $user->givePermissionTo(Permission::findOrCreate('sales.costs.view', 'web'));
-    $csv = $this->get('/reports/damaged-stock?export=1')->assertOk()->streamedContent();
-    expect($csv)->toContain('Damaged value')->toContain('123.45');
 });

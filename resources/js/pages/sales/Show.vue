@@ -149,8 +149,8 @@ defineOptions({
 
 <template>
     <Head :title="`Sale ${sale.sale_number}`" />
-    <section class="page-shell space-y-4">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+    <section class="page-shell h-0 min-h-0 gap-2 overflow-hidden p-2 sm:p-3">
+        <div class="flex shrink-0 flex-wrap items-start justify-between gap-2">
             <div class="space-y-2">
                 <Heading
                     :title="sale.sale_number"
@@ -193,11 +193,11 @@ defineOptions({
         </div>
 
         <div
-            class="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]"
+            class="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-3 overflow-hidden xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)] xl:grid-rows-1"
         >
-            <div class="space-y-4">
+            <div class="flex min-h-0 flex-col gap-3 overflow-hidden">
                 <div
-                    class="surface-panel grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3"
+                    class="surface-panel grid shrink-0 gap-x-4 gap-y-2 p-3 sm:grid-cols-2 xl:grid-cols-3"
                 >
                     <div>
                         <p class="text-xs text-muted-foreground">Date / time</p>
@@ -234,8 +234,8 @@ defineOptions({
                         </p>
                     </div>
                 </div>
-                <div class="table-panel">
-                    <div class="overflow-x-auto">
+                <div class="table-panel min-h-0 flex-1 overflow-hidden">
+                    <div class="h-full overflow-auto">
                         <table class="data-table min-w-[760px]">
                             <thead>
                                 <tr>
@@ -361,8 +361,10 @@ defineOptions({
                 </div>
             </div>
 
-            <aside class="space-y-4">
-                <div class="surface-panel space-y-3 p-4">
+            <aside
+                class="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain pr-1"
+            >
+                <div class="surface-panel shrink-0 space-y-2 p-3">
                     <h2 class="font-semibold">Totals</h2>
                     <div class="flex justify-between text-sm">
                         <span>Subtotal</span
@@ -380,7 +382,7 @@ defineOptions({
                         <span>Tax included</span
                         ><span>{{ money(sale.tax_total) }}</span>
                     </div>
-                    <div class="flex justify-between border-t pt-3 font-bold">
+                    <div class="flex justify-between border-t pt-2 font-bold">
                         <span>{{
                             sale.returned_total !== '0.00'
                                 ? 'Gross total'
@@ -417,7 +419,7 @@ defineOptions({
                         ><span>{{ money(sale.refund_total) }}</span>
                     </div>
                     <div
-                        class="flex justify-between border-t pt-3 font-semibold"
+                        class="flex justify-between border-t pt-2 font-semibold"
                     >
                         <span>Balance due</span
                         ><span>{{ money(outstanding) }}</span>
@@ -425,11 +427,11 @@ defineOptions({
                 </div>
                 <form
                     v-if="canRecordPayment && hasOutstanding"
-                    class="surface-panel space-y-3 p-4"
+                    class="surface-panel shrink-0 space-y-2 p-3"
                     @submit.prevent="recordPayment"
                 >
                     <h2 class="font-semibold">Record payment</h2>
-                    <p class="text-sm text-muted-foreground">
+                    <p class="text-xs text-muted-foreground">
                         Add a payment whenever the customer pays, or settle the
                         full balance.
                     </p>
@@ -439,82 +441,86 @@ defineOptions({
                         @click="form.amount = outstanding"
                         >Use full balance / Final payment</Button
                     >
-                    <div class="space-y-1">
-                        <Label for="payment-amount">Amount</Label
-                        ><Input
-                            id="payment-amount"
-                            v-model="form.amount"
-                            required
-                            inputmode="decimal"
-                        /><InputError :message="form.errors.amount" />
-                    </div>
-                    <div class="space-y-1">
-                        <Label for="payment-method">Method</Label
-                        ><select
-                            id="payment-method"
-                            v-model="form.method"
-                            class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                            <option
-                                v-for="method in paymentMethods"
-                                :key="method.value"
-                                :value="method.value"
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="space-y-1">
+                            <Label for="payment-amount">Amount</Label
+                            ><Input
+                                id="payment-amount"
+                                v-model="form.amount"
+                                required
+                                inputmode="decimal"
+                            /><InputError :message="form.errors.amount" />
+                        </div>
+                        <div class="space-y-1">
+                            <Label for="payment-method">Method</Label
+                            ><select
+                                id="payment-method"
+                                v-model="form.method"
+                                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                             >
-                                {{ method.label }}
-                            </option>
-                        </select>
-                    </div>
-                    <div v-if="form.method === 'cash'" class="space-y-1">
-                        <Label for="payment-cash-tendered"
-                            >Cash received (optional)</Label
-                        >
-                        <Input
-                            id="payment-cash-tendered"
-                            v-model="form.cash_tendered"
-                            inputmode="decimal"
-                        />
-                        <InputError :message="form.errors.cash_tendered" />
-                        <p
-                            v-if="
-                                form.amount &&
-                                form.cash_tendered &&
-                                minorUnits(form.cash_tendered) >=
-                                    minorUnits(form.amount)
-                            "
-                            class="text-xs text-muted-foreground"
-                        >
-                            Change due:
-                            {{
-                                money(
-                                    (
-                                        (minorUnits(form.cash_tendered) -
-                                            minorUnits(form.amount)) /
-                                        100n
-                                    ).toString() +
-                                        '.' +
+                                <option
+                                    v-for="method in paymentMethods"
+                                    :key="method.value"
+                                    :value="method.value"
+                                >
+                                    {{ method.label }}
+                                </option>
+                            </select>
+                        </div>
+                        <div v-if="form.method === 'cash'" class="space-y-1">
+                            <Label for="payment-cash-tendered"
+                                >Cash received (optional)</Label
+                            >
+                            <Input
+                                id="payment-cash-tendered"
+                                v-model="form.cash_tendered"
+                                inputmode="decimal"
+                            />
+                            <InputError :message="form.errors.cash_tendered" />
+                            <p
+                                v-if="
+                                    form.amount &&
+                                    form.cash_tendered &&
+                                    minorUnits(form.cash_tendered) >=
+                                        minorUnits(form.amount)
+                                "
+                                class="text-xs text-muted-foreground"
+                            >
+                                Change due:
+                                {{
+                                    money(
                                         (
                                             (minorUnits(form.cash_tendered) -
-                                                minorUnits(form.amount)) %
+                                                minorUnits(form.amount)) /
                                             100n
-                                        )
-                                            .toString()
-                                            .padStart(2, '0'),
-                                )
-                            }}
-                        </p>
-                    </div>
-                    <div class="space-y-1">
-                        <Label for="payment-reference">Reference</Label
-                        ><Input
-                            id="payment-reference"
-                            v-model="form.reference"
-                        /><InputError :message="form.errors.reference" />
+                                        ).toString() +
+                                            '.' +
+                                            (
+                                                (minorUnits(
+                                                    form.cash_tendered,
+                                                ) -
+                                                    minorUnits(form.amount)) %
+                                                100n
+                                            )
+                                                .toString()
+                                                .padStart(2, '0'),
+                                    )
+                                }}
+                            </p>
+                        </div>
+                        <div class="col-span-2 space-y-1">
+                            <Label for="payment-reference">Reference</Label
+                            ><Input
+                                id="payment-reference"
+                                v-model="form.reference"
+                            /><InputError :message="form.errors.reference" />
+                        </div>
                     </div>
                     <Button class="w-full" :disabled="form.processing">{{
                         form.processing ? 'Saving…' : 'Save payment'
                     }}</Button>
                 </form>
-                <div class="surface-panel space-y-3 p-4">
+                <div class="surface-panel shrink-0 space-y-2 p-3">
                     <h2 class="font-semibold">Payment history</h2>
                     <div
                         v-for="payment in sale.payments"

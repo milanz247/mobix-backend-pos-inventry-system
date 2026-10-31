@@ -14,10 +14,9 @@ This manual describes the application as implemented in the inspected codebase. 
 8. [Inventory and IMEI devices](08-inventory-and-imei.md)
 9. [Suppliers and purchases](09-suppliers-and-purchases.md)
 10. [Sales returns and refunds](10-sales-returns-and-refunds.md)
-11. [Reports](11-reports.md)
-12. [Settings and troubleshooting](12-settings-and-troubleshooting.md)
-13. [Frequently asked questions](13-faq.md)
-14. [Implementation status and audit notes](IMPLEMENTATION-STATUS.md)
+11. [Settings and troubleshooting](12-settings-and-troubleshooting.md)
+12. [Frequently asked questions](13-faq.md)
+13. [Implementation status and audit notes](IMPLEMENTATION-STATUS.md)
 
 ## Important distinctions
 

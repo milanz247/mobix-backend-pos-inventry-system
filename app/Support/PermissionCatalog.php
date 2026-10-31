@@ -41,12 +41,11 @@ class PermissionCatalog
             'locations.update' => ['locations.change-status'],
             'business-settings.view' => ['invoice-settings.view', 'pos-settings.view'],
             'business-settings.update' => ['invoice-settings.update', 'pos-settings.update'],
-            'inventory.view' => ['damaged-stock.view', 'stock-reports.view', 'damaged-reports.view', 'damaged-reports.print'],
+            'inventory.view' => ['damaged-stock.view'],
             'inventory.adjust' => ['damaged-stock.create', 'damaged-stock.repair', 'damaged-stock.write-off'],
             'sales.view' => ['credit-sales.view', 'sales-receipts.print', 'return-receipts.print', 'customers.view'],
             'sales.credit' => ['credit-sales.add-items', 'customers.create'],
             'sale-returns.create' => ['sale-replacements.create'],
-            'shifts.view' => ['expense-reports.view', 'shift-reports.view', 'shifts.print'],
         ];
     }
 

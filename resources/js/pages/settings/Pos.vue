@@ -127,15 +127,15 @@ defineOptions({
     <div class="space-y-6">
         <Heading
             variant="small"
-            title="POS screen customize"
-            description="Choose which controls cashiers see and how many products load at a time."
+            title="POS screen settings"
+            description="Choose which controls appear at checkout and how receipts print."
         />
 
         <Form
             v-bind="PosSettingsController.update.form()"
             :options="{ preserveScroll: true }"
             set-defaults-on-success
-            class="space-y-5"
+            class="space-y-4"
             v-slot="{ errors, processing, recentlySuccessful }"
         >
             <p
@@ -145,7 +145,7 @@ defineOptions({
                 View only — this role cannot change these settings.
             </p>
             <fieldset :disabled="!canUpdate" class="contents">
-                <section class="surface-panel space-y-5 p-5 sm:p-6">
+                <section class="surface-panel space-y-4">
                     <div class="flex items-start gap-3">
                         <span
                             class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
@@ -188,7 +188,7 @@ defineOptions({
                     </div>
                 </section>
 
-                <section class="surface-panel space-y-5 p-5 sm:p-6">
+                <section class="surface-panel space-y-4">
                     <div class="flex items-start gap-3">
                         <span
                             class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
@@ -306,7 +306,7 @@ defineOptions({
                     </div>
                 </section>
 
-                <section class="surface-panel p-5 sm:p-6">
+                <section class="surface-panel">
                     <div
                         class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
                     >

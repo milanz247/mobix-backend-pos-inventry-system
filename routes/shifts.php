@@ -15,5 +15,8 @@ Route::middleware(['auth', 'can:shifts.view'])->prefix('cashier-shifts')->name('
     Route::get('/{shift}/close', 'closing')->name('closing');
     Route::post('/{shift}/close', 'close')->name('close');
     Route::post('/{shift}/approve', 'approve')->name('approve');
-    Route::get('/{shift}/report', 'report')->middleware('can:shifts.print')->name('report');
 });
+
+Route::get('reports/shift-history', [CashierShiftController::class, 'index'])
+    ->middleware(['auth', 'can:shifts.view'])
+    ->name('reports.shifts.history');

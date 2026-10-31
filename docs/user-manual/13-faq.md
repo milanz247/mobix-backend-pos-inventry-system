@@ -28,10 +28,6 @@ No. Return value and refund are separate. A refund requires refund permission an
 
 No. It can mark an eligible serialized device **In repair** and later **Return to stock**, with a status history. There are no repair tickets, job cards, technician assignments, estimates, parts usage, or repair payments.
 
-## Can I export reports?
-
-Sales, out-of-stock, damaged-stock and expense reports include Download filtered CSV. Downloads preserve the selected filters and access permissions and include all matching rows.
-
 ## Why are the sales and cash figures different?
 
-Sales is transaction value. Cash received counts cash payment records only; payments by card/other methods are listed separately in reports. Returns, refunds, and outstanding balances are distinct measures.
+Sales is transaction value. Cash received counts cash payment records only. Returns, refunds, and outstanding balances are distinct measures.

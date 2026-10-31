@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Inventory;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProductVariant;
-use App\Services\ActivityLogService;
 use App\Services\LocationAccessService;
 use App\Services\StockAvailabilityService;
 use Illuminate\Http\RedirectResponse;
@@ -47,15 +46,13 @@ class ReorderLevelController extends Controller
         $location = $access->accessibleQuery($request->user())->findOrFail((int) $data['location_id']);
         $variant = $business->productVariants()->findOrFail((int) $data['product_variant_id']);
         $key = ['business_id' => $business->id, 'location_id' => $location->id, 'product_variant_id' => $variant->id];
-        DB::transaction(function () use ($data, $business, $location, $variant, $key): void {
+        DB::transaction(function () use ($data, $business, $variant, $key): void {
             $business->productVariants()->whereKey($variant->id)->lockForUpdate()->firstOrFail();
-            $before = DB::table('reorder_levels')->where($key)->value('quantity');
             if ($data['quantity'] === null) {
                 DB::table('reorder_levels')->where($key)->delete();
             } else {
                 DB::table('reorder_levels')->updateOrInsert($key, ['quantity' => $data['quantity'], 'updated_at' => now(), 'created_at' => now()]);
             }
-            app(ActivityLogService::class)->record('reorder_level_updated', 'ProductVariant', (string) $variant->id, $variant->sku, ['before' => ['reorder_quantity' => $before], 'after' => ['reorder_quantity' => $data['quantity']]], $business->id, $location->id, $variant->product_id, $variant->product->name);
         });
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Reorder level saved.']);
 

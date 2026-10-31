@@ -52,6 +52,9 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('can:'.PermissionName::PosSettingsUpdate->value)
         ->name('pos-settings.update');
 
+    Route::get('reports/location-status', [LocationController::class, 'index'])
+        ->middleware('can:locations.view')
+        ->name('reports.locations.status');
     Route::get('settings/locations', [LocationController::class, 'index'])->name('locations.index');
     Route::get('settings/locations/create', [LocationController::class, 'create'])->name('locations.create');
     Route::post('settings/locations', [LocationController::class, 'store'])->name('locations.store');

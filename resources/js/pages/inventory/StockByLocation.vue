@@ -2,7 +2,6 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { onBeforeUnmount, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { index } from '@/routes/inventory/locations';
 
@@ -13,10 +12,10 @@ type Stock = {
     variant: string;
     sku: string;
     barcode: string | null;
-    product_type: string;
     category: string;
     brand: string | null;
     tracking_mode: string;
+    selling_price: string | null;
     quantity_on_hand: string;
     serialized_in_stock: number;
 };
@@ -34,6 +33,7 @@ const props = defineProps<{
         category_id: number | null;
         brand_id: number | null;
     };
+    currency: string;
 }>();
 const search = ref(props.filters.search);
 const locationId = ref(String(props.filters.location_id));
@@ -42,6 +42,14 @@ const category = ref(
     props.filters.category_id ? String(props.filters.category_id) : '',
 );
 const brand = ref(props.filters.brand_id ? String(props.filters.brand_id) : '');
+const formatPrice = (price: string | null): string =>
+    price === null
+        ? '—'
+        : new Intl.NumberFormat(undefined, {
+              style: 'currency',
+              currency: props.currency,
+              maximumFractionDigits: 2,
+          }).format(Number(price));
 let timer: ReturnType<typeof setTimeout> | undefined;
 watch([search, locationId, tracking, category, brand], () => {
     if (timer) clearTimeout(timer);
@@ -69,22 +77,23 @@ onBeforeUnmount(() => {
     if (timer) clearTimeout(timer);
 });
 defineOptions({
-    layout: { breadcrumbs: [{ title: 'Stock by location', href: index() }] },
+    layout: { breadcrumbs: [{ title: 'All stock', href: index() }] },
 });
 </script>
 <template>
-    <Head title="Stock by location" />
+    <Head title="All stock" />
     <section class="page-shell">
         <Heading
-            title="Stock by location"
-            :description="`Current catalogue stock at ${selectedLocation.name}.`"
+            title="All stock"
+            description="Choose an active location, then search stock by product, SKU, or barcode."
         />
-        <div class="surface-panel grid gap-2 p-2 md:grid-cols-5">
+        <div class="surface-panel grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-5">
             <Input
                 v-model="search"
-                placeholder="Search product, SKU or barcode"
-                aria-label="Search inventory"
-            /><select v-model="locationId" aria-label="Location">
+                class="sm:col-span-2 xl:col-span-1"
+                placeholder="Search product, SKU, or barcode"
+                aria-label="Search stock"
+            /><select v-model="locationId" aria-label="Active location">
                 <option
                     v-for="item in locations"
                     :key="item.id"
@@ -92,11 +101,11 @@ defineOptions({
                 >
                     {{ item.name }}
                 </option></select
-            ><select v-model="tracking">
+            ><select v-model="tracking" aria-label="Tracking type">
                 <option value="">All tracking types</option>
                 <option value="quantity_based">Quantity based</option>
                 <option value="serialized">Serialized</option></select
-            ><select v-model="category">
+            ><select v-model="category" aria-label="Category">
                 <option value="">All categories</option>
                 <option
                     v-for="item in categories"
@@ -105,7 +114,7 @@ defineOptions({
                 >
                     {{ item.name }}
                 </option></select
-            ><select v-model="brand">
+            ><select v-model="brand" aria-label="Brand">
                 <option value="">All brands</option>
                 <option v-for="item in brands" :key="item.id" :value="item.id">
                     {{ item.name }}
@@ -119,8 +128,8 @@ defineOptions({
                         <tr>
                             <th>Product / variant</th>
                             <th>Category</th>
-                            <th>Tracking</th>
-                            <th class="text-right">On hand</th>
+                            <th class="text-right">Selling price</th>
+                            <th class="text-right">Available stock</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -135,17 +144,6 @@ defineOptions({
                                         · {{ stock.barcode }}</span
                                     >
                                 </div>
-                            </td>
-                            <td data-label="Category">
-                                {{ stock.category }}
-                                <div class="text-muted-foreground">
-                                    {{ stock.brand || 'No brand' }}
-                                </div>
-                            </td>
-                            <td data-label="Tracking">
-                                <Badge variant="secondary">{{
-                                    stock.product_type.replaceAll('_', ' ')
-                                }}</Badge>
                                 <div class="mt-1 text-xs text-muted-foreground">
                                     {{
                                         stock.tracking_mode === 'serialized'
@@ -154,8 +152,20 @@ defineOptions({
                                     }}
                                 </div>
                             </td>
+                            <td data-label="Category">
+                                {{ stock.category }}
+                                <div class="text-muted-foreground">
+                                    {{ stock.brand || 'No brand' }}
+                                </div>
+                            </td>
                             <td
-                                data-label="On hand"
+                                data-label="Selling price"
+                                class="text-right tabular-nums"
+                            >
+                                {{ formatPrice(stock.selling_price) }}
+                            </td>
+                            <td
+                                data-label="Available stock"
                                 class="text-right text-base font-semibold tabular-nums"
                             >
                                 {{

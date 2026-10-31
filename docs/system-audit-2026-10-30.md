@@ -1,5 +1,7 @@
 # Transaction, damaged stock and print audit — 2026-10-30
 
+Historical snapshot. The Reports module and audit-log table described below were removed in a later cleanup on 2026-10-31; this file records the application state at the audit date.
+
 The full application test suite passed: **316 tests, 3,617 assertions**. This checks the application's recorded behavior; it is not a guarantee against every possible production failure.
 
 ## Corrected behavior

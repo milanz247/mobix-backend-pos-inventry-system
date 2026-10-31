@@ -22,7 +22,7 @@ class LocationInventoryController extends Controller
         $locations = $pageData->locations($user);
         abort_if($locations === [], 403, __('No active locations are assigned to your account. Contact an administrator.'));
         $locationId = $request->integer('location_id') ?: ($locationAccess->selectedLocationId($request) ?? $locations[0]['id']);
-        $location = $locationAccess->accessibleQuery($user)->findOrFail($locationId);
+        $location = $locationAccess->accessibleQuery($user)->where('status', 'active')->findOrFail($locationId);
         $search = $request->string('search')->trim()->toString();
         $tracking = VariantTrackingMode::tryFrom($request->string('tracking_mode')->toString());
         $categoryId = $request->integer('category_id') ?: null;
@@ -50,6 +50,7 @@ class LocationInventoryController extends Controller
                 'sku' => $variant->sku, 'barcode' => $variant->barcode, 'product_type' => $variant->product->product_type->value,
                 'category' => $variant->product->category->name,
                 'brand' => $variant->product->brand?->name, 'tracking_mode' => $variant->tracking_mode->value,
+                'selling_price' => $variant->selling_price,
                 'quantity_on_hand' => $variant->quantity_on_hand ?? '0.000', 'serialized_in_stock' => $variant->serialized_in_stock,
             ]);
 
@@ -59,6 +60,7 @@ class LocationInventoryController extends Controller
             'filters' => ['location_id' => $location->id, 'search' => $search, 'tracking_mode' => $tracking === null ? '' : $tracking->value, 'category_id' => $categoryId, 'brand_id' => $brandId],
             'categories' => $business->categories()->orderBy('name')->get(['id', 'name']),
             'brands' => $business->brands()->orderBy('name')->get(['id', 'name']),
+            'currency' => $business->currency,
         ]);
     }
 }

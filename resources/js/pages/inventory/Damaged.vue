@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import {
-    Plus,
-    FileChartColumn,
-    PackageX,
-    Wrench,
-    Smartphone,
-} from '@lucide/vue';
+import { Plus, PackageX, Wrench, Smartphone } from '@lucide/vue';
 import ShiftPagination from '@/components/shifts/ShiftPagination.vue';
 import { damageQuantity } from '@/types/damage';
 import type { DamageSummary } from '@/types/damage';
@@ -78,7 +72,6 @@ const props = defineProps<{
     canCreate: boolean;
     canRepair: boolean;
     canWriteOff: boolean;
-    canViewReport: boolean;
     canManageDevices: boolean;
     canViewSales: boolean;
 }>();
@@ -95,16 +88,6 @@ const filteredVariants = computed(() =>
             .toLowerCase()
             .includes(productSearch.value.toLowerCase().trim()),
     ),
-);
-const reportUrl = computed(
-    () =>
-        '/reports/damaged-stock?' +
-        new URLSearchParams({
-            location_id: location.value,
-            category_id: category.value,
-            brand_id: brand.value,
-            model_number: model.value,
-        }).toString(),
 );
 const search = ref(props.filters.search);
 const location = ref(String(props.filters.location_id));
@@ -205,11 +188,7 @@ defineOptions({
                 description="Track faulty items, customer returns and repairs."
             />
             <div class="flex w-full flex-wrap gap-2 sm:w-auto">
-                <Button v-if="canViewReport" as-child variant="outline"
-                    ><Link :href="reportUrl"
-                        ><FileChartColumn /> View report</Link
-                    ></Button
-                ><Button v-if="canCreate" @click="moveOpen = true"
+                <Button v-if="canCreate" @click="moveOpen = true"
                     ><Plus /> Move stock to damaged</Button
                 >
             </div>

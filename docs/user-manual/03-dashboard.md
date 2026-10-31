@@ -14,6 +14,6 @@ The overview shows:
 
 ## Performance trend
 
-The trend chart covers the preceding 30 calendar days, including today. It presents daily **Net sales** (sales less returns) and **Gross profit** calculated from sale-line cost snapshots and the corresponding returned-line costs. These figures are not a full accounting profit: operating expenses and other costs are not included. The dashboard includes **Open sales reports** for users with report access.
+The trend chart covers the preceding 30 calendar days, including today. It presents daily **Net sales** (sales less returns) and **Gross profit** calculated from sale-line cost snapshots and the corresponding returned-line costs. These figures are not a full accounting profit: operating expenses and other costs are not included.
 
 The dashboard shows no general-purpose location/date filter in its current UI. The set of included locations follows the user's access assignment.

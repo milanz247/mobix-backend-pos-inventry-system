@@ -28,6 +28,6 @@ The location list/detail pages support viewing and status changes, including dea
 
 ## Selecting a location for work
 
-The POS and stock/purchase forms select a location as part of each transaction. The POS shows a location selector, initially set to an authorized location. Inventory lists and sales reports offer location filters. Always confirm the location before checkout, receiving, adjustments, transfers, or purchase posting.
+The POS and stock/purchase forms select a location as part of each transaction. The POS shows a location selector, initially set to an authorized location. Inventory lists offer location filters. Always confirm the location before checkout, receiving, adjustments, transfers, or purchase posting.
 
 Stock is maintained per location. A sale reduces stock at its selected location; receiving, opening stock, and posted purchases add it at the destination; transfers reduce the source and increase the destination. A user with no access to the requested location is denied by the server. Ask an administrator to assign access rather than retrying with another user's account.

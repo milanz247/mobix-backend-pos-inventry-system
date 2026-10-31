@@ -10,7 +10,7 @@ use App\Models\CashMovement;
 use App\Models\User;
 use App\Services\CashierShiftService;
 use App\Services\LocationAccessService;
-use App\Services\ShiftReportService;
+use App\Services\ShiftTransactionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -21,7 +21,7 @@ use Inertia\Response;
 
 class CashierShiftController extends Controller
 {
-    public function __construct(private readonly CashierShiftService $shifts, private readonly LocationAccessService $locations, private readonly ShiftReportService $reports) {}
+    public function __construct(private readonly CashierShiftService $shifts, private readonly LocationAccessService $locations, private readonly ShiftTransactionService $transactions) {}
 
     public function index(Request $request): Response
     {
@@ -61,6 +61,7 @@ class CashierShiftController extends Controller
             'cashiers' => $user->can('shifts.view-all') ? User::query()->whereIn('id', $this->shifts->accessibleQuery($user)->select('cashier_id'))->orderBy('name')->get(['id', 'name']) : [],
             'filters' => $filters, 'currency' => $this->locations->business()->currency,
             'timezone' => $timezone,
+            'historyOnly' => $request->routeIs('reports.shifts.history'),
         ]);
     }
 
@@ -95,42 +96,12 @@ class CashierShiftController extends Controller
         return $this->details($request, $shift, 'shifts/Movements');
     }
 
-    public function current(Request $request): Response|RedirectResponse
-    {
-        $data = $request->validate(['location_id' => ['nullable', 'integer'], 'shift_id' => ['nullable', 'integer']]);
-        if ($request->filled('location_id')) {
-            $this->locations->accessibleQuery($request->user())->whereKey($data['location_id'])->firstOrFail();
-        }
-        if ($request->filled('shift_id')) {
-            $query = $this->shifts->accessibleQuery($request->user())->whereKey($data['shift_id']);
-            if ($request->filled('location_id')) {
-                $query->where('location_id', $data['location_id']);
-            }
-            $shift = $query->firstOrFail();
-
-            return to_route('shifts.show', $shift);
-        }
-        $query = $this->shifts->activeQuery($request->user());
-        if ($request->filled('location_id')) {
-            $query->where('location_id', $data['location_id']);
-        }
-        $shift = $query->first();
-        if ($shift !== null) {
-            return to_route('shifts.show', $shift);
-        }
-
-        return Inertia::render('reports/CurrentShift', [
-            'locations' => $this->locations->accessibleQuery($request->user())->orderBy('name')->get(['id', 'name']),
-            'locationId' => $data['location_id'] ?? '',
-        ]);
-    }
-
     public function movement(Request $request, CashierShift $shift, CashMovement $movement): Response
     {
         $shift = $this->shifts->scoped($request->user(), $shift)->load(['cashier:id,name', 'location:id,name']);
         $movement = $shift->movements()->whereKey($movement->id)->with(['creator:id,name', 'reversal.creator:id,name', 'original.creator:id,name'])->withExists('reversal')->firstOrFail();
 
-        return Inertia::render('reports/CashMovement', [
+        return Inertia::render('shifts/CashMovement', [
             'shift' => $shift, 'movement' => $movement,
             'currency' => $shift->closing_summary['identity']['currency'] ?? $this->locations->business()->currency,
             'timezone' => $shift->closing_summary['identity']['timezone'] ?? $this->locations->business()->timezone,
@@ -143,7 +114,7 @@ class CashierShiftController extends Controller
         $shift = $this->shifts->scoped($request->user(), $shift);
         abort_unless($request->user()->can('shifts.close') && $shift->cashier_id === $request->user()->id, 403);
         if ($shift->closed_at !== null) {
-            return to_route('shifts.report', $shift);
+            return to_route('shifts.show', $shift);
         }
 
         return $this->details($request, $shift, 'shifts/Close');
@@ -185,7 +156,7 @@ class CashierShiftController extends Controller
             return to_route('pos.index', ['location_id' => $shift->location_id]);
         }
 
-        return to_route('shifts.report', $shift);
+        return to_route('shifts.show', $shift);
     }
 
     public function approve(Request $request, CashierShift $shift): RedirectResponse
@@ -195,14 +166,6 @@ class CashierShiftController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Shift closure approved.']);
 
         return back();
-    }
-
-    public function report(Request $request, CashierShift $shift): Response
-    {
-        $shift = $this->shifts->scoped($request->user(), $shift);
-        abort_if($shift->closed_at === null, 404);
-
-        return $this->details($request, $shift, 'shifts/Report');
     }
 
     private function details(Request $request, CashierShift $shift, string $page): Response
@@ -218,7 +181,7 @@ class CashierShiftController extends Controller
 
             return Inertia::render($page, [
                 'shift' => $shift, 'summary' => $this->shifts->summary($shift),
-                ...($page === 'shifts/Show' ? ['section' => $section, 'transactions' => $this->reports->transactions($user, $shift, $section)] : []),
+                ...($page === 'shifts/Show' ? ['section' => $section, 'transactions' => $this->transactions->transactions($user, $shift, $section)] : []),
                 'movements' => $shift->movements()->with('creator:id,name')->withExists('reversal')->latest('id')->paginate(20, ['*'], 'movements_page')->withQueryString(),
                 'events' => $shift->events()->with('actor:id,name')->latest('id')->paginate(20, ['*'], 'events_page')->withQueryString(),
                 'currency' => $shift->closing_summary['identity']['currency'] ?? $this->locations->business()->currency,

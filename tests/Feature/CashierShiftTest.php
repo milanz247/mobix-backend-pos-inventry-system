@@ -21,7 +21,7 @@ function shiftContext(): array
     $location = Location::factory()->for($business)->create();
     $user = User::factory()->create();
     $location->users()->attach($user);
-    shiftPermissions($user, ['shifts.view', 'shifts.print', 'expense-reports.view', 'shift-reports.view', 'credit-sales.view', 'customers.view', 'customers.create', 'sales-receipts.print', 'return-receipts.print', 'sale-replacements.create', 'shifts.open', 'shifts.movements', 'shifts.close', 'sales.pos', 'sales.view', 'sales.create', 'sales.credit', 'sale-payments.create', 'sale-returns.create', 'sale-refunds.create', 'inventory.opening']);
+    shiftPermissions($user, ['shifts.view', 'credit-sales.view', 'customers.view', 'customers.create', 'sales-receipts.print', 'return-receipts.print', 'sale-replacements.create', 'shifts.open', 'shifts.movements', 'shifts.close', 'sales.pos', 'sales.view', 'sales.create', 'sales.credit', 'sale-payments.create', 'sale-returns.create', 'sale-refunds.create', 'inventory.opening']);
 
     return compact('user', 'business', 'location');
 }
@@ -200,13 +200,13 @@ test('closing saves balanced shortage and surplus figures and safely ignores dup
     $context = shiftContext();
     $shift = openTestShift($context);
     $payload = ['actual_cash' => $actual, 'variance_reason' => 'Count checked twice', 'closing_note' => 'End of day'];
-    $this->actingAs($context['user'])->post(route('shifts.close', $shift), $payload)->assertRedirect(route('shifts.report', $shift))->assertSessionHasNoErrors();
-    $this->post(route('shifts.close', $shift), ['actual_cash' => '0.00'])->assertRedirect(route('shifts.report', $shift));
+    $this->actingAs($context['user'])->post(route('shifts.close', $shift), $payload)->assertRedirect(route('shifts.show', $shift))->assertSessionHasNoErrors();
+    $this->post(route('shifts.close', $shift), ['actual_cash' => '0.00'])->assertRedirect(route('shifts.show', $shift));
     $shift->refresh();
     expect($shift->status)->toBe($status)->and($shift->variance)->toBe($variance)
         ->and($shift->actual_cash)->toBe($actual)->and($shift->active_cashier_id)->toBeNull()
         ->and($shift->events()->where('type', 'closed')->count())->toBe(1);
-    $this->get(route('shifts.report', $shift))->assertOk()->assertInertia(fn (Assert $page) => $page->component('shifts/Report')->where('summary.expected_cash', '1000.00')->where('shift.actual_cash', $actual));
+    $this->get(route('shifts.show', $shift))->assertOk()->assertInertia(fn (Assert $page) => $page->component('shifts/Show')->where('summary.expected_cash', '1000.00')->where('shift.actual_cash', $actual));
     $this->post(route('shifts.store-movement', $shift), ['operation_key' => (string) Str::uuid(), 'type' => 'cash_in', 'amount' => '10', 'reason' => 'After close attempt'])->assertSessionHasErrors('shift');
 })->with(['balanced' => ['1000.00', '0.00', 'closed'], 'shortage' => ['980.00', '-20.00', 'pending_approval'], 'surplus' => ['1025.00', '25.00', 'pending_approval']]);
 
@@ -247,11 +247,10 @@ test('location reports and shift history are scoped even for managers', function
     $otherShift = CashierShift::factory()->for($context['business'])->for($otherLocation)->for($otherCashier, 'cashier')->create();
     shiftPermissions($context['user'], ['shifts.view-all']);
     $this->actingAs($context['user'])->get(route('shifts.show', $otherShift))->assertNotFound();
-    $this->get(route('shifts.report', $otherShift))->assertNotFound();
     $this->get(route('shifts.index'))->assertInertia(fn (Assert $page) => $page->has('shifts.data', 1)->where('shifts.data.0.id', $ownShift->id));
 });
 
-test('closing report stays historically consistent and later transactions do not change it', function () {
+test('closing summary stays historically consistent and later transactions do not change it', function () {
     $context = shiftContext();
     $shift = openTestShift($context);
     $payload = shiftSalePayload($context, [['amount' => '70.00', 'method' => 'cash'], ['amount' => '30.00', 'method' => 'card']]);
@@ -262,7 +261,7 @@ test('closing report stays historically consistent and later transactions do not
     $context['user']->update(['name' => 'Renamed Cashier']);
     $newShift = openTestShift($context);
     $this->post(route('pos.checkout'), shiftSalePayload($context, [['amount' => '100.00', 'method' => 'cash']]))->assertSessionHasNoErrors();
-    $this->get(route('shifts.report', $shift))->assertInertia(fn (Assert $page) => $page
+    $this->get(route('shifts.show', $shift))->assertInertia(fn (Assert $page) => $page
         ->where('summary.expected_cash', '1070.00')->where('summary.payments.card', '30.00')
         ->where('summary.identity.business', 'Nalaka Test Shop')->where('summary.sales_count', 1));
     expect(app(CashierShiftService::class)->summary($newShift)['expected_cash'])->toBe('1100.00');
@@ -275,7 +274,7 @@ test('overview movements and closing screens render for the active cashier', fun
     $this->get(route('shifts.create'))->assertOk();
     $this->get(route('shifts.movements', $shift))->assertOk();
     $this->get(route('shifts.closing', $shift))->assertOk();
-    $this->get(route('shifts.report', $shift))->assertNotFound();
+    $this->get(route('shifts.show', $shift))->assertOk();
 });
 
 test('reusing opening or movement keys for changed data fails without modifying the original', function () {
@@ -313,7 +312,7 @@ test('full drawer formula reconciles real POS sales refunds and all cash movemen
         ])->assertSessionHasNoErrors();
     }
     $this->post(route('shifts.close', $shift), ['actual_cash' => '590.00'])->assertSessionHasNoErrors();
-    $this->get(route('shifts.report', $shift))->assertInertia(fn (Assert $page) => $page
+    $this->get(route('shifts.show', $shift))->assertInertia(fn (Assert $page) => $page
         ->where('summary.expected_cash', '590.00')->where('summary.cash_sales', '70.00')
         ->where('summary.cash_refunds', '100.00')->where('summary.payments.card', '30.00')
         ->where('summary.movements.cash_in', '200.00')->where('summary.movements.expense', '10.00')

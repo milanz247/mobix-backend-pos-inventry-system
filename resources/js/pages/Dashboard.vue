@@ -1,20 +1,16 @@
 <script setup lang="ts">
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import {
     Banknote,
     ChartNoAxesCombined,
     CircleDollarSign,
-    HandCoins,
     ReceiptText,
-    RotateCcw,
     TrendingUp,
 } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { dashboard } from '@/routes';
-import { reports as salesReports } from '@/routes/sales';
-import type { Auth } from '@/types';
 
 type TrendRow = {
     date: string;
@@ -24,14 +20,11 @@ type TrendRow = {
 };
 
 const props = defineProps<{
-    attention: { label: string; value: number; href: string }[];
     overview: {
         sales_total: string;
         completed_sales: number;
         cash_received: string;
-        returns: string;
-        refunds: string;
-        outstanding: string;
+        gross_profit_today: string | null;
     };
     performance: {
         net_sales_30_days: string;
@@ -45,7 +38,6 @@ const props = defineProps<{
     filters: { location_id: number | '' };
 }>();
 
-const auth = usePage<{ auth: Auth }>().props.auth;
 const trendDays = ref<7 | 30>(7);
 const chartWidth = 720;
 const chartHeight = 220;
@@ -73,20 +65,17 @@ const overviewCards = computed(() => [
         icon: Banknote,
         tone: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     },
-    {
-        label: 'Returns',
-        value: money(props.overview.returns),
-        detail: money(props.overview.refunds) + ' refunded today',
-        icon: RotateCcw,
-        tone: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-    },
-    {
-        label: 'Outstanding',
-        value: money(props.overview.outstanding),
-        detail: 'Current customer balances due',
-        icon: HandCoins,
-        tone: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
-    },
+    ...(props.canViewCosts && props.overview.gross_profit_today !== null
+        ? [
+              {
+                  label: "Today's gross profit",
+                  value: money(props.overview.gross_profit_today),
+                  detail: 'Sales margin after item costs and returns',
+                  icon: TrendingUp,
+                  tone: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+              },
+          ]
+        : []),
 ]);
 
 const visibleTrend = computed(() => props.trend.slice(-trendDays.value));
@@ -131,17 +120,15 @@ const chartBounds = computed(() => {
         maximum: maximum === minimum ? minimum + 1 : maximum,
     };
 });
-const salesPoints = computed(() =>
-    visibleTrend.value
-        .map((row, index) => chartPoint(index, Number(row.net_sales)))
-        .join(' '),
-);
-const profitPoints = computed(() =>
-    visibleTrend.value
-        .map((row, index) => chartPoint(index, Number(row.gross_profit)))
-        .join(' '),
-);
 const zeroLineY = computed(() => chartY(0));
+const slotWidth = computed(
+    () =>
+        (chartWidth - chartPadding * 2) /
+        Math.max(1, visibleTrend.value.length),
+);
+const barWidth = computed(() =>
+    Math.min(14, slotWidth.value * (props.canViewCosts ? 0.28 : 0.5)),
+);
 const generatedTime = computed(() =>
     new Intl.DateTimeFormat(undefined, {
         dateStyle: 'medium',
@@ -162,15 +149,24 @@ function money(value: string | number): string {
     );
 }
 
-function chartPoint(index: number, value: number): string {
-    const usableWidth = chartWidth - chartPadding * 2;
-    const x =
-        visibleTrend.value.length <= 1
-            ? chartWidth / 2
-            : chartPadding +
-              (index / (visibleTrend.value.length - 1)) * usableWidth;
+function barX(index: number, series: 0 | 1): number {
+    const seriesCount = props.canViewCosts ? 2 : 1;
+    const groupWidth = barWidth.value * seriesCount + (seriesCount - 1) * 2;
 
-    return String(x) + ',' + String(chartY(value));
+    return (
+        chartPadding +
+        index * slotWidth.value +
+        (slotWidth.value - groupWidth) / 2 +
+        series * (barWidth.value + 2)
+    );
+}
+
+function barY(value: number): number {
+    return Math.min(chartY(value), zeroLineY.value);
+}
+
+function barHeight(value: number): number {
+    return Math.max(1, Math.abs(chartY(value) - zeroLineY.value));
 }
 
 function chartY(value: number): number {
@@ -237,40 +233,20 @@ defineOptions({
                 <p class="hidden text-xs text-muted-foreground sm:block">
                     Updated {{ generatedTime }}
                 </p>
-                <Button
-                    v-if="auth.permissions.includes('sales.reports.view')"
-                    as-child
-                    variant="outline"
-                    size="sm"
-                >
-                    <Link :href="salesReports()">Open sales reports</Link>
-                </Button>
             </div>
         </div>
 
-        <div v-if="attention.length" class="grid gap-3 sm:grid-cols-3">
-            <Link
-                v-for="item in attention"
-                :key="item.label"
-                :href="item.href"
-                class="surface-panel p-4 hover:border-primary"
-            >
-                <p class="text-sm text-muted-foreground">{{ item.label }}</p>
-                <p class="text-2xl font-semibold">{{ item.value }}</p>
-                <span class="text-sm text-primary">Review →</span>
-            </Link>
-        </div>
         <section aria-labelledby="sales-overview-heading" class="space-y-2">
             <div>
                 <h2 id="sales-overview-heading" class="font-semibold">
                     Sales overview
                 </h2>
                 <p class="text-sm text-muted-foreground">
-                    Today’s activity and the current amount owed by customers.
+                    Today’s sales, cash received, and recorded item margin.
                 </p>
             </div>
 
-            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <article
                     v-for="card in overviewCards"
                     :key="card.label"
@@ -358,7 +334,7 @@ defineOptions({
                         class="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"
                     >
                         <div>
-                            <h3 class="font-semibold">Performance trend</h3>
+                            <h3 class="font-semibold">Sales by day</h3>
                             <p class="text-xs text-muted-foreground">
                                 {{
                                     canViewCosts
@@ -421,25 +397,40 @@ defineOptions({
                                 stroke="currentColor"
                                 class="text-muted-foreground/50"
                             />
-                            <polyline
-                                :points="salesPoints"
-                                fill="none"
-                                stroke="rgb(59 130 246)"
-                                stroke-width="3"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                vector-effect="non-scaling-stroke"
-                            />
-                            <polyline
-                                v-if="canViewCosts"
-                                :points="profitPoints"
-                                fill="none"
-                                stroke="rgb(16 185 129)"
-                                stroke-width="3"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                vector-effect="non-scaling-stroke"
-                            />
+                            <g
+                                v-for="(row, index) in visibleTrend"
+                                :key="row.date"
+                            >
+                                <rect
+                                    :x="barX(index, 0)"
+                                    :y="barY(Number(row.net_sales))"
+                                    :width="barWidth"
+                                    :height="barHeight(Number(row.net_sales))"
+                                    rx="2"
+                                    fill="rgb(59 130 246)"
+                                >
+                                    <title>
+                                        {{ shortDate(row.date) }} · Net sales
+                                        {{ money(row.net_sales) }}
+                                    </title>
+                                </rect>
+                                <rect
+                                    v-if="canViewCosts"
+                                    :x="barX(index, 1)"
+                                    :y="barY(Number(row.gross_profit))"
+                                    :width="barWidth"
+                                    :height="
+                                        barHeight(Number(row.gross_profit))
+                                    "
+                                    rx="2"
+                                    fill="rgb(16 185 129)"
+                                >
+                                    <title>
+                                        {{ shortDate(row.date) }} · Gross profit
+                                        {{ money(row.gross_profit ?? '0') }}
+                                    </title>
+                                </rect>
+                            </g>
                         </svg>
                         <div
                             v-if="visibleTrend.length"

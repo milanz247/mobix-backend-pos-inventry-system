@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import {
+    Boxes,
+    ClipboardList,
     ChevronRight,
     LayoutGrid,
     Package,
     ShoppingCart,
     Settings,
     Users,
-    Warehouse,
     Wallet,
-    ChartNoAxesCombined,
 } from '@lucide/vue';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import {
@@ -40,28 +40,22 @@ import { edit as editProfile } from '@/routes/profile-settings';
 import { dashboard } from '@/routes';
 import { index as brandsIndex } from '@/routes/brands';
 import { index as categoriesIndex } from '@/routes/categories';
+import { create as adjustmentsCreate } from '@/routes/inventory/adjustments';
+import { index as inventoryStockIndex } from '@/routes/inventory/locations';
+import { create as transfersCreate } from '@/routes/inventory/transfers';
 import { index as permissionsIndex } from '@/routes/permissions';
 import { index as productsIndex } from '@/routes/products';
 import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
 import { index as locationsIndex } from '@/routes/locations';
-import { index as inventoryIndex } from '@/routes/inventory';
-import { index as inventoryLocations } from '@/routes/inventory/locations';
-import { create as receivingCreate } from '@/routes/inventory/receiving';
-import { create as openingCreate } from '@/routes/inventory/opening';
-import { create as adjustmentsCreate } from '@/routes/inventory/adjustments';
-import { create as transfersCreate } from '@/routes/inventory/transfers';
-import { index as devicesIndex } from '@/routes/inventory/devices';
-import { index as movementsIndex } from '@/routes/inventory/movements';
 import { index as suppliersIndex } from '@/routes/suppliers';
 import {
     index as purchasesIndex,
     create as purchaseCreate,
 } from '@/routes/purchases';
 import { index as posIndex } from '@/routes/pos';
-import { index as salesIndex, reports as salesReports } from '@/routes/sales';
+import { index as salesIndex } from '@/routes/sales';
 import { index as shiftsIndex } from '@/routes/shifts';
-import { outOfStock, expenses, currentShift } from '@/routes/reports';
 import type { Auth, NavItem } from '@/types';
 
 const mainNavItems = computed<NavItem[]>(() => [
@@ -96,24 +90,8 @@ const catalogNavItems = computed<NavItem[]>(() => [
     ...(can('brands.view') ? [{ title: 'Brands', href: brandsIndex() }] : []),
 ]);
 const inventoryNavItems = computed<NavItem[]>(() => [
-    ...(can('damaged-stock.view')
-        ? [{ title: 'Damaged stock', href: '/inventory/damaged' }]
-        : []),
     ...(can('inventory.view')
-        ? [
-              { title: 'Overview', href: inventoryIndex() },
-              {
-                  title: 'Reorder levels / alerts',
-                  href: '/inventory/reorder?alerts=1',
-              },
-              { title: 'Stock by location', href: inventoryLocations() },
-          ]
-        : []),
-    ...(can('inventory.receive')
-        ? [{ title: 'Stock receiving', href: receivingCreate() }]
-        : []),
-    ...(can('inventory.opening')
-        ? [{ title: 'Opening stock', href: openingCreate() }]
+        ? [{ title: 'All stock', href: inventoryStockIndex() }]
         : []),
     ...(can('inventory.adjust')
         ? [{ title: 'Adjustments', href: adjustmentsCreate() }]
@@ -121,11 +99,39 @@ const inventoryNavItems = computed<NavItem[]>(() => [
     ...(can('inventory.transfer')
         ? [{ title: 'Transfers', href: transfersCreate() }]
         : []),
-    ...(can('serialized-devices.view')
-        ? [{ title: 'IMEI lookup', href: devicesIndex() }]
+    ...(can('inventory.opening')
+        ? [{ title: 'Opening stock', href: '/inventory/opening-stock' }]
+        : []),
+]);
+const inventoryReportItems = computed<NavItem[]>(() => [
+    ...(can('inventory.view')
+        ? [
+              {
+                  title: 'Stock overview',
+                  href: '/inventory/reports/stock-overview',
+              },
+              {
+                  title: 'Stock adjustments',
+                  href: '/inventory/reports/adjustments',
+              },
+              {
+                  title: 'Stock transfers',
+                  href: '/inventory/reports/transfers',
+              },
+              { title: 'Reorder levels', href: '/inventory/reorder' },
+          ]
         : []),
     ...(can('stock-movements.view')
-        ? [{ title: 'Movement history', href: movementsIndex() }]
+        ? [{ title: 'Product movement history', href: '/inventory/movements' }]
+        : []),
+    ...(can('sales.view') && can('credit-sales.view')
+        ? [{ title: 'Credit sales report', href: '/sales/credit/report' }]
+        : []),
+    ...(can('shifts.view')
+        ? [{ title: 'Shift history', href: '/reports/shift-history' }]
+        : []),
+    ...(can('locations.view')
+        ? [{ title: 'Location status', href: '/reports/location-status' }]
         : []),
 ]);
 const purchasingNavItems = computed<NavItem[]>(() => [
@@ -149,36 +155,6 @@ const salesNavItems = computed<NavItem[]>(() => [
     ...(can('sales.pos') ? [{ title: 'POS checkout', href: posIndex() }] : []),
     ...(can('sales.view')
         ? [{ title: 'Sales history', href: salesIndex() }]
-        : []),
-]);
-const reportNavItems = computed<NavItem[]>(() => [
-    ...(can('activity-logs.view')
-        ? [{ title: 'System activity log', href: '/reports/activity' }]
-        : []),
-    ...(can('products.view') && can('product-activity.view')
-        ? [{ title: 'Product activity log', href: '/reports/product-activity' }]
-        : []),
-    ...(can('shifts.view') && can('shift-reports.view')
-        ? [{ title: 'Cashier shift sales', href: '/reports/shift-sales' }]
-        : []),
-    ...(can('sales.reports.view')
-        ? [
-              { title: 'Daily sales', href: '/reports/daily-sales' },
-              { title: 'All sales report', href: '/reports/all-sales' },
-              { title: 'Sales summary', href: salesReports() },
-          ]
-        : []),
-    ...(can('stock-reports.view')
-        ? [{ title: 'Out-of-stock report', href: outOfStock() }]
-        : []),
-    ...(can('damaged-reports.view')
-        ? [{ title: 'Damaged stock report', href: '/reports/damaged-stock' }]
-        : []),
-    ...(can('shifts.view') && can('expense-reports.view')
-        ? [{ title: 'Expenses', href: expenses() }]
-        : []),
-    ...(can('shifts.view') && can('shift-reports.view')
-        ? [{ title: 'Current Shift', href: currentShift() }]
         : []),
 ]);
 const settingsNavItems = computed<NavItem[]>(() => [
@@ -207,8 +183,18 @@ const usersAreActive = computed(() =>
 const catalogIsActive = computed(() =>
     catalogNavItems.value.some((item) => isCurrentUrl(item.href)),
 );
-const inventoryIsActive = computed(() =>
-    inventoryNavItems.value.some((item) => isCurrentUrl(item.href)),
+const reportsAreActive = computed(() =>
+    [
+        '/inventory/reports/',
+        '/inventory/reorder',
+        '/inventory/movements',
+        '/sales/credit/report',
+        '/reports/shift-history',
+        '/reports/location-status',
+    ].some((path) => page.url.startsWith(path)),
+);
+const inventoryIsActive = computed(
+    () => page.url.startsWith('/inventory') && !reportsAreActive.value,
 );
 const purchasingIsActive = computed(() =>
     purchasingNavItems.value.some((item) => isCurrentUrl(item.href)),
@@ -216,35 +202,29 @@ const purchasingIsActive = computed(() =>
 const salesIsActive = computed(() =>
     salesNavItems.value.some((item) => isCurrentUrl(item.href)),
 );
-const reportsAreActive = computed(
-    () =>
-        reportNavItems.value.some((item) => isCurrentUrl(item.href)) ||
-        page.component === 'shifts/Show' ||
-        page.component === 'reports/CashMovement',
-);
 
 type SidebarSection =
     | 'users'
     | 'catalog'
     | 'inventory'
+    | 'reports'
     | 'purchasing'
     | 'sales'
-    | 'reports'
     | 'settings';
 
 const openSection = ref<SidebarSection | null>(
     usersAreActive.value
         ? 'users'
-        : catalogIsActive.value
-          ? 'catalog'
-          : inventoryIsActive.value
+        : reportsAreActive.value
+          ? 'reports'
+          : page.url.startsWith('/inventory')
             ? 'inventory'
-            : purchasingIsActive.value
-              ? 'purchasing'
-              : salesIsActive.value
-                ? 'sales'
-                : reportsAreActive.value
-                  ? 'reports'
+            : catalogIsActive.value
+              ? 'catalog'
+              : purchasingIsActive.value
+                ? 'purchasing'
+                : salesIsActive.value
+                  ? 'sales'
                   : settingsAreActive.value
                     ? 'settings'
                     : null,
@@ -253,6 +233,13 @@ const openSection = ref<SidebarSection | null>(
 const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
     openSection.value = isOpen ? section : null;
 };
+watch(reportsAreActive, (active) => {
+    if (active) {
+        openSection.value = 'reports';
+    } else if (page.url.startsWith('/inventory')) {
+        openSection.value = 'inventory';
+    }
+});
 </script>
 
 <template>
@@ -320,6 +307,93 @@ const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
                 </SidebarMenu>
             </SidebarGroup>
 
+            <SidebarGroup v-if="inventoryNavItems.length" class="px-2 py-0">
+                <SidebarMenu>
+                    <Collapsible
+                        as-child
+                        :open="openSection === 'inventory'"
+                        class="group/collapsible"
+                        @update:open="updateOpenSection('inventory', $event)"
+                    >
+                        <SidebarMenuItem>
+                            <CollapsibleTrigger as-child>
+                                <SidebarMenuButton
+                                    tooltip="Inventory"
+                                    :is-active="inventoryIsActive"
+                                >
+                                    <Boxes />
+                                    <span>Inventory</span>
+                                    <ChevronRight
+                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                                    />
+                                </SidebarMenuButton>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                <SidebarMenuSub>
+                                    <SidebarMenuSubItem
+                                        v-for="item in inventoryNavItems"
+                                        :key="item.title"
+                                    >
+                                        <SidebarMenuSubButton
+                                            as-child
+                                            :is-active="isCurrentUrl(item.href)"
+                                        >
+                                            <Link :href="item.href">
+                                                <span>{{ item.title }}</span>
+                                            </Link>
+                                        </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                </SidebarMenuSub>
+                            </CollapsibleContent>
+                        </SidebarMenuItem>
+                    </Collapsible>
+                </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarGroup v-if="inventoryReportItems.length" class="px-2 py-0">
+                <SidebarMenu>
+                    <Collapsible
+                        as-child
+                        :open="openSection === 'reports'"
+                        class="group/collapsible"
+                        @update:open="updateOpenSection('reports', $event)"
+                    >
+                        <SidebarMenuItem>
+                            <CollapsibleTrigger as-child>
+                                <SidebarMenuButton
+                                    tooltip="Reports"
+                                    :is-active="reportsAreActive"
+                                >
+                                    <ClipboardList />
+                                    <span>Reports</span>
+                                    <ChevronRight
+                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                                    />
+                                </SidebarMenuButton>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                <SidebarMenuSub>
+                                    <SidebarMenuSubItem
+                                        v-for="item in inventoryReportItems"
+                                        :key="item.title"
+                                    >
+                                        <SidebarMenuSubButton
+                                            as-child
+                                            :is-active="isCurrentUrl(item.href)"
+                                            class="data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:hover:bg-blue-600"
+                                        >
+                                            <Link :href="item.href">
+                                                <span>{{ item.title }}</span>
+                                            </Link>
+                                        </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                </SidebarMenuSub>
+                            </CollapsibleContent>
+                        </SidebarMenuItem>
+                    </Collapsible>
+                </SidebarMenu>
+            </SidebarGroup>
+
             <SidebarGroup v-if="catalogNavItems.length" class="px-2 py-0">
                 <SidebarMenu>
                     <Collapsible
@@ -355,49 +429,6 @@ const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
                                                 <span>{{ item.title }}</span>
                                             </Link>
                                         </SidebarMenuSubButton>
-                                    </SidebarMenuSubItem>
-                                </SidebarMenuSub>
-                            </CollapsibleContent>
-                        </SidebarMenuItem>
-                    </Collapsible>
-                </SidebarMenu>
-            </SidebarGroup>
-
-            <SidebarGroup v-if="inventoryNavItems.length" class="px-2 py-0">
-                <SidebarMenu>
-                    <Collapsible
-                        as-child
-                        :open="openSection === 'inventory'"
-                        class="group/collapsible"
-                        @update:open="updateOpenSection('inventory', $event)"
-                    >
-                        <SidebarMenuItem>
-                            <CollapsibleTrigger as-child>
-                                <SidebarMenuButton
-                                    tooltip="Inventory"
-                                    :is-active="inventoryIsActive"
-                                >
-                                    <Warehouse /><span>Inventory</span
-                                    ><ChevronRight
-                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
-                                    />
-                                </SidebarMenuButton>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                                <SidebarMenuSub>
-                                    <SidebarMenuSubItem
-                                        v-for="item in inventoryNavItems"
-                                        :key="item.title"
-                                    >
-                                        <SidebarMenuSubButton
-                                            as-child
-                                            :is-active="isCurrentUrl(item.href)"
-                                            ><Link :href="item.href"
-                                                ><span>{{
-                                                    item.title
-                                                }}</span></Link
-                                            ></SidebarMenuSubButton
-                                        >
                                     </SidebarMenuSubItem>
                                 </SidebarMenuSub>
                             </CollapsibleContent>
@@ -490,45 +521,6 @@ const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
                         </SidebarMenuItem>
                     </Collapsible>
                 </SidebarMenu>
-            </SidebarGroup>
-
-            <SidebarGroup v-if="reportNavItems.length" class="px-2 py-0">
-                <SidebarMenu
-                    ><Collapsible
-                        as-child
-                        :open="openSection === 'reports'"
-                        class="group/collapsible"
-                        @update:open="updateOpenSection('reports', $event)"
-                    >
-                        <SidebarMenuItem
-                            ><CollapsibleTrigger as-child
-                                ><SidebarMenuButton
-                                    tooltip="Reports"
-                                    :is-active="reportsAreActive"
-                                    ><ChartNoAxesCombined /><span>Reports</span
-                                    ><ChevronRight
-                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" /></SidebarMenuButton
-                            ></CollapsibleTrigger>
-                            <CollapsibleContent
-                                ><SidebarMenuSub
-                                    ><SidebarMenuSubItem
-                                        v-for="item in reportNavItems"
-                                        :key="item.title"
-                                        ><SidebarMenuSubButton
-                                            as-child
-                                            :is-active="isCurrentUrl(item.href)"
-                                            ><Link :href="item.href"
-                                                ><span>{{
-                                                    item.title
-                                                }}</span></Link
-                                            ></SidebarMenuSubButton
-                                        ></SidebarMenuSubItem
-                                    ></SidebarMenuSub
-                                ></CollapsibleContent
-                            >
-                        </SidebarMenuItem>
-                    </Collapsible></SidebarMenu
-                >
             </SidebarGroup>
 
             <SidebarGroup class="px-2 py-0">

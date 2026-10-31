@@ -4,6 +4,7 @@ use App\Http\Controllers\CashierShiftController;
 use App\Http\Controllers\Sales\HeldCartController;
 use App\Http\Controllers\Sales\PosController;
 use App\Http\Controllers\Sales\SaleController;
+use App\Http\Controllers\Sales\CreditSalesReportController;
 use App\Http\Controllers\Sales\SalePaymentController;
 use App\Http\Controllers\Sales\SaleReturnController;
 use Illuminate\Support\Facades\Route;
@@ -22,8 +23,8 @@ Route::middleware('auth')->group(function (): void {
     });
 
     Route::get('sales/credit', [SaleController::class, 'index'])->defaults('credit', true)->middleware(['can:sales.view', 'can:credit-sales.view'])->name('sales.credit');
+    Route::get('sales/credit/report', CreditSalesReportController::class)->middleware(['can:sales.view', 'can:credit-sales.view'])->name('sales.credit.report');
     Route::get('sales', [SaleController::class, 'index'])->middleware('can:sales.view')->name('sales.index');
-    Route::get('sales/reports', [SaleController::class, 'reports'])->middleware('can:sales.reports.view')->name('sales.reports');
     Route::get('sales/{sale}/receipt', [SaleController::class, 'receipt'])->middleware(['can:sales.view', 'can:sales-receipts.print'])->name('sales.receipt');
     Route::get('sales/{sale}', [SaleController::class, 'show'])->middleware('can:sales.view')->name('sales.show');
     Route::post('sales/{sale}/payments', [SalePaymentController::class, 'store'])->middleware(['can:sales.view', 'can:sale-payments.create'])->name('sales.payments.store');

@@ -10,7 +10,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use stdClass;
 
-class DamagedStockReportService
+class DamagedStockListService
 {
     public function __construct(private readonly LocationAccessService $access) {}
 

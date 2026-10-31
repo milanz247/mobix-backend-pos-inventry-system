@@ -1,8 +1,8 @@
 # Function permissions and roles
 
-The role matrix exposes 95 implemented permissions. Select View, Add, Edit, Delete and the named actions, save the role, then assign it to users. Role, object-ownership and location checks still apply to every protected request.
+The role matrix exposes implemented permissions. Select View, Add, Edit, Delete and the named actions, save the role, then assign it to users. Role, object-ownership and location checks still apply to every protected request.
 
-New delete/status/report/damage/credit capabilities are independent. Existing assignments are migrated from their previous broader permission so staff do not lose established access. Later role changes remain under administrator control. Owner is protected; system roles cannot be deleted and custom roles must be unassigned before deletion. Prerequisites are added and checked on both client and server. Posted invoices and movement history are not made deletable by a checkbox.
+New delete/status/damage/credit capabilities are independent. Existing assignments are migrated from their previous broader permission so staff do not lose established access. Later role changes remain under administrator control. Owner is protected; system roles cannot be deleted and custom roles must be unassigned before deletion. Prerequisites are added and checked on both client and server. Posted invoices and movement history are not made deletable by a checkbox.
 
 | Module             | Function                           | Column  | Permission                  | Action                             |
 | ------------------ | ---------------------------------- | ------- | --------------------------- | ---------------------------------- |
@@ -72,7 +72,6 @@ New delete/status/report/damage/credit capabilities are independent. Existing as
 | POS & Sales        | Sales returns                      | add     | `sale-returns.create`       | Process returns                    |
 | POS & Sales        | Customer refunds                   | add     | `sale-refunds.create`       | Issue refunds                      |
 | POS & Sales        | Cost and profit information        | view    | `sales.costs.view`          | View costs and profit              |
-| POS & Sales        | Sales report                       | view    | `sales.reports.view`        | View sales reports                 |
 | Products           | Products                           | delete  | `products.delete`           | Delete unused record               |
 | Categories         | Categories                         | delete  | `categories.delete`         | Delete unused record               |
 | Brands             | Brands                             | delete  | `brands.delete`             | Delete unused record               |
@@ -86,9 +85,6 @@ New delete/status/report/damage/credit capabilities are independent. Existing as
 | Damaged Stock      | Damaged Stock                      | add     | `damaged-stock.create`      | Move stock to damaged              |
 | Damaged Stock      | Damaged Stock                      | actions | `damaged-stock.repair`      | Return repaired stock              |
 | Damaged Stock      | Damaged Stock                      | actions | `damaged-stock.write-off`   | Write off damaged stock            |
-| Reports            | Out-of-stock report                | view    | `stock-reports.view`        | View out-of-stock report           |
-| Reports            | Damaged stock report               | view    | `damaged-reports.view`      | View damaged stock report          |
-| Reports            | Damaged stock report               | actions | `damaged-reports.print`     | Print damaged stock report         |
 | POS & Sales        | Credit sales                       | view    | `credit-sales.view`         | View credit invoices               |
 | POS & Sales        | Credit sales                       | actions | `credit-sales.add-items`    | Add items to credit bill           |
 | Customers          | Customers                          | view    | `customers.view`            | Find saved customers               |
@@ -96,8 +92,5 @@ New delete/status/report/damage/credit capabilities are independent. Existing as
 | POS & Sales        | Sales invoices                     | actions | `sales-receipts.print`      | Print sale receipt                 |
 | POS & Sales        | Sales returns                      | actions | `return-receipts.print`     | Print return / replacement receipt |
 | POS & Sales        | Warranty replacements              | add     | `sale-replacements.create`  | Issue replacement                  |
-| Reports            | Expense report                     | view    | `expense-reports.view`      | View expense report                |
-| Reports            | Current shift report               | view    | `shift-reports.view`        | View current shift report          |
-| Cashier Shifts     | Cashier Shifts                     | actions | `shifts.print`              | Print shift report                 |
 | Users              | Users                              | actions | `users.change-status`       | Activate / deactivate              |
 | Locations          | Locations                          | actions | `locations.change-status`   | Activate / deactivate              |

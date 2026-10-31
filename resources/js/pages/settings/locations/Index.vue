@@ -25,10 +25,11 @@ type Location = {
 };
 type LinkItem = { url: string | null; label: string; active: boolean };
 
-defineProps<{
+const props = defineProps<{
     locations: { data: Location[]; links: LinkItem[] };
     filters: { search?: string; status?: string };
     statuses: { value: string; label: string }[];
+    reportOnly?: boolean;
 }>();
 
 const auth = usePage<{ auth: Auth }>().props.auth;
@@ -71,20 +72,26 @@ defineOptions({
 </script>
 
 <template>
-    <Head title="Locations" />
+    <Head :title="props.reportOnly ? 'Location status' : 'Locations'" />
     <div class="page-shell">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
-                title="Locations"
-                description="Manage business shops, warehouses, repair centres, and user access."
+                :title="props.reportOnly ? 'Location status' : 'Locations'"
+                :description="
+                    props.reportOnly
+                        ? 'Review active and inactive status for locations you can access.'
+                        : 'Manage business shops, warehouses, repair centres, and user access.'
+                "
             />
-            <Button v-if="can('locations.create')" as-child
+            <Button v-if="!props.reportOnly && can('locations.create')" as-child
                 ><Link :href="create()">Create location</Link></Button
             >
         </div>
 
         <Form
-            :action="index.url()"
+            :action="
+                props.reportOnly ? '/reports/location-status' : index.url()
+            "
             method="get"
             class="filter-panel grid gap-3 sm:grid-cols-3"
         >
@@ -123,7 +130,13 @@ defineOptions({
                         <th scope="col">City</th>
                         <th scope="col">Users</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="text-right">Actions</th>
+                        <th
+                            v-if="!props.reportOnly"
+                            scope="col"
+                            class="text-right"
+                        >
+                            Actions
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -156,7 +169,7 @@ defineOptions({
                                 >{{ location.status }}</Badge
                             >
                         </td>
-                        <td class="text-right">
+                        <td v-if="!props.reportOnly" class="text-right">
                             <RowActions :label="location.name">
                                 <Button
                                     as-child
@@ -222,7 +235,7 @@ defineOptions({
                     </tr>
                     <tr v-if="locations.data.length === 0">
                         <td
-                            colspan="6"
+                            :colspan="props.reportOnly ? 5 : 6"
                             class="py-12 text-center text-muted-foreground"
                         >
                             No accessible locations found.
@@ -249,6 +262,7 @@ defineOptions({
             </Button>
         </nav>
         <ConfirmActionDialog
+            v-if="!props.reportOnly"
             :open="confirmationOpen"
             :title="confirmationTitle"
             :description="confirmationDescription"

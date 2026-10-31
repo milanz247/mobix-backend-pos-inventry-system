@@ -1890,9 +1890,7 @@ defineOptions({
                             </span>
                         </div>
 
-                        <div
-                            class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2"
-                        >
+                        <div class="grid gap-2">
                             <div class="min-w-0">
                                 <div
                                     class="mb-1 flex items-center justify-between gap-2"
@@ -1927,60 +1925,68 @@ defineOptions({
                                 />
                             </div>
 
-                            <Button
-                                class="relative h-10 min-w-32 overflow-hidden px-3 transition-all duration-200 active:scale-[0.97]"
+                            <div
+                                class="grid gap-2"
                                 :class="
-                                    form.processing
-                                        ? 'cursor-wait shadow-lg shadow-primary/25'
-                                        : 'justify-between gap-3'
+                                    canCredit ? 'grid-cols-2' : 'grid-cols-1'
                                 "
-                                :disabled="
-                                    form.processing ||
-                                    drawerProcessing ||
-                                    !hasActiveShift ||
-                                    cart.length === 0 ||
-                                    hasInsufficientCash ||
-                                    !!creditSale
-                                "
-                                @click="submitCheckout(false)"
                             >
-                                <span
-                                    v-if="form.processing"
-                                    class="absolute inset-0 animate-pulse bg-white/15"
-                                />
-                                <span
-                                    v-if="form.processing"
-                                    class="relative flex w-full items-center justify-center gap-2"
+                                <Button
+                                    class="relative h-9 min-w-0 justify-between gap-2 overflow-hidden px-2.5 text-xs active:scale-[0.98]"
+                                    :disabled="
+                                        form.processing ||
+                                        drawerProcessing ||
+                                        !hasActiveShift ||
+                                        cart.length === 0 ||
+                                        hasInsufficientCash ||
+                                        !!creditSale
+                                    "
+                                    @click="submitCheckout(false)"
                                 >
-                                    <LoaderCircle class="size-4 animate-spin" />
-                                    Processing payment…
-                                </span>
-                                <template v-else>
-                                    <span>Pay cash</span>
-                                    <span class="tabular-nums">{{
+                                    <span
+                                        v-if="form.processing"
+                                        class="absolute inset-0 animate-pulse bg-white/15"
+                                    />
+                                    <span
+                                        v-if="form.processing"
+                                        class="relative flex w-full items-center justify-center gap-1.5"
+                                    >
+                                        <LoaderCircle
+                                            class="size-3.5 animate-spin"
+                                        />
+                                        Processing…
+                                    </span>
+                                    <template v-else>
+                                        <span class="truncate">Pay cash</span>
+                                        <span class="shrink-0 tabular-nums">{{
+                                            money(cartTotal())
+                                        }}</span>
+                                    </template>
+                                </Button>
+                                <Button
+                                    v-if="canCredit"
+                                    type="button"
+                                    variant="outline"
+                                    class="h-9 min-w-0 justify-between gap-2 px-2.5 text-xs"
+                                    :disabled="
+                                        form.processing ||
+                                        drawerProcessing ||
+                                        !hasActiveShift ||
+                                        cart.length === 0
+                                    "
+                                    @click="creditModalOpen = true"
+                                >
+                                    <span class="truncate">{{
+                                        creditSale
+                                            ? 'Add to bill'
+                                            : 'Credit sale'
+                                    }}</span>
+                                    <span class="shrink-0 tabular-nums">{{
                                         money(cartTotal())
                                     }}</span>
-                                </template>
-                            </Button>
+                                </Button>
+                            </div>
                         </div>
-
-                        <Button
-                            v-if="canCredit"
-                            variant="outline"
-                            class="w-full"
-                            :disabled="
-                                form.processing ||
-                                drawerProcessing ||
-                                !hasActiveShift ||
-                                cart.length === 0
-                            "
-                            @click="creditModalOpen = true"
-                            >{{
-                                creditSale
-                                    ? 'Add items to credit bill'
-                                    : 'Credit sale'
-                            }}</Button
-                        >
 
                         <div
                             v-if="

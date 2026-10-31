@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 use stdClass;
 
 /** @phpstan-type TransactionRow array{id: int, reference: string|null, at: string, amount: string|null, method: string, actor: string, status: string, description: string|null, url: string|null} */
-class ShiftReportService
+class ShiftTransactionService
 {
     public function __construct(private readonly SalesActivityService $activity, private readonly LocationAccessService $access) {}
 
@@ -61,7 +61,7 @@ class ShiftReportService
                     'amount' => $this->closingAmount($event),
                     'method' => 'cash_drawer', 'actor' => $event->actor->name, 'status' => $event->type,
                     'description' => $event->type === 'closed' ? $shift->variance_reason : null,
-                    'url' => $shift->closed_at !== null ? route('shifts.report', $shift) : null,
+                    'url' => null,
                 ]));
         }
         $types = match ($section) {

@@ -516,28 +516,47 @@ class InventoryService
             }
 
             $location = $this->authorizedLocation($user, (int) $data['location_id']);
-            $variant = $this->activeVariant($business, (int) $data['product_variant_id']);
-            $this->assertQuantityVariant($variant);
-            $quantity = $this->normalizeQuantity((string) $data['quantity']);
+            $items = $data['items'] ?? [[
+                'product_variant_id' => $data['product_variant_id'],
+                'quantity' => $data['quantity'],
+            ]];
+
             if ($data['reason'] === 'damaged') {
                 abort_unless($user->can('damaged-stock.create'), 403);
             }
             if ($data['reason'] === 'damaged' && $data['direction'] !== 'decrease') {
                 throw ValidationException::withMessages(['direction' => __('Move damaged items out of available stock. Use Damaged stock to recover repaired items.')]);
             }
-            $delta = $data['direction'] === 'decrease' ? '-'.$quantity : $quantity;
             $movementType = $data['direction'] === 'decrease' ? StockMovementType::AdjustmentOut : StockMovementType::AdjustmentIn;
-
             $operation->update(['destination_location_id' => $location->id]);
-            $operation->lines()->create(['business_id' => $business->id, 'product_variant_id' => $variant->id, 'quantity' => $delta]);
-            $this->changeQuantity($operation, $location, $variant, $delta, $movementType);
-            if ($data['reason'] === 'damaged') {
-                DamagedStockEntry::query()->create([
-                    'business_id' => $business->id, 'location_id' => $location->id,
-                    'product_variant_id' => $variant->id, 'inventory_operation_id' => $operation->id,
-                    'quantity' => $quantity, 'remaining_quantity' => $quantity, 'unit_cost' => $variant->cost_price,
-                    'reason' => 'Stock damaged', 'notes' => $data['notes'] ?? null, 'recorded_by' => $user->id,
+
+            foreach ($items as $index => $item) {
+                $variant = $this->activeVariant($business, (int) $item['product_variant_id']);
+                $this->assertQuantityVariant($variant, "items.{$index}.product_variant_id");
+                $quantity = $this->normalizeQuantity((string) $item['quantity']);
+                $delta = $data['direction'] === 'decrease' ? '-'.$quantity : $quantity;
+
+                $operation->lines()->create([
+                    'business_id' => $business->id,
+                    'product_variant_id' => $variant->id,
+                    'quantity' => $delta,
                 ]);
+                $this->changeQuantity($operation, $location, $variant, $delta, $movementType);
+
+                if ($data['reason'] === 'damaged') {
+                    DamagedStockEntry::query()->create([
+                        'business_id' => $business->id,
+                        'location_id' => $location->id,
+                        'product_variant_id' => $variant->id,
+                        'inventory_operation_id' => $operation->id,
+                        'quantity' => $quantity,
+                        'remaining_quantity' => $quantity,
+                        'unit_cost' => $variant->cost_price,
+                        'reason' => 'Stock damaged',
+                        'notes' => $data['notes'] ?? null,
+                        'recorded_by' => $user->id,
+                    ]);
+                }
             }
 
             return $operation->fresh(['lines']) ?? $operation;

@@ -20,6 +20,7 @@ const props = defineProps<{
     filters: Record<string, string>;
     currency: string;
     timezone: string;
+    historyOnly?: boolean;
 }>();
 const page = usePage<{ auth: Auth }>();
 const can = (permission: string): boolean =>
@@ -34,26 +35,36 @@ const filters = reactive({
     ...props.filters,
 });
 function filter(): void {
-    router.get(index().url, filters, {
-        preserveState: true,
-        replace: true,
-        preserveScroll: true,
-    });
+    router.get(
+        props.historyOnly ? '/reports/shift-history' : index().url,
+        filters,
+        {
+            preserveState: true,
+            replace: true,
+            preserveScroll: true,
+        },
+    );
 }
 usePoll(15000, { only: ['activeShift', 'activeSummary', 'shifts'] });
 </script>
 <template>
     <section class="page-shell space-y-6">
-        <Head title="Cashier shifts" />
+        <Head :title="historyOnly ? 'Shift history' : 'Cashier shifts'" />
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
-                title="Cashier shifts"
-                description="Live drawer balances, physical cash reconciliation, and daily closing history."
-            /><Button v-if="!activeShift && can('shifts.open')" as-child
+                :title="historyOnly ? 'Shift history' : 'Cashier shifts'"
+                :description="
+                    historyOnly
+                        ? 'Daily closing records, cashier reconciliation, and location activity.'
+                        : 'Live drawer balances, physical cash reconciliation, and daily closing history.'
+                "
+            /><Button
+                v-if="!historyOnly && !activeShift && can('shifts.open')"
+                as-child
                 ><Link :href="create()">Open shift</Link></Button
             >
         </div>
-        <template v-if="activeShift && activeSummary">
+        <template v-if="!historyOnly && activeShift && activeSummary">
             <div
                 class="surface-panel flex flex-wrap items-center justify-between gap-4 p-4"
             >
@@ -98,14 +109,21 @@ usePoll(15000, { only: ['activeShift', 'activeSummary', 'shifts'] });
                 />
             </div>
         </template>
-        <p v-else class="surface-panel p-5 text-sm text-muted-foreground">
+        <p
+            v-else-if="!historyOnly"
+            class="surface-panel p-5 text-sm text-muted-foreground"
+        >
             You have no active shift. Open a shift to track new payments in your
             drawer. Transactions recorded without a shift are not added
             retrospectively.
         </p>
         <section class="table-panel">
             <h2 class="border-b p-4 font-semibold">
-                Shift history and location status
+                {{
+                    historyOnly
+                        ? 'Shift history'
+                        : 'Shift history and location status'
+                }}
             </h2>
             <form
                 class="grid gap-3 border-b p-4 sm:grid-cols-2 lg:grid-cols-4"

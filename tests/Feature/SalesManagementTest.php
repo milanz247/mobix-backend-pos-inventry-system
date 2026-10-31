@@ -230,16 +230,6 @@ test('cash tender below the applied payment amount is rejected', function () {
         ->and(InventoryStock::query()->sole()->quantity_on_hand)->toBe('2.000');
 });
 
-test('sales report is permission protected and scoped to accessible locations', function () {
-    ['user' => $user, 'location' => $location] = salesFeatureContext('sales.reports.view');
-
-    $this->actingAs($user)->get(route('sales.reports', ['location_id' => $location->id]))->assertOk()
-        ->assertInertia(fn (Assert $page) => $page->component('sales/Reports')->where('summary.sales_count', 0));
-
-    $unauthorized = User::factory()->create();
-    $this->actingAs($unauthorized)->get(route('sales.reports'))->assertForbidden();
-});
-
 test('checkout is idempotent and does not deduct the same sale twice', function () {
     ['user' => $user, 'location' => $location, 'quantityVariant' => $variant] = salesFeatureContext(
         'sales.pos', 'sales.create', 'sales.view', 'inventory.opening',
@@ -753,10 +743,10 @@ test('return print records the return-specific balance and remains unchanged aft
     $this->get(route('sales.returns.receipt', [$different, $return]))->assertNotFound();
 });
 
-test('later credit additions and replacements are reported on their transaction dates without rewriting the original day', function () {
+test('later credit additions and replacements update dashboard dates without rewriting the original day', function () {
     $this->travelTo(Carbon::parse('2026-10-20 09:00:00', 'UTC'));
     ['user' => $user, 'business' => $business, 'location' => $location, 'quantityVariant' => $variant] = salesFeatureContext(
-        'sales.pos', 'sales.create', 'sales.view', 'sales.credit', 'inventory.opening', 'sale-returns.create', 'sales.reports.view', 'sales.costs.view', 'dashboard.view',
+        'sales.pos', 'sales.create', 'sales.view', 'sales.credit', 'inventory.opening', 'sale-returns.create', 'sales.costs.view', 'dashboard.view',
     );
     receiveSaleTestStock($user, $location, $variant, '5.000');
     $payload = saleCheckoutPayload($location, $variant, Str::uuid()->toString());
@@ -781,8 +771,6 @@ test('later credit additions and replacements are reported on their transaction 
         ->where('overview.sales_total', '100.00')->where('overview.returns', '100.00')
         ->where('overview.outstanding', '180.00')->where('trend.27.net_sales', '100.00')
         ->where('trend.28.net_sales', '100.00')->where('trend.29.net_sales', '0.00')->where('trend.29.gross_profit', '0.00'));
-    $this->get(route('sales.reports', ['date_from' => '2026-10-22', 'date_to' => '2026-10-22']))->assertInertia(fn (Assert $page) => $page
-        ->where('summary.gross_sales', '100.00')->where('summary.returns', '100.00')->where('summary.net_sales', '0.00')->where('summary.payments_received', '0.00'));
     $return = SaleReturn::query()->sole();
     $this->get(route('sales.returns.receipt', [$sale, $return]))->assertInertia(fn (Assert $page) => $page
         ->where('receipt.is_exchange', true)->has('receipt.replacements', 1)->where('receipt.balance', '180.00'));
