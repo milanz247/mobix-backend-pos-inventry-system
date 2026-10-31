@@ -13,8 +13,12 @@ use App\PermissionName;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('settings/appearance', fn () => Inertia::render('settings/Appearance'))
+        ->name('appearance.edit');
+
     Route::get('settings', fn (Request $request): RedirectResponse => $request->user()->can(PermissionName::BusinessSettingsView->value)
         ? to_route('business-settings.edit')
         : to_route('profile-settings.edit'));

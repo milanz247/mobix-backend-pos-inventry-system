@@ -6,6 +6,7 @@ import {
     ChevronRight,
     LayoutGrid,
     Package,
+    Palette,
     ShoppingCart,
     Settings,
     Users,
@@ -172,6 +173,11 @@ const salesNavItems = computed<NavItem[]>(() => [
         : []),
 ]);
 const settingsNavItems = computed<NavItem[]>(() => [
+    {
+        title: 'Appearance & colors',
+        href: '/settings/appearance',
+        icon: Palette,
+    },
     ...(can('invoice-settings.view')
         ? [{ title: 'Invoice settings', href: editInvoices() }]
         : []),
