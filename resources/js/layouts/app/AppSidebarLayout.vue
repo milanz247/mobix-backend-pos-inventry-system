@@ -32,6 +32,7 @@ const isFixedWorkflowPage = computed(() =>
         'purchasing/purchases/Edit',
         'inventory/Adjustments',
         'inventory/Transfers',
+        'sales/Pos',
         'sales/Show',
     ].includes(page.component),
 );

@@ -244,6 +244,12 @@ const discountLineIndex = ref<number | null>(null);
 const payments = ref<Payment[]>([
     { amount: '', method: 'cash', reference: '', cash_tendered: '' },
 ]);
+const paymentMethods = [
+    { value: 'cash', label: 'Cash' },
+    { value: 'card', label: 'Card' },
+    { value: 'bank_transfer', label: 'Bank transfer' },
+    { value: 'other', label: 'Other' },
+];
 const confirmation = useConfirmationDialog();
 const heldCartStorageKey = `nalakamobile:pos-held-carts:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
 const activeCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
@@ -299,6 +305,14 @@ const hasInsufficientCash = computed(() =>
             cashReceived(payment) < minorUnits(appliedPaymentAmount(payment)),
     ),
 );
+const paymentAllocationMatchesTotal = computed(
+    () =>
+        payments.value.length === 1 ||
+        payments.value.reduce(
+            (sum, payment) => sum + minorUnits(payment.amount),
+            0n,
+        ) === cartTotal(),
+);
 const needsExactCashReset = computed(() => {
     const payment = payments.value[0];
 
@@ -338,12 +352,6 @@ const discountPreview = computed(() => {
     return amount > discountBase.value ? discountBase.value : amount;
 });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-let sidebarWrapper: HTMLElement | null = null;
-let originalDocumentOverflow = '';
-let originalBodyOverflow = '';
-let originalSidebarWrapperHeight = '';
-let originalSidebarWrapperMinHeight = '';
-let originalSidebarWrapperOverflow = '';
 let pendingReceiptWindow: Window | null = null;
 watch([search, categoryId, brandId, locationId], () => {
     cancelShiftPoll?.();
@@ -406,36 +414,9 @@ onBeforeUnmount(() => {
     cancelShiftPoll?.();
     if (searchTimer) clearTimeout(searchTimer);
     closePendingReceiptWindow();
-
-    document.documentElement.style.overflow = originalDocumentOverflow;
-    document.body.style.overflow = originalBodyOverflow;
-
-    if (sidebarWrapper) {
-        sidebarWrapper.style.height = originalSidebarWrapperHeight;
-        sidebarWrapper.style.minHeight = originalSidebarWrapperMinHeight;
-        sidebarWrapper.style.overflow = originalSidebarWrapperOverflow;
-    }
 });
 onMounted(() => {
     navbarReady.value = true;
-    originalDocumentOverflow = document.documentElement.style.overflow;
-    originalBodyOverflow = document.body.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-
-    sidebarWrapper = document.querySelector<HTMLElement>(
-        '[data-slot="sidebar-wrapper"]',
-    );
-
-    if (sidebarWrapper) {
-        originalSidebarWrapperHeight = sidebarWrapper.style.height;
-        originalSidebarWrapperMinHeight = sidebarWrapper.style.minHeight;
-        originalSidebarWrapperOverflow = sidebarWrapper.style.overflow;
-        sidebarWrapper.style.height = '100svh';
-        sidebarWrapper.style.minHeight = '0';
-        sidebarWrapper.style.overflow = 'hidden';
-    }
-
     void loadHeldCarts();
     window.addEventListener('keydown', handleShortcut);
 
@@ -1011,6 +992,56 @@ function resetCashPayment(): void {
         { amount: '', method: 'cash', reference: '', cash_tendered: '' },
     ];
 }
+function addSplitPayment(): void {
+    if (payments.value.length >= 5) return;
+    if (payments.value.length === 1) {
+        payments.value[0].amount = formatMinor(cartTotal());
+        payments.value[0].cash_tendered =
+            payments.value[0].method === 'cash' ? formatMinor(cartTotal()) : '';
+    }
+    payments.value.push({
+        amount: '0.00',
+        method: 'cash',
+        reference: '',
+        cash_tendered: '0.00',
+    });
+}
+function removeSplitPayment(index: number): void {
+    if (payments.value.length <= 1) return;
+    payments.value.splice(index, 1);
+    if (payments.value.length === 1) {
+        payments.value[0].amount = '';
+        payments.value[0].cash_tendered = '';
+    }
+}
+async function switchLocation(id: number): Promise<void> {
+    if (
+        props.creditSale ||
+        drawerProcessing.value ||
+        id === Number(locationId.value)
+    )
+        return;
+    if (cart.value.length > 0) {
+        confirmation.request({
+            title: 'Save cart and switch location?',
+            description: `The current cart will be held at ${props.selectedLocation.name} before switching. You can resume it later from that location.`,
+            confirmLabel: 'Hold cart and switch',
+            onConfirm: () => {
+                void (async () => {
+                    if (await holdCart()) locationId.value = String(id);
+                })();
+            },
+        });
+        return;
+    }
+    locationId.value = String(id);
+}
+function handleLocationSelect(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const nextLocationId = Number(select.value);
+    select.value = locationId.value;
+    void switchLocation(nextLocationId);
+}
 function payRemaining(): void {
     payments.value = [
         {
@@ -1021,13 +1052,11 @@ function payRemaining(): void {
         },
     ];
 }
-function isExactCashPayment(payment: Payment): boolean {
-    return payments.value.length === 1 && payment.method === 'cash';
+function isSinglePayment(): boolean {
+    return payments.value.length === 1;
 }
 function appliedPaymentAmount(payment: Payment): string {
-    return isExactCashPayment(payment)
-        ? formatMinor(cartTotal())
-        : payment.amount;
+    return isSinglePayment() ? formatMinor(cartTotal()) : payment.amount;
 }
 function cashReceived(payment: Payment): bigint {
     return payment.cash_tendered.trim() === ''
@@ -1226,7 +1255,7 @@ function submitCheckout(credit = false): void {
             : {}),
     }));
     form.payments = payments.value
-        .filter((payment) => appliedPaymentAmount(payment) !== '')
+        .filter((payment) => minorUnits(appliedPaymentAmount(payment)) > 0n)
         .map((payment) => ({
             amount: appliedPaymentAmount(payment),
             method: payment.method,
@@ -1310,9 +1339,7 @@ defineOptions({
                     :currency="currency"
                     :checkout-busy="form.processing"
                     @busy="drawerProcessing = $event"
-                    @switch-location="
-                        !creditSale && (locationId = String($event))
-                    "
+                    @switch-location="switchLocation"
                 />
             </Teleport>
 
@@ -1384,11 +1411,13 @@ defineOptions({
                         </select>
                         <select
                             v-if="posSettings.show_location_filter"
-                            v-model="locationId"
+                            :value="locationId"
+                            @change="handleLocationSelect"
                             :disabled="
                                 !!creditSale ||
                                 drawerProcessing ||
-                                form.processing
+                                form.processing ||
+                                cartSaving
                             "
                             class="h-10 min-w-44 flex-1 rounded-md border border-input bg-background px-3 text-sm"
                             aria-label="Sales location"
@@ -1643,9 +1672,12 @@ defineOptions({
                                     :value="held.id"
                                 >
                                     {{
+                                        held.customer_name || 'Walk-in customer'
+                                    }}
+                                    · {{ held.lines.length }} items ·
+                                    {{
                                         new Date(held.held_at).toLocaleString()
                                     }}
-                                    · {{ held.lines.length }} lines
                                 </option>
                             </select>
                         </div>
@@ -1653,8 +1685,8 @@ defineOptions({
                             v-if="heldCarts.length"
                             class="text-xs text-muted-foreground"
                         >
-                            Held carts stay on this device and do not reserve
-                            stock.
+                            Held carts are shared with authorized cashiers at
+                            this location and do not reserve stock.
                         </p>
                         <div
                             v-if="posSettings.show_sale_source"
@@ -1735,7 +1767,7 @@ defineOptions({
                                             "
                                             :id="`qty-${index}`"
                                             v-model="line.quantity"
-                                            class="h-8 w-20 px-2 text-sm tabular-nums"
+                                            class="h-10 w-20 px-2 text-sm tabular-nums"
                                             inputmode="decimal"
                                             aria-label="Quantity"
                                         />
@@ -1760,7 +1792,7 @@ defineOptions({
                                         <Input
                                             :id="`price-${index}`"
                                             v-model="line.unit_price"
-                                            class="h-8 w-24 px-2 text-sm tabular-nums"
+                                            class="h-10 w-24 px-2 text-sm tabular-nums"
                                             inputmode="decimal"
                                             aria-label="Unit price"
                                         />
@@ -1771,7 +1803,7 @@ defineOptions({
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        class="h-8 shrink-0 gap-1.5 px-2.5 text-xs"
+                                        class="h-10 shrink-0 gap-1.5 px-2.5 text-xs"
                                         :class="
                                             minorUnits(line.discount_amount) >
                                             0n
@@ -1827,7 +1859,7 @@ defineOptions({
                                         type="button"
                                         variant="ghost"
                                         size="icon-sm"
-                                        class="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                        class="size-10 shrink-0 text-muted-foreground hover:text-destructive"
                                         aria-label="Remove cart line"
                                         @click="removeLine(index)"
                                         ><Trash2 class="size-4"
@@ -1835,18 +1867,35 @@ defineOptions({
                                 </div>
                                 <div
                                     v-if="
-                                        posSettings.require_imei_on_sale &&
                                         line.variant.tracking_mode ===
                                             'serialized' &&
                                         !line.variant.is_virtual_combo
                                     "
                                     class="mt-2 border-t pt-2"
                                 >
+                                    <Label
+                                        :for="`imei-${index}`"
+                                        class="mb-1 block text-xs"
+                                    >
+                                        IMEI / device identifier
+                                        <span
+                                            v-if="
+                                                posSettings.require_imei_on_sale
+                                            "
+                                            class="text-destructive"
+                                            >· required</span
+                                        >
+                                        <span
+                                            v-else
+                                            class="text-muted-foreground"
+                                            >· optional</span
+                                        >
+                                    </Label>
                                     <Input
                                         :id="`imei-${index}`"
                                         v-model="line.device_identifier"
                                         autocomplete="off"
-                                        class="h-8 text-sm"
+                                        class="h-10 text-sm"
                                         aria-label="IMEI or IMEI2"
                                         placeholder="Scan or enter device IMEI"
                                     />
@@ -1882,27 +1931,107 @@ defineOptions({
                                 </span>
                             </div>
                             <span class="shrink-0 font-semibold">
-                                Due
+                                Total to pay
                                 <strong
                                     class="text-base font-bold tabular-nums"
                                     >{{ money(cartTotal()) }}</strong
                                 >
                             </span>
                         </div>
+                        <p class="text-[11px] text-muted-foreground">
+                            Prices include {{ taxRate }}% tax.
+                        </p>
 
-                        <div class="grid gap-2">
+                        <div v-if="payments.length > 1" class="space-y-2">
+                            <div
+                                v-for="(payment, paymentIndex) in payments"
+                                :key="paymentIndex"
+                                class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2"
+                            >
+                                <select
+                                    v-model="payment.method"
+                                    class="h-10 min-w-0 rounded-md border border-input bg-background px-2 text-sm"
+                                    :aria-label="`Payment method ${paymentIndex + 1}`"
+                                >
+                                    <option
+                                        v-for="method in paymentMethods"
+                                        :key="method.value"
+                                        :value="method.value"
+                                    >
+                                        {{ method.label }}
+                                    </option>
+                                </select>
+                                <Input
+                                    v-model="payment.amount"
+                                    inputmode="decimal"
+                                    class="h-10 min-w-0"
+                                    :aria-label="`Payment amount ${paymentIndex + 1}`"
+                                    placeholder="Amount"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    class="size-10 px-0"
+                                    :aria-label="`Remove payment ${paymentIndex + 1}`"
+                                    @click="removeSplitPayment(paymentIndex)"
+                                    >×</Button
+                                >
+                                <Input
+                                    v-if="payment.method === 'cash'"
+                                    v-model="payment.cash_tendered"
+                                    inputmode="decimal"
+                                    class="col-span-2 h-9"
+                                    :aria-label="`Cash received for payment ${paymentIndex + 1}`"
+                                    placeholder="Cash received"
+                                />
+                                <Input
+                                    v-else
+                                    v-model="payment.reference"
+                                    class="col-span-2 h-9"
+                                    :aria-label="`Payment reference ${paymentIndex + 1}`"
+                                    placeholder="Reference (optional)"
+                                />
+                            </div>
+                            <p
+                                v-if="!paymentAllocationMatchesTotal"
+                                class="text-xs text-destructive"
+                            >
+                                Payment amounts must add up to
+                                {{ money(cartTotal()) }}.
+                            </p>
+                        </div>
+                        <div v-else class="grid gap-2">
                             <div class="min-w-0">
                                 <div
                                     class="mb-1 flex items-center justify-between gap-2"
                                 >
-                                    <Label
-                                        for="cash-tendered"
-                                        class="text-xs font-medium"
-                                        >Cash received</Label
+                                    <div
+                                        class="flex min-w-0 flex-1 items-center gap-2"
                                     >
+                                        <select
+                                            v-model="payments[0].method"
+                                            class="h-9 min-w-28 rounded-md border border-input bg-background px-2 text-sm"
+                                            aria-label="Payment method"
+                                        >
+                                            <option
+                                                v-for="method in paymentMethods"
+                                                :key="method.value"
+                                                :value="method.value"
+                                            >
+                                                {{ method.label }}
+                                            </option>
+                                        </select>
+                                        <Label
+                                            v-if="payments[0].method === 'cash'"
+                                            for="cash-tendered"
+                                            class="truncate text-xs font-medium"
+                                            >Cash received</Label
+                                        >
+                                    </div>
                                     <Button
                                         v-if="
                                             posSettings.show_pay_exact &&
+                                            payments[0].method === 'cash' &&
                                             needsExactCashReset &&
                                             payments[0].cash_tendered !== ''
                                         "
@@ -1916,6 +2045,7 @@ defineOptions({
                                     </Button>
                                 </div>
                                 <Input
+                                    v-if="payments[0].method === 'cash'"
                                     id="cash-tendered"
                                     data-cash-input
                                     v-model="payments[0].cash_tendered"
@@ -1923,6 +2053,22 @@ defineOptions({
                                     :placeholder="money(cartTotal())"
                                     class="h-10 border-primary/30 bg-background px-3 text-base font-semibold tabular-nums"
                                 />
+                                <Input
+                                    v-else
+                                    v-model="payments[0].reference"
+                                    aria-label="Payment reference (optional)"
+                                    placeholder="Payment reference (optional)"
+                                    class="h-10 border-primary/30 bg-background px-3 text-sm"
+                                />
+                                <Button
+                                    v-if="cart.length > 0"
+                                    type="button"
+                                    variant="ghost"
+                                    class="mt-1 h-8 px-2 text-xs"
+                                    :disabled="payments.length >= 5"
+                                    @click="addSplitPayment"
+                                    >＋ Split payment</Button
+                                >
                             </div>
 
                             <div
@@ -1939,6 +2085,7 @@ defineOptions({
                                         !hasActiveShift ||
                                         cart.length === 0 ||
                                         hasInsufficientCash ||
+                                        !paymentAllocationMatchesTotal ||
                                         !!creditSale
                                     "
                                     @click="submitCheckout(false)"
@@ -1957,7 +2104,9 @@ defineOptions({
                                         Processing…
                                     </span>
                                     <template v-else>
-                                        <span class="truncate">Pay cash</span>
+                                        <span class="truncate"
+                                            >Complete sale</span
+                                        >
                                         <span class="shrink-0 tabular-nums">{{
                                             money(cartTotal())
                                         }}</span>
@@ -1990,6 +2139,8 @@ defineOptions({
 
                         <div
                             v-if="
+                                payments.length === 1 &&
+                                payments[0].method === 'cash' &&
                                 payments[0].cash_tendered !== '' &&
                                 changeDue(payments[0]) > 0n
                             "
@@ -2002,6 +2153,8 @@ defineOptions({
                         </div>
                         <div
                             v-else-if="
+                                payments.length === 1 &&
+                                payments[0].method === 'cash' &&
                                 payments[0].cash_tendered !== '' &&
                                 remainingCash(payments[0]) > 0n
                             "
