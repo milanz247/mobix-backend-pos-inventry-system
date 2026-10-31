@@ -14,6 +14,7 @@ use App\Models\SaleLine;
 use App\Models\SaleLineComponent;
 use App\Models\SerializedDevice;
 use App\Models\StockMovement;
+use App\Services\ProductActivityLogger;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,10 +24,11 @@ class DeleteProduct
     /**
      * Permanently delete an unused, inactive product and its catalogue-only data.
      */
-    public function handle(Business $business, Product $product): ?string
+    public function handle(Business $business, Product $product, ?ProductActivityLogger $activity = null): ?string
     {
+        $activity ??= app(ProductActivityLogger::class);
         try {
-            return DB::transaction(function () use ($business, $product): ?string {
+            return DB::transaction(function () use ($business, $product, $activity): ?string {
                 $managedProduct = $business->products()
                     ->lockForUpdate()
                     ->findOrFail($product->id);
@@ -59,10 +61,15 @@ class DeleteProduct
                     ]);
                 }
 
+                $imagePath = $managedProduct->image_path;
+                $before = $managedProduct->getAttributes();
+                $before['variants'] = $managedProduct->variants()->orderBy('id')->get(['id', 'name', 'sku', 'barcode', 'status'])->map(fn ($variant): array => [
+                    'id' => $variant->id, 'name' => $variant->name, 'sku' => $variant->sku,
+                    'barcode' => $variant->barcode, 'status' => $variant->status,
+                ])->all();
+                $activity->product($managedProduct, 'deleted', $before, []);
                 BundleComponent::query()->whereIn('bundle_variant_id', $variantIds)->delete();
                 $managedProduct->variants()->delete();
-
-                $imagePath = $managedProduct->image_path;
                 $managedProduct->delete();
 
                 return $imagePath;

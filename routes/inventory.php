@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Inventory\DamagedStockController;
+use App\Http\Controllers\Inventory\DamagedStockReportController;
 use App\Http\Controllers\Inventory\InventoryOverviewController;
 use App\Http\Controllers\Inventory\InventoryOperationReportController;
 use App\Http\Controllers\Inventory\LocationInventoryController;
@@ -18,6 +19,7 @@ Route::prefix('inventory')->name('inventory.')->middleware('auth')->group(functi
     Route::get('reorder', [ReorderLevelController::class, 'index'])->middleware('can:inventory.view')->name('reorder.index');
     Route::put('reorder', [ReorderLevelController::class, 'update'])->middleware(['can:inventory.view', 'can:inventory.adjust'])->name('reorder.update');
     Route::get('damaged', [DamagedStockController::class, 'index'])->middleware('can:damaged-stock.view')->name('damaged.index');
+    Route::get('reports/damaged-stock', DamagedStockReportController::class)->middleware('can:damaged-stock.view')->name('reports.damaged-stock');
     Route::post('damaged', [DamagedStockController::class, 'store'])->middleware(['can:damaged-stock.view', 'can:damaged-stock.create'])->name('damaged.store');
     Route::post('damaged/{entry}/resolve', [DamagedStockController::class, 'resolve'])->middleware('can:damaged-stock.view')->name('damaged.resolve');
     Route::get('/', InventoryOverviewController::class)->middleware('can:inventory.view')->name('index');

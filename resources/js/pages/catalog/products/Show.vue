@@ -4,8 +4,10 @@ import { ArrowLeft, Pencil } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import ShiftPagination from '@/components/shifts/ShiftPagination.vue';
 import { edit, index } from '@/routes/products';
 import type { Auth } from '@/types';
+import type { PageLink } from '@/types/shift';
 
 type Option = { value: string; label: string };
 type Component = {
@@ -14,7 +16,7 @@ type Component = {
     variant: string;
     sku: string;
     quantity: string;
-    cost_price: string;
+    cost_price: string | null;
     status: string;
     product_status: string;
 };
@@ -30,11 +32,11 @@ type Variant = {
     tracking_mode: string;
     unit: string;
     condition: string | null;
-    cost_price: string;
+    cost_price: string | null;
     selling_price: string;
     minimum_selling_price: string | null;
     status: string;
-    estimated_component_cost: string;
+    estimated_component_cost: string | null;
     components: Component[];
 };
 type Product = {
@@ -48,6 +50,16 @@ type Product = {
     brand: string | null;
     variants: Variant[];
 };
+type ActivityEntry = {
+    id: number;
+    action: string;
+    subject_type: string;
+    subject_id: number | null;
+    actor: string;
+    location: string;
+    created_at: string;
+    changes: { field: string; before: unknown; after: unknown }[];
+};
 
 const props = defineProps<{
     product: Product;
@@ -55,6 +67,12 @@ const props = defineProps<{
     trackingModes: Option[];
     conditions: Option[];
     currency: string;
+    canViewActivity: boolean;
+    activity: {
+        data: ActivityEntry[];
+        links: PageLink[];
+        total: number;
+    } | null;
 }>();
 
 const auth = usePage<{ auth: Auth }>().props.auth;
@@ -72,6 +90,14 @@ const formatPrice = (value: string | null): string =>
               currency: props.currency,
               maximumFractionDigits: 2,
           }).format(Number(value));
+const activityValue = (value: unknown): string =>
+    value === null || value === undefined
+        ? '—'
+        : typeof value === 'string'
+          ? value
+          : JSON.stringify(value);
+const activityField = (field: string): string =>
+    field.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 
 defineOptions({
     layout: {
@@ -386,6 +412,85 @@ defineOptions({
                     </div>
                 </div>
             </article>
+        </section>
+        <section
+            v-if="canViewActivity && activity"
+            class="space-y-3"
+            aria-labelledby="product-activity-title"
+        >
+            <div>
+                <h2 id="product-activity-title" class="text-lg font-semibold">
+                    Product activity
+                </h2>
+                <p class="text-sm text-muted-foreground">
+                    Catalogue and variant changes, with the staff member and
+                    active location recorded. Stock transactions remain in
+                    Inventory movement history.
+                </p>
+            </div>
+            <div v-if="activity.data.length" class="space-y-2">
+                <article
+                    v-for="entry in activity.data"
+                    :key="entry.id"
+                    class="surface-panel p-4"
+                >
+                    <header class="flex flex-wrap justify-between gap-2">
+                        <div class="font-medium">
+                            {{ entry.action }} {{ entry.subject_type }}
+                            <span
+                                v-if="entry.subject_type === 'variant'"
+                                class="text-muted-foreground"
+                                >#{{ entry.subject_id }}</span
+                            >
+                        </div>
+                        <time
+                            class="text-sm text-muted-foreground"
+                            :datetime="entry.created_at"
+                        >
+                            {{ new Date(entry.created_at).toLocaleString() }}
+                        </time>
+                    </header>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        {{ entry.actor }} · {{ entry.location }}
+                    </p>
+                    <div
+                        v-if="entry.changes.length"
+                        class="mt-3 overflow-x-auto"
+                    >
+                        <table class="data-table min-w-[520px]">
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Before</th>
+                                    <th>After</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="change in entry.changes"
+                                    :key="change.field"
+                                >
+                                    <td>{{ activityField(change.field) }}</td>
+                                    <td class="max-w-64 break-words">
+                                        {{ activityValue(change.before) }}
+                                    </td>
+                                    <td class="max-w-64 break-words">
+                                        {{ activityValue(change.after) }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-else class="mt-3 text-sm text-muted-foreground">
+                        No tracked fields changed.
+                    </p>
+                </article>
+                <ShiftPagination :links="activity.links" />
+            </div>
+            <div v-else class="surface-panel p-4 text-sm text-muted-foreground">
+                No product activity has been recorded since activity history was
+                enabled.
+            </div>
         </section>
     </section>
 </template>

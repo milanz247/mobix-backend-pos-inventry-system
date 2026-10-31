@@ -72,6 +72,7 @@ enum PermissionName: string
     case SalesCostsView = 'sales.costs.view';
 
     case ProductsDelete = 'products.delete';
+    case ProductActivityView = 'product-activity.view';
     case CategoriesDelete = 'categories.delete';
     case BrandsDelete = 'brands.delete';
     case SuppliersDelete = 'suppliers.delete';
@@ -93,6 +94,7 @@ enum PermissionName: string
     case SalesReceiptsPrint = 'sales-receipts.print';
     case ReturnReceiptsPrint = 'return-receipts.print';
     case SaleReplacementsCreate = 'sale-replacements.create';
+    case SalesCustomerLink = 'sales.customer-link';
     case UsersChangeStatus = 'users.change-status';
     case LocationsChangeStatus = 'locations.change-status';
 
@@ -100,12 +102,12 @@ enum PermissionName: string
     {
         return match ($this) {
             self::DashboardView => 'Dashboard',
-            self::ProductsDelete => 'Products', self::CategoriesDelete => 'Categories', self::BrandsDelete => 'Brands',
+            self::ProductsDelete, self::ProductActivityView => 'Products', self::CategoriesDelete => 'Categories', self::BrandsDelete => 'Brands',
             self::SuppliersDelete => 'Suppliers', self::PurchasesDelete => 'Purchases',
             self::InvoiceSettingsView, self::InvoiceSettingsUpdate => 'Invoice Settings',
             self::PosSettingsView, self::PosSettingsUpdate => 'POS Settings',
             self::DamagedStockView, self::DamagedStockCreate, self::DamagedStockRepair, self::DamagedStockWriteOff => 'Damaged Stock',
-            self::CreditSalesView, self::CreditSalesAddItems, self::SalesReceiptsPrint, self::ReturnReceiptsPrint, self::SaleReplacementsCreate => 'POS & Sales',
+            self::CreditSalesView, self::CreditSalesAddItems, self::SalesReceiptsPrint, self::ReturnReceiptsPrint, self::SaleReplacementsCreate, self::SalesCustomerLink => 'POS & Sales',
             self::CustomersView, self::CustomersCreate, self::CustomersUpdate, self::CustomersDelete => 'Customers',
             self::UsersChangeStatus => 'Users', self::LocationsChangeStatus => 'Locations',
             self::ShiftsView, self::ShiftsOpen, self::ShiftsMovements, self::ShiftsClose,
@@ -175,6 +177,7 @@ enum PermissionName: string
     {
         return match ($this) {
             self::ProductsDelete, self::CategoriesDelete, self::BrandsDelete, self::SuppliersDelete => 'Delete unused record',
+            self::ProductActivityView => 'View product activity history',
             self::PurchasesDelete => 'Delete draft invoice',
             self::UsersChangeStatus, self::LocationsChangeStatus => 'Activate / deactivate',
             self::DamagedStockCreate => 'Move stock to damaged', self::DamagedStockRepair => 'Return repaired stock', self::DamagedStockWriteOff => 'Write off damaged stock',
@@ -182,6 +185,7 @@ enum PermissionName: string
             self::CustomersView => 'View customers and statements', self::CustomersCreate => 'Add customer',
             self::SalesReceiptsPrint => 'Print sale receipt', self::ReturnReceiptsPrint => 'Print return / replacement receipt',
             self::SaleReplacementsCreate => 'Issue replacement',
+            self::SalesCustomerLink => 'Link historical sale to customer',
             self::UsersAssignRoles => 'Assign roles',
             self::LocationsAssignUsers => 'Assign users',
             self::ProductsDeactivate,
@@ -219,6 +223,8 @@ enum PermissionName: string
             self::SaleReplacementsCreate => 'Warranty replacements',
             self::SaleRefundsCreate => 'Customer refunds',
             self::SalesCostsView => 'Cost and profit information',
+            self::ProductActivityView => 'Product activity history',
+            self::SalesCustomerLink => 'Customer accounts',
             self::InventoryReceive => 'Stock receiving', self::InventoryOpening => 'Opening stock',
             self::InventoryAdjust => 'Stock adjustments', self::InventoryTransfer => 'Stock transfers',
             self::InventoryView => 'Stock overview / location balances',
@@ -251,6 +257,7 @@ enum PermissionName: string
             self::DamagedStockRepair => 'Move a repaired quantity from damaged stock back to available stock.',
             self::DamagedStockWriteOff => 'Remove unusable damaged quantity without increasing available stock.',
             self::SalesCostsView => 'Reveal buying costs, damaged-stock valuation and gross profit.',
+            self::ProductActivityView => 'View recorded changes to product details and variants.',
             self::SaleReplacementsCreate => 'Return faulty goods and issue a matching replacement without a cash refund.',
             self::ShiftsViewAll => 'View other cashiers’ shifts within assigned locations.',
             self::UsersAssignRoles => 'Assign permitted roles to user accounts.',
@@ -272,9 +279,11 @@ enum PermissionName: string
             self::CreditSalesAddItems => ['sales.credit', 'sales.create', 'credit-sales.view'],
             self::SalePaymentsCreate, self::SaleReturnsCreate, self::SaleRefundsCreate, self::SalesReceiptsPrint, self::ReturnReceiptsPrint => ['sales.view'],
             self::SaleReplacementsCreate => ['sales.view', 'sales.create', 'sale-returns.create', 'shifts.view'],
+            self::SalesCustomerLink => ['sales.view', 'customers.view'],
             self::PurchasesPost => ['purchases.view', 'inventory.receive'],
             self::PurchasePaymentsCreate, self::PurchaseReturnsCreate => ['purchases.view'],
             self::DamagedStockCreate, self::DamagedStockRepair, self::DamagedStockWriteOff => ['damaged-stock.view'],
+            self::ProductActivityView => ['products.view'],
             self::ShiftsOpen, self::ShiftsMovements, self::ShiftsClose => ['shifts.view'],
             self::ShiftsApprove, self::ShiftsCorrect => ['shifts.view', 'shifts.view-all'],
             self::UsersChangeStatus => ['users.view'], self::LocationsChangeStatus => ['locations.view'],

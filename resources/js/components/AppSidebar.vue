@@ -84,6 +84,9 @@ const catalogNavItems = computed<NavItem[]>(() => [
     ...(can('products.view')
         ? [{ title: 'All products', href: productsIndex() }]
         : []),
+    ...(can('product-activity.view')
+        ? [{ title: 'Product activity', href: '/products/activity' }]
+        : []),
     ...(can('categories.view')
         ? [{ title: 'Categories', href: categoriesIndex() }]
         : []),
@@ -102,8 +105,11 @@ const inventoryNavItems = computed<NavItem[]>(() => [
     ...(can('inventory.opening')
         ? [{ title: 'Opening stock', href: '/inventory/opening-stock' }]
         : []),
+    ...(can('damaged-stock.view')
+        ? [{ title: 'Damaged stock', href: '/inventory/damaged' }]
+        : []),
 ]);
-const inventoryReportItems = computed<NavItem[]>(() => [
+const reportNavItems = computed<NavItem[]>(() => [
     ...(can('inventory.view')
         ? [
               {
@@ -123,6 +129,14 @@ const inventoryReportItems = computed<NavItem[]>(() => [
         : []),
     ...(can('stock-movements.view')
         ? [{ title: 'Product movement history', href: '/inventory/movements' }]
+        : []),
+    ...(can('damaged-stock.view')
+        ? [
+              {
+                  title: 'Damaged stock report',
+                  href: '/inventory/reports/damaged-stock',
+              },
+          ]
         : []),
     ...(can('sales.view') && can('credit-sales.view')
         ? [{ title: 'Credit sales report', href: '/sales/credit/report' }]
@@ -350,7 +364,7 @@ watch(reportsAreActive, (active) => {
                 </SidebarMenu>
             </SidebarGroup>
 
-            <SidebarGroup v-if="inventoryReportItems.length" class="px-2 py-0">
+            <SidebarGroup v-if="reportNavItems.length" class="px-2 py-0">
                 <SidebarMenu>
                     <Collapsible
                         as-child
@@ -374,7 +388,7 @@ watch(reportsAreActive, (active) => {
                             <CollapsibleContent>
                                 <SidebarMenuSub>
                                     <SidebarMenuSubItem
-                                        v-for="item in inventoryReportItems"
+                                        v-for="item in reportNavItems"
                                         :key="item.title"
                                     >
                                         <SidebarMenuSubButton

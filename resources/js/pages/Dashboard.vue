@@ -70,7 +70,7 @@ const overviewCards = computed(() => [
               {
                   label: "Today's gross profit",
                   value: money(props.overview.gross_profit_today),
-                  detail: 'Sales margin after item costs and returns',
+                  detail: 'Item margin after returns; excludes operating expenses',
                   icon: TrendingUp,
                   tone: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
               },

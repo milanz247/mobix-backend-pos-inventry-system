@@ -1,19 +1,33 @@
 <script setup lang="ts">
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Printer, RotateCcw } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import sales, { index, receipt } from '@/routes/sales';
 import { shiftDate } from '@/lib/shift';
 
 const page = usePage();
 
 type Method = { value: string; label: string };
+type CustomerOption = {
+    id: number;
+    name: string;
+    phone: string;
+    email: string | null;
+};
 type SaleData = {
     id: number;
     sale_number: string;
@@ -104,6 +118,7 @@ const props = defineProps<{
     canPrintReceipt: boolean;
     canPrintReturn: boolean;
     canAddItems: boolean;
+    canLinkCustomer: boolean;
     canReturn: boolean;
     canRefund: boolean;
     paymentMethods: Method[];
@@ -118,6 +133,59 @@ const form = useForm({
 const hasOutstanding = computed(
     () => BigInt(props.outstanding.replace('.', '')) > 0n,
 );
+const linkDialogOpen = ref(false);
+const customerSearch = ref('');
+const customerOptions = ref<CustomerOption[]>([]);
+const selectedCustomer = ref<CustomerOption | null>(null);
+const customerSearchError = ref('');
+const customerLinkForm = useForm({ customer_id: null as number | null });
+let customerSearchTimer: ReturnType<typeof setTimeout> | undefined;
+let customerSearchController: AbortController | undefined;
+watch(customerSearch, (value) => {
+    if (customerSearchTimer) clearTimeout(customerSearchTimer);
+    customerSearchController?.abort();
+    customerOptions.value = [];
+    customerSearchError.value = '';
+    const term = value.trim();
+    if (term.length < 2) return;
+    customerSearchTimer = setTimeout(async () => {
+        customerSearchController = new AbortController();
+        try {
+            const response = await fetch(
+                `/customers/search?search=${encodeURIComponent(term)}`,
+                {
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    signal: customerSearchController.signal,
+                },
+            );
+            if (!response.ok) throw new Error('Customer search failed.');
+            customerOptions.value = (await response.json()) as CustomerOption[];
+        } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError')
+                return;
+            customerSearchError.value =
+                'Could not search customers. Try again.';
+        }
+    }, 250);
+});
+function linkHistoricalSale(): void {
+    if (!selectedCustomer.value) return;
+    customerLinkForm.customer_id = selectedCustomer.value.id;
+    customerLinkForm.patch(`/sales/${props.sale.id}/customer`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            linkDialogOpen.value = false;
+            router.reload({ only: ['sale', 'canLinkCustomer'] });
+        },
+    });
+}
+onBeforeUnmount(() => {
+    if (customerSearchTimer) clearTimeout(customerSearchTimer);
+    customerSearchController?.abort();
+});
 function formatMinor(value: bigint): string {
     return `${value / 100n}.${(value % 100n).toString().padStart(2, '0')}`;
 }
@@ -232,6 +300,15 @@ defineOptions({
                                 'No contact saved'
                             }}
                         </p>
+                        <Button
+                            v-if="canLinkCustomer"
+                            type="button"
+                            variant="link"
+                            class="h-auto p-0 text-sm"
+                            @click="linkDialogOpen = true"
+                        >
+                            Link historical invoice
+                        </Button>
                     </div>
                 </div>
                 <div class="table-panel min-h-0 flex-1 overflow-hidden">
@@ -654,4 +731,102 @@ defineOptions({
             </aside>
         </div>
     </section>
+    <Dialog v-model:open="linkDialogOpen">
+        <DialogContent class="sm:max-w-lg">
+            <DialogHeader>
+                <DialogTitle>Link invoice to a customer</DialogTitle>
+                <DialogDescription>
+                    Invoice {{ sale.sale_number }} currently records “{{
+                        sale.customer.name || 'Walk-in customer'
+                    }}”. Linking it adds this existing invoice to the selected
+                    customer’s history without changing its saved customer
+                    details, prices, payments, or dates.
+                </DialogDescription>
+            </DialogHeader>
+            <div class="space-y-3">
+                <p
+                    v-if="sale.payment_status !== 'paid'"
+                    class="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+                >
+                    This invoice has an outstanding balance of
+                    {{ money(outstanding) }}. Linking it will include that
+                    balance in the customer account. Confirm the customer
+                    identity before saving.
+                </p>
+                <Label for="historical-customer-search">Search customers</Label>
+                <Input
+                    id="historical-customer-search"
+                    v-model="customerSearch"
+                    placeholder="Name or phone number"
+                    autocomplete="off"
+                />
+                <p
+                    v-if="customerSearch.trim().length < 2"
+                    class="text-sm text-muted-foreground"
+                >
+                    Enter at least two characters.
+                </p>
+                <div
+                    v-else-if="customerOptions.length"
+                    class="max-h-56 overflow-y-auto rounded-lg border"
+                >
+                    <button
+                        v-for="customer in customerOptions"
+                        :key="customer.id"
+                        type="button"
+                        class="flex w-full items-start justify-between gap-3 border-b p-3 text-left last:border-0 hover:bg-muted"
+                        @click="selectedCustomer = customer"
+                    >
+                        <span
+                            ><span class="block font-medium">{{
+                                customer.name
+                            }}</span
+                            ><span class="text-sm text-muted-foreground"
+                                >{{ customer.phone
+                                }}<span v-if="customer.email">
+                                    · {{ customer.email }}</span
+                                ></span
+                            ></span
+                        >
+                        <span
+                            v-if="selectedCustomer?.id === customer.id"
+                            class="text-primary"
+                            >Selected</span
+                        >
+                    </button>
+                </div>
+                <p
+                    v-else-if="!customerSearchError"
+                    class="text-sm text-muted-foreground"
+                >
+                    No matching customers found.
+                </p>
+                <p v-if="customerSearchError" class="text-sm text-destructive">
+                    {{ customerSearchError }}
+                </p>
+                <p
+                    v-if="selectedCustomer"
+                    class="rounded-lg bg-muted p-3 text-sm"
+                >
+                    Selected: <strong>{{ selectedCustomer.name }}</strong> ·
+                    {{ selectedCustomer.phone }}
+                </p>
+                <InputError :message="customerLinkForm.errors.customer_id" />
+            </div>
+            <DialogFooter>
+                <Button
+                    type="button"
+                    variant="outline"
+                    @click="linkDialogOpen = false"
+                    >Cancel</Button
+                >
+                <Button
+                    type="button"
+                    :disabled="!selectedCustomer || customerLinkForm.processing"
+                    @click="linkHistoricalSale"
+                    >Link invoice</Button
+                >
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>

@@ -1,4 +1,4 @@
-> Updated 2026-10-31: see [shop operations improvements](../shop-operations-2026-10-31.md) for customer accounts, credit terms, stock alerts, server-held carts and tax. Repair job management and backup/restore remain excluded.
+> Updated 2026-10-31: see [shop operations improvements](../shop-operations-2026-10-31.md) for customer accounts, credit terms, stock alerts, server-held carts and tax. Product activity history and manual historical-sale linking are also available. Repair job management and backup/restore remain excluded.
 
 # Implementation status and documentation audit
 
@@ -14,11 +14,14 @@ Audit basis: route list, route middleware, Vue page/components, controllers, req
 - Supplier CRUD/status; purchase draft creation/edit, posting to inventory, supplier payments, and posted purchase returns.
 - POS catalogue search/filter, cart, local held carts, customer contact fields, sale-source capture, discounts/price overrides/credit permission checks, multi-method payments, sale posting, serialized device selection, and combo component stock posting.
 - Sales history/detail/receipt, later sale payments, sales returns and optional refunds, and invoice settings/live preview.
+- Permission-gated product activity history for catalogue and variant creation, edits, status changes, and deletion. Changes record the actor and active location; cost changes are hidden without cost-view permission.
 - Dashboard sales, payment, return/refund, outstanding, net-sales-trend, and cost-snapshot gross-profit calculations are defined in code and location-scoped.
 
 ## Partially implemented or limited
 
-- **Customer operations:** customer directory, bounded POS search, normalized phone matching, credit terms and location-scoped statements are implemented. Existing historical unlinked sales are not automatically assigned to customers.
+- **Customer operations:** customer directory, bounded POS search, normalized phone matching, credit terms and location-scoped statements are implemented. Historical unlinked sales can be linked manually by authorized staff; they are never auto-assigned. Linking adds the existing invoice balance to the customer account without rewriting invoice snapshots.
+- **Product activity:** history begins when the new activity logging migration is applied; it does not reconstruct earlier edits. Stock movements and device events remain in their existing inventory history screens.
+- **Damaged stock report:** the screen paginates matching rows, while its print view includes every row matching the current filters. Large print jobs still depend on browser capacity.
 - **Repair:** serialized devices can move to/from an `in_repair` status with events. No repair-management workflow exists. A Repair centre location type and Technician role do not mean repair jobs are implemented.
 - **Low stock:** location-specific reorder levels, low-stock screens and dashboard attention counts are implemented. External email/SMS notifications are not included.
 - **Tax:** business settings controls the tax-inclusive rate, default zero. Checkout, returns and replacements retain per-line tax snapshots.

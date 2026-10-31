@@ -2,11 +2,13 @@
 
 use App\Http\Controllers\Catalog\BrandController;
 use App\Http\Controllers\Catalog\CategoryController;
+use App\Http\Controllers\Catalog\ProductActivityController;
 use App\Http\Controllers\Catalog\ProductController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function (): void {
     Route::get('products', [ProductController::class, 'index'])->middleware('can:products.view')->name('products.index');
+    Route::get('products/activity', ProductActivityController::class)->middleware(['can:product-activity.view', 'can:products.view'])->name('products.activity');
     Route::get('products/create', [ProductController::class, 'create'])->middleware(['can:products.create', 'can:variants.manage'])->name('products.create');
     Route::post('products', [ProductController::class, 'store'])->middleware(['can:products.create', 'can:variants.manage'])->name('products.store');
     Route::get('products/{product}', [ProductController::class, 'show'])->middleware('can:products.view')->name('products.show');

@@ -25,6 +25,7 @@ type Entry = {
     product: string;
     variant: string;
     sku: string;
+    barcode: string | null;
     model_number: string | null;
     category: string;
     brand: string | null;
@@ -36,6 +37,7 @@ type Entry = {
     date: string;
     sale_id: number | null;
     invoice: string | null;
+    customer: string | null;
 };
 const props = defineProps<{
     entries: { data: Entry[]; links: PageLink[] };
@@ -144,6 +146,18 @@ function submit(): void {
     });
 }
 const selectedEntry = ref<Entry | null>(null);
+const damageDetailOpen = ref(false);
+function openDamageDetail(entry: Entry): void {
+    selectedEntry.value = entry;
+    damageDetailOpen.value = true;
+}
+function startResolution(): void {
+    if (selectedEntry.value) {
+        const entry = selectedEntry.value;
+        damageDetailOpen.value = false;
+        openResolution(entry);
+    }
+}
 const resolveOpen = ref(false);
 const resolution = useForm({
     operation_key: crypto.randomUUID(),
@@ -348,7 +362,7 @@ defineOptions({
             <Input
                 v-model="search"
                 class="max-w-sm"
-                placeholder="Product, SKU, invoice, customer or IMEI"
+                placeholder="Product, SKU, barcode, invoice, customer or IMEI"
                 aria-label="Search damaged stock"
             />
             <select
@@ -432,7 +446,12 @@ defineOptions({
                 <article
                     v-for="entry in entries.data"
                     :key="entry.id"
-                    class="rounded-lg border p-3"
+                    class="cursor-pointer rounded-lg border p-3 transition hover:border-primary/40 hover:bg-muted/30"
+                    tabindex="0"
+                    role="button"
+                    @click="openDamageDetail(entry)"
+                    @keydown.enter.prevent="openDamageDetail(entry)"
+                    @keydown.space.prevent="openDamageDetail(entry)"
                 >
                     <div class="flex items-start justify-between gap-3">
                         <p class="min-w-0 font-semibold">
@@ -448,7 +467,7 @@ defineOptions({
                         </div>
                     </div>
                     <p class="mt-2 font-mono text-xs break-all">
-                        SKU {{ entry.sku }}
+                        SKU {{ entry.sku }} · Barcode {{ entry.barcode || '—' }}
                     </p>
                     <p class="text-xs text-muted-foreground">
                         Model {{ entry.model_number || '—' }} ·
@@ -467,7 +486,7 @@ defineOptions({
                             v-if="canAdjust && Number(entry.remaining) > 0"
                             variant="outline"
                             size="sm"
-                            @click="openResolution(entry)"
+                            @click.stop="openResolution(entry)"
                             >{{
                                 canRepair && canWriteOff
                                     ? 'Repair / Write off'
@@ -484,6 +503,7 @@ defineOptions({
                             as-child
                             variant="ghost"
                             size="sm"
+                            @click.stop
                             ><Link :href="`/sales/${entry.sale_id}`"
                                 >View invoice</Link
                             ></Button
@@ -513,11 +533,21 @@ defineOptions({
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="entry in entries.data" :key="entry.id">
+                    <tr
+                        v-for="entry in entries.data"
+                        :key="entry.id"
+                        class="cursor-pointer hover:bg-muted/40"
+                        tabindex="0"
+                        role="button"
+                        @click="openDamageDetail(entry)"
+                        @keydown.enter.prevent="openDamageDetail(entry)"
+                        @keydown.space.prevent="openDamageDetail(entry)"
+                    >
                         <td data-label="Product">
                             {{ entry.product }} · {{ entry.variant }}
                             <p class="text-xs text-muted-foreground">
-                                SKU {{ entry.sku }} · Model
+                                SKU {{ entry.sku }} · Barcode
+                                {{ entry.barcode || '—' }} · Model
                                 {{ entry.model_number || '—' }}
                             </p>
                             <p class="text-xs text-muted-foreground">
@@ -539,6 +569,7 @@ defineOptions({
                                 v-if="entry.sale_id && canViewSales"
                                 :href="`/sales/${entry.sale_id}`"
                                 class="underline"
+                                @click.stop
                                 >{{ entry.invoice }}</Link
                             >
                             <p>{{ entry.reason }}</p>
@@ -552,7 +583,7 @@ defineOptions({
                                 v-if="canAdjust && Number(entry.remaining) > 0"
                                 variant="outline"
                                 size="sm"
-                                @click="openResolution(entry)"
+                                @click.stop="openResolution(entry)"
                                 >{{
                                     canRepair && canWriteOff
                                         ? 'Repair / Write off'
@@ -668,6 +699,111 @@ defineOptions({
             <ShiftPagination :links="devices.links" />
         </div>
     </section>
+    <Dialog v-model:open="damageDetailOpen">
+        <DialogContent class="sm:max-w-xl">
+            <DialogHeader>
+                <DialogTitle>Damaged item details</DialogTitle>
+                <DialogDescription>
+                    Review where the item was found, how much remains, and the
+                    recorded repair or damage notes.
+                </DialogDescription>
+            </DialogHeader>
+            <dl
+                v-if="selectedEntry"
+                class="grid gap-3 rounded-lg border p-3 sm:grid-cols-2"
+            >
+                <div class="sm:col-span-2">
+                    <dt class="text-xs text-muted-foreground">Product</dt>
+                    <dd class="font-semibold">
+                        {{ selectedEntry.product }} ·
+                        {{ selectedEntry.variant }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">Location</dt>
+                    <dd>{{ selectedEntry.location }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">
+                        Damaged quantity
+                    </dt>
+                    <dd>
+                        {{ damageQuantity(selectedEntry.remaining) }} remaining
+                        of {{ damageQuantity(selectedEntry.quantity) }} recorded
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">SKU</dt>
+                    <dd class="font-mono">{{ selectedEntry.sku }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">Barcode</dt>
+                    <dd class="font-mono">
+                        {{ selectedEntry.barcode || '—' }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">
+                        Model / category
+                    </dt>
+                    <dd>
+                        {{ selectedEntry.model_number || '—' }} ·
+                        {{ selectedEntry.category }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">Brand</dt>
+                    <dd>{{ selectedEntry.brand || 'Unbranded' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">Reported</dt>
+                    <dd>{{ selectedEntry.date }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-muted-foreground">Reason</dt>
+                    <dd>{{ selectedEntry.reason }}</dd>
+                </div>
+                <div class="sm:col-span-2">
+                    <dt class="text-xs text-muted-foreground">
+                        Repair details / notes
+                    </dt>
+                    <dd class="whitespace-pre-wrap">
+                        {{
+                            selectedEntry.notes ||
+                            'No repair details were recorded.'
+                        }}
+                    </dd>
+                </div>
+                <div v-if="selectedEntry.invoice" class="sm:col-span-2">
+                    <dt class="text-xs text-muted-foreground">
+                        Source invoice / customer
+                    </dt>
+                    <dd>
+                        <Link
+                            v-if="selectedEntry.sale_id && canViewSales"
+                            :href="`/sales/${selectedEntry.sale_id}`"
+                            class="text-primary underline"
+                            >{{ selectedEntry.invoice }}</Link
+                        ><span v-else>{{ selectedEntry.invoice }}</span
+                        ><span v-if="selectedEntry.customer">
+                            · {{ selectedEntry.customer }}</span
+                        >
+                    </dd>
+                </div>
+            </dl>
+            <DialogFooter>
+                <Button
+                    v-if="
+                        canAdjust &&
+                        selectedEntry &&
+                        Number(selectedEntry.remaining) > 0
+                    "
+                    @click="startResolution"
+                    >Repair / Write off</Button
+                >
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     <Dialog v-model:open="resolveOpen"
         ><DialogContent
             ><DialogHeader

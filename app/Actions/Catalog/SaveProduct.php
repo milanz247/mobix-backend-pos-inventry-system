@@ -6,6 +6,7 @@ use App\Models\Business;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\ProductType;
+use App\Services\ProductActivityLogger;
 use App\VariantTrackingMode;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -22,8 +23,9 @@ class SaveProduct
      *
      * @param  array<string, mixed>  $attributes
      */
-    public function handle(Business $business, array $attributes, ?Product $product = null, ?UploadedFile $image = null): Product
+    public function handle(Business $business, array $attributes, ?Product $product = null, ?UploadedFile $image = null, ?ProductActivityLogger $activity = null): Product
     {
+        $activity ??= app(ProductActivityLogger::class);
         $variantRows = $attributes['variants'];
         unset($attributes['variants'], $attributes['image']);
 
@@ -40,12 +42,15 @@ class SaveProduct
         }
 
         try {
-            $product = DB::transaction(function () use ($business, $attributes, $product, $variantRows): Product {
+            $product = DB::transaction(function () use ($business, $attributes, $product, $variantRows, $activity): Product {
+                $productBefore = $product?->getAttributes() ?? [];
+                $isNewProduct = $product === null;
                 if ($product === null) {
                     $product = $business->products()->create($attributes);
                 } else {
                     $product->update($attributes);
                 }
+                $activity->product($product, $isNewProduct ? 'created' : 'updated', $productBefore, $product->getAttributes());
 
                 $retainedVariantIds = [];
 
@@ -53,6 +58,13 @@ class SaveProduct
                     $variantId = isset($variantRow['id']) && $variantRow['id'] !== ''
                         ? (int) $variantRow['id']
                         : null;
+                    $variantBefore = [];
+                    $componentsBefore = [];
+                    if ($variantId !== null) {
+                        $existingVariant = $product->variants()->whereKey($variantId)->firstOrFail();
+                        $variantBefore = $existingVariant->getAttributes();
+                        $componentsBefore = $existingVariant->bundleComponents()->orderBy('component_variant_id')->get(['component_variant_id', 'quantity'])->map(fn ($component): array => ['component_variant_id' => $component->component_variant_id, 'quantity' => $component->quantity])->all();
+                    }
                     $variantAttributes = Arr::only($variantRow, [
                         'name', 'barcode', 'model_number', 'storage_capacity', 'color',
                         'variant_attributes', 'condition', 'tracking_mode', 'unit', 'cost_price',
@@ -76,7 +88,7 @@ class SaveProduct
                         $variant->forceFill(['business_id' => $business->id]);
                         $variant->save();
                     } else {
-                        $variant = $product->variants()->whereKey($variantId)->firstOrFail();
+                        $variant = $existingVariant;
                         $variant->update($variantAttributes);
                     }
 
@@ -87,11 +99,21 @@ class SaveProduct
                     } else {
                         DB::table('bundle_components')->where('bundle_variant_id', $variant->id)->delete();
                     }
+                    $componentsAfter = $variant->bundleComponents()->orderBy('component_variant_id')->get(['component_variant_id', 'quantity'])->map(fn ($component): array => ['component_variant_id' => $component->component_variant_id, 'quantity' => $component->quantity])->all();
+                    $variantAfter = $variant->getAttributes();
+                    if ($componentsBefore !== $componentsAfter) {
+                        $variantBefore['components'] = $componentsBefore;
+                        $variantAfter['components'] = $componentsAfter;
+                    }
+                    $activity->variant($variant, $variantId === null ? 'created' : 'updated', $variantBefore, $variantAfter);
                 }
 
-                $product->variants()
-                    ->whereNotIn('id', $retainedVariantIds)
-                    ->update(['status' => 'inactive', 'updated_at' => now()]);
+                $removedVariants = $product->variants()->whereNotIn('id', $retainedVariantIds)->get();
+                foreach ($removedVariants as $removedVariant) {
+                    $before = $removedVariant->getAttributes();
+                    $removedVariant->update(['status' => 'inactive']);
+                    $activity->variant($removedVariant, 'updated', $before, $removedVariant->getAttributes());
+                }
 
                 $product->refresh()->load('variants.bundleComponents');
 

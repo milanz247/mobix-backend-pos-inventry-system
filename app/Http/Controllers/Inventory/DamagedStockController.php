@@ -43,11 +43,13 @@ class DamagedStockController extends Controller
             }))
             ->latest('id')->paginate(20)->withQueryString()->through(fn (DamagedStockEntry $entry): array => [
                 'id' => $entry->id, 'product' => $entry->variant->product->name, 'variant' => $entry->variant->name,
-                'sku' => $entry->variant->sku, 'model_number' => $entry->variant->model_number, 'category' => $entry->variant->product->category->name, 'brand' => $entry->variant->product->brand?->name, 'location' => $entry->location->name,
+                'sku' => $entry->variant->sku, 'barcode' => $entry->variant->barcode,
+                'model_number' => $entry->variant->model_number, 'category' => $entry->variant->product->category->name, 'brand' => $entry->variant->product->brand?->name, 'location' => $entry->location->name,
                 'quantity' => $entry->quantity, 'remaining' => $entry->remaining_quantity,
                 'reason' => $entry->reason, 'notes' => $entry->notes, 'date' => $entry->created_at->format('Y-m-d H:i'),
                 'sale_id' => $request->user()->can('sales.view') ? $entry->returnLine?->saleReturn->sale_id : null,
                 'invoice' => $request->user()->can('sales.view') ? $entry->returnLine?->saleReturn->sale->sale_number : null,
+                'customer' => $request->user()->can('sales.view') ? $entry->returnLine?->saleReturn->sale->customer_name : null,
             ]);
         $devices = SerializedDevice::query()->where('business_id', $business->id)->whereIn('location_id', $locationIds)
             ->where('status', 'damaged')->with(['variant.product.category', 'variant.product.brand', 'location'])

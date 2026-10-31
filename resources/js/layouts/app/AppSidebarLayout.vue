@@ -38,10 +38,9 @@ const isFixedWorkflowPage = computed(() =>
 </script>
 
 <template>
-    <AppShell variant="sidebar">
+    <AppShell>
         <AppSidebar />
         <AppContent
-            variant="sidebar"
             :class="
                 isFixedWorkflowPage
                     ? 'h-svh min-h-0 overflow-hidden'
