@@ -132,7 +132,7 @@ defineOptions({
         </div>
         <div class="table-panel">
             <div class="overflow-x-auto">
-                <table class="data-table">
+                <table class="data-table responsive-table">
                     <thead>
                         <tr>
                             <th>Device</th>
@@ -144,7 +144,7 @@ defineOptions({
                     </thead>
                     <tbody>
                         <tr v-for="device in devices.data" :key="device.id">
-                            <td>
+                            <td data-label="Device">
                                 <div class="font-medium">
                                     {{ device.product }}
                                 </div>
@@ -161,7 +161,7 @@ defineOptions({
                                     }}
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Identifiers">
                                 <div class="font-mono text-sm">
                                     {{ device.imei }}
                                 </div>
@@ -178,8 +178,8 @@ defineOptions({
                                     S/N {{ device.serial_number }}
                                 </div>
                             </td>
-                            <td>{{ device.location }}</td>
-                            <td>
+                            <td data-label="Location">{{ device.location }}</td>
+                            <td data-label="Status / history">
                                 <Badge variant="secondary">{{
                                     device.status.replaceAll('_', ' ')
                                 }}</Badge>
@@ -210,7 +210,7 @@ defineOptions({
                                     </ol>
                                 </details>
                             </td>
-                            <td class="text-right">
+                            <td data-label="Action" class="text-right">
                                 <Button
                                     v-if="canManage && device.status !== 'sold'"
                                     type="button"

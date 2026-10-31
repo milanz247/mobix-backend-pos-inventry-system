@@ -9,6 +9,7 @@ use App\Models\SaleReturn;
 use App\Models\SaleReturnLine;
 use App\Services\LocationAccessService;
 use App\Services\SalesActivityService;
+use App\Services\ShopAttentionService;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Http\Request;
@@ -79,7 +80,7 @@ class DashboardController extends Controller
             ->keyBy(fn (SaleReturn $return): string => (string) $return->getAttribute('day'));
         $dailySaleProfit = $showCosts ? $activity->lines($request->user(), $business, $locationId)
             ->whereBetween('event_at', [$trendStart, $todayEnd])
-            ->selectRaw("DATE(CONVERT_TZ(event_at, '+00:00', ?)) AS day, SUM(total - cost_snapshot * quantity) AS gross_profit", [$timezoneOffset])
+            ->selectRaw("DATE(CONVERT_TZ(event_at, '+00:00', ?)) AS day, SUM(total - tax_total - cost_snapshot * quantity) AS gross_profit", [$timezoneOffset])
             ->groupBy('day')->get()->keyBy(fn (object $row): string => (string) $row->day) : collect();
         $dailyReturnedProfit = $showCosts ? SaleReturnLine::query()
             ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_lines.sale_return_id')
@@ -87,7 +88,7 @@ class DashboardController extends Controller
             ->whereIn('sale_returns.location_id', clone $accessibleLocationIds)
             ->where('sale_return_lines.is_component', false)
             ->whereBetween('sale_returns.processed_at', [$trendStart, $todayEnd])
-            ->selectRaw("DATE(CONVERT_TZ(sale_returns.processed_at, '+00:00', ?)) as day, SUM(sale_return_lines.total - (sale_return_lines.unit_cost_snapshot * sale_return_lines.quantity)) as returned_profit", [$timezoneOffset])
+            ->selectRaw("DATE(CONVERT_TZ(sale_returns.processed_at, '+00:00', ?)) as day, SUM(sale_return_lines.total - sale_return_lines.tax_total - (sale_return_lines.unit_cost_snapshot * sale_return_lines.quantity)) as returned_profit", [$timezoneOffset])
             ->groupBy('day')
             ->get()
             ->keyBy(fn (SaleReturnLine $line): string => (string) $line->getAttribute('day')) : collect();
@@ -116,6 +117,7 @@ class DashboardController extends Controller
         })->values();
 
         return Inertia::render('Dashboard', [
+            'attention' => app(ShopAttentionService::class)->forUser($request->user(), $locationId),
             'overview' => [
                 'sales_total' => $this->money((string) (clone $todaySales)->sum('total')),
                 'completed_sales' => (int) (clone $todaySales)->sum('initial_sale'),

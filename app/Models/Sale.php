@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
+ * @property Carbon|null $due_date
  * @property int|null $customer_id
  * @property bool $is_credit
  * @property int $id
@@ -37,7 +38,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, SaleReturn> $returns
  * @property-read Collection<int, SaleRefund> $refunds
  */
-#[Fillable(['customer_id', 'is_credit', 'cashier_shift_id', 'business_id', 'location_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
+#[Fillable(['due_date', 'customer_id', 'is_credit', 'cashier_shift_id', 'business_id', 'location_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
 class Sale extends Model
 {
     /** @use HasFactory<SaleFactory> */
@@ -100,11 +101,12 @@ class Sale extends Model
     protected function casts(): array
     {
         return [
-            'subtotal' => 'decimal:2',
+            'due_date' => 'date',            'subtotal' => 'decimal:2',
             'discount_total' => 'decimal:2',
             'tax_total' => 'decimal:2',
             'total' => 'decimal:2',
             'paid_total' => 'decimal:2',
+            'is_credit' => 'boolean',
             'source' => SaleSource::class,
             'status' => SaleStatus::class,
             'payment_status' => SalePaymentStatus::class,

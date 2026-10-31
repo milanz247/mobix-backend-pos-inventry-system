@@ -21,8 +21,8 @@ class SaleLineFactory extends Factory
     public function definition(): array
     {
         return [
-            'business_id' => fn (array $attributes): int => Sale::query()->findOrFail($attributes['sale_id'])->business_id,
             'sale_id' => Sale::factory(),
+            'business_id' => fn (array $attributes): int => Sale::query()->findOrFail((int) $attributes['sale_id'])->business_id,
             'product_variant_id' => fn (array $attributes): int => ProductVariant::factory()->create(['business_id' => $attributes['business_id']])->id,
             'serialized_device_id' => null,
             'product_name_snapshot' => fake()->words(2, true),

@@ -7,6 +7,7 @@ use App\Models\CashMovement;
 use App\Models\User;
 use App\Services\CashierShiftService;
 use App\Services\LocationAccessService;
+use App\Support\CsvDownload;
 use Brick\Math\BigDecimal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -14,10 +15,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExpenseReportController extends Controller
 {
-    public function __invoke(Request $request, LocationAccessService $locations, CashierShiftService $shifts): Response
+    public function __invoke(Request $request, LocationAccessService $locations, CashierShiftService $shifts): Response|StreamedResponse
     {
         $filters = $request->validate([
             'date_from' => ['nullable', 'date_format:Y-m-d'],
@@ -34,7 +36,7 @@ class ExpenseReportController extends Controller
             $locations->accessibleQuery($user)->whereKey($request->integer('location_id'))->firstOrFail();
         }
 
-        return DB::transaction(function () use ($request, $filters, $user, $business, $locations, $shifts): Response {
+        return DB::transaction(function () use ($request, $filters, $user, $business, $locations, $shifts): Response|StreamedResponse {
             $base = CashMovement::query()->whereIn('cashier_shift_id', $shifts->accessibleQuery($user)->select('id'))
                 ->where('type', 'expense')->whereNull('reverses_id');
             $query = (clone $base)->with(['creator:id,name', 'shift.location:id,name'])->withExists('reversal');
@@ -62,6 +64,17 @@ class ExpenseReportController extends Controller
             $net = (string) BigDecimal::of((string) (clone $query)->whereDoesntHave('reversal')->sum('amount'))->toScale(2);
             $sort = $filters['sort'] ?? 'newest';
             $query->orderBy($sort === 'amount' ? 'amount' : 'created_at', $sort === 'oldest' ? 'asc' : 'desc')->orderByDesc('id');
+
+            if ($request->boolean('export')) {
+                $export = (function () use ($query): \Generator {
+                    yield ['Reference', 'Date (UTC)', 'Location', 'Reason', 'Amount', 'Created by', 'Shift', 'Status'];
+                    foreach ($query->lazy(500) as $movement) {
+                        yield [$movement->reference, $movement->created_at->toIso8601String(), $movement->shift->location->name, $movement->reason, $movement->amount, $movement->creator->name, $movement->shift->reference, $movement->getAttribute('reversal_exists') ? 'reversed' : 'completed'];
+                    }
+                })();
+
+                return CsvDownload::make('expenses.csv', $export);
+            }
 
             return Inertia::render('reports/Expenses', [
                 'rows' => (clone $query)->paginate(25)->withQueryString()->through(fn (CashMovement $movement): array => [

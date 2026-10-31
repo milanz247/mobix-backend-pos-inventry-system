@@ -97,7 +97,7 @@ defineOptions({
         </div>
         <div class="table-panel">
             <div class="overflow-x-auto">
-                <table class="data-table">
+                <table class="data-table responsive-table">
                     <thead>
                         <tr>
                             <th>Product</th>
@@ -109,7 +109,7 @@ defineOptions({
                     </thead>
                     <tbody>
                         <tr v-for="item in movements.data" :key="item.id">
-                            <td>
+                            <td data-label="Product">
                                 <div class="font-medium">
                                     {{ item.product }}
                                 </div>
@@ -117,13 +117,13 @@ defineOptions({
                                     {{ item.variant }} · {{ item.sku }}
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Location / actor">
                                 {{ item.location }}
                                 <div class="text-muted-foreground">
                                     {{ item.actor }}
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Type / reference">
                                 <Badge variant="secondary">{{
                                     item.type.replaceAll('_', ' ')
                                 }}</Badge>
@@ -135,6 +135,7 @@ defineOptions({
                                 </div>
                             </td>
                             <td
+                                data-label="Change"
                                 class="text-right font-semibold tabular-nums"
                                 :class="
                                     Number(item.delta) >= 0
@@ -145,7 +146,10 @@ defineOptions({
                                 {{ Number(item.delta) >= 0 ? '+' : ''
                                 }}{{ item.delta }}
                             </td>
-                            <td class="text-right tabular-nums">
+                            <td
+                                data-label="Before → after"
+                                class="text-right tabular-nums"
+                            >
                                 {{ item.before }} → {{ item.after }}
                             </td>
                         </tr>

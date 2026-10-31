@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ExportCsv from '@/components/reports/ExportCsv.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Heading from '@/components/Heading.vue';
@@ -68,7 +69,10 @@ const summaryCards = [
         label: 'Payments received',
         value: () => money(props.summary.payments_received),
     },
-    { label: 'Outstanding', value: () => money(props.summary.outstanding) },
+    {
+        label: 'Sales less net collections (period)',
+        value: () => money(props.summary.outstanding),
+    },
 ];
 
 defineOptions({
@@ -81,8 +85,9 @@ defineOptions({
     <section class="page-shell space-y-5">
         <Heading
             title="Sales reports"
-            description="Posted transactions for locations you are authorized to access. Figures are based on the selected sale-date range."
+            description="Posted transactions for locations you are authorized to access. Sales, returns and collections use their own transaction dates. Sales figures include tax; these figures do not represent net business profit."
         />
+        <ExportCsv />
         <form
             class="surface-panel grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end"
             @submit.prevent="applyFilters"

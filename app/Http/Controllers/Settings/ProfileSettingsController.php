@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Settings\TwoFactorAuthenticationRequest;
 use App\Http\Requests\Settings\UpdateProfileRequest;
 use App\Models\User;
 use App\Services\LocationAccessService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,7 +16,7 @@ use Throwable;
 
 class ProfileSettingsController extends Controller
 {
-    public function edit(Request $request, LocationAccessService $locationAccess): Response
+    public function edit(TwoFactorAuthenticationRequest $request, LocationAccessService $locationAccess): Response
     {
         $user = $request->user();
         $user->load('roles:id,name');
@@ -33,6 +33,7 @@ class ProfileSettingsController extends Controller
             ]);
 
         return Inertia::render('settings/Profile', [
+            'securitySettings' => app(SecurityController::class)->data($request),
             'profile' => [
                 'name' => $user->name,
                 'email' => $user->email,

@@ -8,7 +8,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property Carbon $return_date
+ */
 #[Fillable(['business_id', 'purchase_id', 'location_id', 'return_number', 'return_date', 'status', 'total', 'notes', 'operation_key', 'payload_hash', 'inventory_operation_id', 'created_by', 'posted_by', 'posted_at'])]
 class PurchaseReturn extends Model
 {
@@ -39,6 +43,7 @@ class PurchaseReturn extends Model
         return $this->hasMany(PurchaseReturnLine::class);
     }
 
+    /** @return array<string, string> */
     protected function casts(): array
     {
         return ['return_date' => 'date', 'posted_at' => 'datetime', 'total' => 'decimal:2'];

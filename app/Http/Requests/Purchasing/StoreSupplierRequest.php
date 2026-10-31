@@ -4,6 +4,7 @@ namespace App\Http\Requests\Purchasing;
 
 use App\Services\LocationAccessService;
 use App\SupplierStatus;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

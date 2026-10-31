@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ExportCsv from '@/components/reports/ExportCsv.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import ReportFilters from '@/components/reports/ReportFilters.vue';
@@ -36,6 +37,7 @@ defineProps<{
             title="Expenses"
             description="Posted cash-drawer expenses from authorized shifts, with original records and reversal details retained."
         />
+        <ExportCsv />
         <ReportFilters
             :action="expenses().url"
             :filters="filters"

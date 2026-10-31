@@ -22,8 +22,8 @@ class SaleRefundFactory extends Factory
     public function definition(): array
     {
         return [
-            'business_id' => fn (array $attributes): int => Sale::query()->findOrFail($attributes['sale_id'])->business_id,
             'sale_id' => Sale::factory(),
+            'business_id' => fn (array $attributes): int => Sale::query()->findOrFail((int) $attributes['sale_id'])->business_id,
             'sale_return_id' => SaleReturn::factory(),
             'amount' => '10.00',
             'operation_key' => fn (): string => Str::uuid()->toString(),

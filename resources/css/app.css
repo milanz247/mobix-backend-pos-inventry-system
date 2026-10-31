@@ -282,3 +282,71 @@
         @apply size-2 shrink-0 rounded-full bg-current;
     }
 }
+
+@layer components {
+    .responsive-table {
+        min-width: 0 !important;
+        width: 100%;
+        table-layout: fixed;
+    }
+    .responsive-table th,
+    .responsive-table td {
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .responsive-table td > * {
+        min-width: 0;
+        max-width: 100%;
+    }
+    @media (max-width: 639px) {
+        .responsive-table,
+        .responsive-table tbody {
+            display: block;
+        }
+        .responsive-table thead {
+            display: none;
+        }
+        .responsive-table tbody > tr {
+            display: grid;
+            padding: 0.75rem;
+            gap: 0.5rem;
+        }
+        .responsive-table td {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.25rem 0;
+            text-align: right;
+        }
+        .responsive-table td[data-label]::before {
+            content: attr(data-label);
+            color: var(--muted-foreground);
+            font-size: 0.75rem;
+            text-align: left;
+            flex: 0 0 5.5rem;
+        }
+        .responsive-table td[colspan] {
+            display: block;
+            text-align: center;
+        }
+    }
+}
+
+@layer components {
+    .responsive-table [data-slot='badge'] {
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .responsive-table .truncate {
+        overflow: visible;
+        white-space: normal;
+        text-overflow: clip;
+    }
+    @media (max-width: 639px) {
+        .responsive-table colgroup {
+            display: none;
+        }
+    }
+}

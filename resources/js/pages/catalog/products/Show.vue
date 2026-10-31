@@ -49,6 +49,9 @@ type Product = {
     variants: Variant[];
 };
 
+const activityAllowed = (
+    usePage().props.auth as { permissions: string[] }
+).permissions.includes('product-activity.view');
 const props = defineProps<{
     product: Product;
     productTypes: Option[];
@@ -86,6 +89,12 @@ defineOptions({
 <template>
     <Head :title="product.name" />
     <section class="page-shell">
+        <Link
+            v-if="activityAllowed"
+            :href="`/reports/product-activity?product_id=${product.id}`"
+            class="w-fit rounded border px-3 py-2 text-sm text-primary"
+            >View product activity</Link
+        >
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
                 :title="product.name"

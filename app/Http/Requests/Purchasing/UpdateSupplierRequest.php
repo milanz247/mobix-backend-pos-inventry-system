@@ -6,6 +6,7 @@ use App\Http\Requests\Concerns\AuthorizesStatusChanges;
 use App\Models\Supplier;
 use App\Services\LocationAccessService;
 use App\SupplierStatus;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -31,7 +32,8 @@ class UpdateSupplierRequest extends FormRequest
     public function rules(): array
     {
         $businessId = app(LocationAccessService::class)->business()->id;
-        $supplierId = $this->route('supplier')?->id;
+        $supplier = $this->route('supplier');
+        $supplierId = $supplier instanceof Supplier ? $supplier->id : null;
 
         return [
             'name' => ['required', 'string', 'max:150', Rule::unique('suppliers', 'name')->where('business_id', $businessId)->ignore($supplierId)],

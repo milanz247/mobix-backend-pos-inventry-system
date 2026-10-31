@@ -14,6 +14,7 @@ use App\Models\SaleLine;
 use App\Models\SaleLineComponent;
 use App\Models\SerializedDevice;
 use App\Models\StockMovement;
+use App\Services\ActivityLogService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -59,6 +60,7 @@ class DeleteProduct
                     ]);
                 }
 
+                app(ActivityLogService::class)->record('catalogue_deleted', 'Product', (string) $managedProduct->id, $managedProduct->name, ['before' => $managedProduct->load('variants.bundleComponents')->toArray()], $business->id, null, $managedProduct->id, $managedProduct->name);
                 BundleComponent::query()->whereIn('bundle_variant_id', $variantIds)->delete();
                 $managedProduct->variants()->delete();
 

@@ -29,7 +29,9 @@ class RoleAdministrationService
                 'guard_name' => 'web',
             ]);
             $role->forceFill(['description' => $attributes['description'] ?? null, 'is_system' => false])->save();
+            $beforePermissions = $role->permissions()->pluck('name')->all();
             $role->syncPermissions($permissions);
+            app(ActivityLogService::class)->record('permissions_updated', 'Role', (string) $role->id, $role->name, ['before' => ['permissions' => $beforePermissions], 'after' => ['permissions' => $permissions->pluck('name')->all()]]);
 
             return $role;
         });
@@ -58,7 +60,9 @@ class RoleAdministrationService
                 'name' => $role->is_system ? $role->name : $attributes['name'],
                 'description' => $attributes['description'] ?? null,
             ])->save();
+            $beforePermissions = $role->permissions()->pluck('name')->all();
             $role->syncPermissions($permissions);
+            app(ActivityLogService::class)->record('permissions_updated', 'Role', (string) $role->id, $role->name, ['before' => ['permissions' => $beforePermissions], 'after' => ['permissions' => $permissions->pluck('name')->all()]]);
 
             return $role;
         });

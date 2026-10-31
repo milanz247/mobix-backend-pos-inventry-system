@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
 /**
+ * @property numeric-string $tax_total
  * @property int $business_id
  * @property int $sale_line_id
  * @property int|null $sale_line_component_id
@@ -21,7 +22,7 @@ use LogicException;
  * @property numeric-string $unit_cost_snapshot
  * @property numeric-string $total
  */
-#[Fillable(['business_id', 'sale_line_id', 'sale_line_component_id', 'serialized_device_id', 'is_component', 'restock', 'quantity', 'unit_price', 'unit_cost_snapshot', 'total'])]
+#[Fillable(['tax_total', 'business_id', 'sale_line_id', 'sale_line_component_id', 'serialized_device_id', 'is_component', 'restock', 'quantity', 'unit_price', 'unit_cost_snapshot', 'total'])]
 class SaleReturnLine extends Model
 {
     /** @use HasFactory<SaleReturnLineFactory> */
@@ -53,7 +54,7 @@ class SaleReturnLine extends Model
 
     protected function casts(): array
     {
-        return ['is_component' => 'boolean', 'restock' => 'boolean', 'quantity' => 'decimal:3', 'unit_price' => 'decimal:2', 'unit_cost_snapshot' => 'decimal:2', 'total' => 'decimal:2'];
+        return ['tax_total' => 'decimal:2', 'is_component' => 'boolean', 'restock' => 'boolean', 'quantity' => 'decimal:3', 'unit_price' => 'decimal:2', 'unit_cost_snapshot' => 'decimal:2', 'total' => 'decimal:2'];
     }
 
     protected static function booted(): void

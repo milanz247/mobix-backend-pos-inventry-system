@@ -2,21 +2,15 @@
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { Pencil, Plus, Trash2 } from '@lucide/vue';
 import { ref } from 'vue';
+import ShiftPagination from '@/components/shifts/ShiftPagination.vue';
+import { Input } from '@/components/ui/input';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import Heading from '@/components/Heading.vue';
-import RoleForm from '@/components/management/RoleForm.vue';
 import RowActions from '@/components/management/RowActions.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
-import { destroy, edit, index, store } from '@/routes/roles';
+import { destroy, edit, index, create } from '@/routes/roles';
 import type { Auth } from '@/types';
 
 import type { PermissionGroups } from '@/types/permissions';
@@ -28,13 +22,16 @@ type Role = {
     users_count: number;
     permissions_count: number;
 };
-defineProps<{
+const props = defineProps<{
     roles: Role[];
+    pagination: { url: string | null; label: string; active: boolean }[];
+    total: number;
+    search: string;
     permissionGroups: PermissionGroups;
 }>();
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string) => auth.permissions.includes(permission);
-const createRoleOpen = ref(false);
+const search = ref(props.search);
 const {
     isOpen: confirmationOpen,
     title: confirmationTitle,
@@ -67,17 +64,27 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                 title="Roles"
                 description="Manage reusable permission sets for user accounts."
             />
-            <Button
-                v-if="can('roles.create')"
-                type="button"
-                @click="createRoleOpen = true"
-            >
-                <Plus aria-hidden="true" />
-                Create role
+            <Button v-if="can('roles.create')" as-child>
+                <Link :href="create()"
+                    ><Plus aria-hidden="true" /> Create role</Link
+                >
             </Button>
         </div>
+        <form
+            class="flex gap-2"
+            @submit.prevent="
+                router.get(index.url(), { search }, { preserveState: true })
+            "
+        >
+            <Input
+                v-model="search"
+                placeholder="Search roles"
+                aria-label="Search roles"
+                class="max-w-md"
+            /><Button variant="outline">Search</Button>
+        </form>
         <div class="table-panel">
-            <table class="data-table">
+            <table class="data-table responsive-table">
                 <colgroup>
                     <col class="w-[48%]" />
                     <col class="w-[12%]" />
@@ -94,7 +101,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                 </thead>
                 <tbody>
                     <tr v-for="role in roles" :key="role.id">
-                        <td>
+                        <td data-label="Role">
                             <div class="flex items-center gap-2 font-medium">
                                 {{ role.name
                                 }}<Badge
@@ -107,9 +114,11 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                                 {{ role.description || 'No description' }}
                             </div>
                         </td>
-                        <td>{{ role.users_count }}</td>
-                        <td>{{ role.permissions_count }}</td>
-                        <td class="text-right">
+                        <td data-label="Users">{{ role.users_count }}</td>
+                        <td data-label="Permissions">
+                            {{ role.permissions_count }}
+                        </td>
+                        <td data-label="Actions" class="text-right">
                             <RowActions
                                 v-if="
                                     (can('roles.update') &&
@@ -164,25 +173,7 @@ defineOptions({ layout: { breadcrumbs: [{ title: 'Roles', href: index() }] } });
                 </tbody>
             </table>
         </div>
-        <Dialog v-model:open="createRoleOpen">
-            <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
-                <DialogHeader>
-                    <DialogTitle>Create role</DialogTitle>
-                    <DialogDescription>
-                        Name the role and select the access permissions it
-                        needs.
-                    </DialogDescription>
-                </DialogHeader>
-                <RoleForm
-                    embedded
-                    :action="store.url()"
-                    method="post"
-                    :permission-groups="permissionGroups"
-                    @cancel="createRoleOpen = false"
-                    @success="createRoleOpen = false"
-                />
-            </DialogContent>
-        </Dialog>
+        <ShiftPagination :links="pagination" />
         <ConfirmActionDialog
             :open="confirmationOpen"
             :title="confirmationTitle"

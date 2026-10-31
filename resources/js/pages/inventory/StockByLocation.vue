@@ -114,7 +114,7 @@ defineOptions({
         </div>
         <div class="table-panel">
             <div class="overflow-x-auto">
-                <table class="data-table">
+                <table class="data-table responsive-table">
                     <thead>
                         <tr>
                             <th>Product / variant</th>
@@ -125,7 +125,7 @@ defineOptions({
                     </thead>
                     <tbody>
                         <tr v-for="stock in stocks.data" :key="stock.id">
-                            <td>
+                            <td data-label="Product / variant">
                                 <div class="font-medium">
                                     {{ stock.product }}
                                 </div>
@@ -136,13 +136,13 @@ defineOptions({
                                     >
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Category">
                                 {{ stock.category }}
                                 <div class="text-muted-foreground">
                                     {{ stock.brand || 'No brand' }}
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Tracking">
                                 <Badge variant="secondary">{{
                                     stock.product_type.replaceAll('_', ' ')
                                 }}</Badge>
@@ -155,6 +155,7 @@ defineOptions({
                                 </div>
                             </td>
                             <td
+                                data-label="On hand"
                                 class="text-right text-base font-semibold tabular-nums"
                             >
                                 {{

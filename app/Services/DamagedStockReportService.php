@@ -77,7 +77,9 @@ class DamagedStockReportService
     /** @return list<array<string, mixed>> */
     public function breakdown(Builder $query, string $group, bool $showCosts): array
     {
-        $column = $group === 'brand' ? 'b.name' : 'c.name';
+        $column = match ($group) {
+            'brand' => 'b.name', 'branch' => 'l.name', default => 'c.name'
+        };
 
         $groups = (clone $query)->selectRaw("COALESCE({$column}, 'Unbranded') AS name, COUNT(DISTINCT v.id) AS skus, SUM(damage.damaged_quantity) AS quantity, SUM(damage.device_count) AS devices, SUM(damage.damaged_value) AS value")
             ->groupBy($column)->orderBy($column)->get()->map(fn (object $row): array => [

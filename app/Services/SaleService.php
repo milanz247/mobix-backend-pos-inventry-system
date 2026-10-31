@@ -102,6 +102,17 @@ class SaleService
                 }
 
                 $preparedLines = $this->allocateOrderDiscount($preparedLines, $orderDiscount, $beforeOrderDiscount);
+                $taxTotal = BigDecimal::zero();
+                foreach ($preparedLines as $index => &$line) {
+                    $minimum = $line['variant']->minimum_selling_price;
+                    if ($minimum !== null && BigDecimal::of((string) $line['total'])->isLessThan(BigDecimal::of($minimum)->multipliedBy((string) $line['quantity'])->toScale(2, RoundingMode::HalfUp))
+                        && (! $business->pos_allow_price_override || ! $user->can('sales.price-override'))) {
+                        throw ValidationException::withMessages(["lines.{$index}.discount_amount" => __('The final price after discounts is below the minimum selling price. An authorized price override is required.')]);
+                    }
+                    $line['tax_total'] = $this->includedTax((string) $line['total'], (string) $business->tax_rate);
+                    $taxTotal = $taxTotal->plus($line['tax_total']);
+                }
+                unset($line);
                 $discountTotal = $lineDiscounts->plus($orderDiscount)->toScale(2, RoundingMode::HalfUp)->__toString();
                 $total = $beforeOrderDiscount->minus($orderDiscount)->toScale(2, RoundingMode::HalfUp)->__toString();
                 $payments = $this->preparePayments($data['payments'] ?? []);
@@ -122,24 +133,44 @@ class SaleService
                     abort_unless($user->can('sales.credit') && $user->can('credit-sales.view'), 403);
                     abort_unless($user->can('customers.view'), 403);
                     if (! empty($data['customer_id'])) {
-                        $customer = Customer::query()->where('business_id', $business->id)->whereKey($data['customer_id'])->first();
+                        $customer = Customer::query()->where('business_id', $business->id)->whereKey($data['customer_id'])->lockForUpdate()->first();
                         if ($customer === null) {
                             throw ValidationException::withMessages(['customer_id' => __('Select a customer from this business.')]);
                         }
                     } else {
                         abort_unless($user->can('customers.create'), 403);
                         $name = trim((string) ($data['customer_name'] ?? ''));
-                        $phone = preg_replace('/[\s()\-]+/', '', trim((string) ($data['customer_phone'] ?? '')));
-                        if ($name === '' || $phone === '') {
+                        $phone = Customer::normalizePhone((string) ($data['customer_phone'] ?? ''));
+                        if ($name === '' || ! preg_match('/^\+?[0-9]{7,15}$/', $phone)) {
                             throw ValidationException::withMessages(['customer_id' => __('Credit sales require a customer name and phone number.')]);
                         }
-                        $customer = Customer::query()->firstOrCreate(
+                        $customer = Customer::query()->where('business_id', $business->id)->whereIn('phone', Customer::phoneAliases($phone))->lockForUpdate()->first() ?? Customer::query()->firstOrCreate(
                             ['business_id' => $business->id, 'phone' => $phone],
                             ['name' => $name, 'email' => $data['customer_email'] ?? null],
                         );
                     }
                 }
 
+                if (! $isCredit && ! empty($data['customer_id'])) {
+                    abort_unless($user->can('customers.view'), 403);
+                    $customer = Customer::query()->where('business_id', $business->id)->lockForUpdate()->findOrFail((int) $data['customer_id']);
+                }
+                $dueDate = null;
+                if ($isCredit) {
+                    $customer = Customer::query()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
+                    $increment = BigDecimal::of($total)->minus($paidTotal);
+                    if ($increment->isPositive()) {
+                        $balances = app(CustomerAccountService::class)->balances($business)->where('customer_id', $customer->id);
+                        $debt = BigDecimal::of((string) (clone $balances)->sum('balance_due'));
+                        if ($customer->credit_limit !== null && $debt->plus($increment)->isGreaterThan($customer->credit_limit)) {
+                            throw ValidationException::withMessages(['customer_id' => __('This sale exceeds the customer credit limit. Collect a payment or ask an authorized manager to update the limit.')]);
+                        }
+                        if ((clone $balances)->where('balance_due', '>', 0)->where('due_date', '<', now($business->timezone)->toDateString())->exists()) {
+                            throw ValidationException::withMessages(['customer_id' => __('This customer has overdue invoices. Collect the overdue balance before extending more credit.')]);
+                        }
+                    }
+                    $dueDate = $target?->due_date?->toDateString() ?? ($data['due_date'] ?? now($business->timezone)->addDays($customer->credit_days)->toDateString());
+                }
                 $addition = null;
                 if ($target === null) {
                     $sale = Sale::query()->create([
@@ -157,7 +188,8 @@ class SaleService
                         'customer_email' => $customer === null ? (filled($data['customer_email'] ?? null) ? Str::lower(trim((string) $data['customer_email'])) : null) : $customer->email,
                         'subtotal' => $subtotal->toScale(2, RoundingMode::HalfUp)->__toString(),
                         'discount_total' => $discountTotal,
-                        'tax_total' => '0.00',
+                        'tax_total' => (string) $taxTotal,
+                        'due_date' => $dueDate,
                         'total' => $total,
                         'paid_total' => $paidTotal,
                         'status' => SaleStatus::Completed,
@@ -173,6 +205,7 @@ class SaleService
                         'subtotal' => $this->money(BigDecimal::of((string) $sale->subtotal)->plus($subtotal)->__toString()),
                         'discount_total' => $this->money(BigDecimal::of((string) $sale->discount_total)->plus($discountTotal)->__toString()),
                         'total' => $this->money(BigDecimal::of((string) $sale->total)->plus($total)->__toString()),
+                        'tax_total' => $this->money(BigDecimal::of((string) $sale->tax_total)->plus($taxTotal)->__toString()),
                         'paid_total' => $this->money(BigDecimal::of((string) $sale->paid_total)->plus($paidTotal)->__toString()),
                     ]);
                     $sale->payment_status = $this->paymentStatus((string) $sale->total, (string) $sale->paid_total, '0.00');
@@ -373,6 +406,7 @@ class SaleService
                     $lineIds = [];
                     $addedSubtotal = BigDecimal::zero();
                     $addedDiscounts = BigDecimal::zero();
+                    $addedTax = BigDecimal::zero();
                     foreach ($replacementLines as $replacement) {
                         $lineIds[] = $sale->lines()->create([
                             ...Arr::except($replacement, ['device_identifier', 'variant']),
@@ -380,11 +414,13 @@ class SaleService
                         ])->id;
                         $addedSubtotal = $addedSubtotal->plus($replacement['subtotal']);
                         $addedDiscounts = $addedDiscounts->plus($replacement['discount_amount']);
+                        $addedTax = $addedTax->plus($replacement['tax_total']);
                     }
                     $sale->fill([
                         'subtotal' => $this->money(BigDecimal::of((string) $sale->subtotal)->plus($addedSubtotal)->__toString()),
                         'discount_total' => $this->money(BigDecimal::of((string) $sale->discount_total)->plus($addedDiscounts)->__toString()),
                         'total' => $this->money(BigDecimal::of((string) $sale->total)->plus($returnTotal)->__toString()),
+                        'tax_total' => $this->money(BigDecimal::of((string) $sale->tax_total)->plus($addedTax)->__toString()),
                     ])->save();
                     $replacementKey = Str::uuid()->toString();
                     $this->inventory->postSale($user, $sale, $lineIds, $replacementKey);
@@ -565,6 +601,17 @@ class SaleService
             $share = $index === $lastIndex
                 ? $remaining
                 : BigDecimal::of($orderDiscount)->multipliedBy((string) $line['total'])->dividedBy((string) $basis, 2, RoundingMode::HalfUp);
+            $share = BigDecimal::min($share, $remaining, BigDecimal::of((string) $line['total']));
+            $line['discount_amount'] = $this->money(BigDecimal::of($line['discount_amount'])->plus($share)->__toString());
+            $line['total'] = $this->money(BigDecimal::of($line['total'])->minus($share)->__toString());
+            $remaining = $remaining->minus($share);
+        }
+        unset($line);
+        foreach ($lines as &$line) {
+            if ($remaining->isZero()) {
+                break;
+            }
+            $share = BigDecimal::min($remaining, BigDecimal::of((string) $line['total']));
             $line['discount_amount'] = $this->money(BigDecimal::of($line['discount_amount'])->plus($share)->__toString());
             $line['total'] = $this->money(BigDecimal::of($line['total'])->minus($share)->__toString());
             $remaining = $remaining->minus($share);
@@ -624,6 +671,10 @@ class SaleService
             }
 
             $lineAmount = $this->returnValue($line, $quantity, $available);
+            $remainingTax = BigDecimal::of((string) $line->tax_total)->minus((string) SaleReturnLine::query()->where('sale_line_id', $line->id)->where('is_component', false)->sum('tax_total'));
+            $returnTax = $quantity->isEqualTo($available) ? $remainingTax : BigDecimal::of((string) $line->tax_total)->multipliedBy($quantity)->dividedBy((string) $line->quantity, 2, RoundingMode::HalfUp);
+            $returnTax = BigDecimal::min($returnTax, $remainingTax);
+
             $prepared[] = [
                 'sale_line_id' => $line->id,
                 'sale_line_component_id' => null,
@@ -634,6 +685,7 @@ class SaleService
                 'unit_price' => $line->unit_price,
                 'unit_cost_snapshot' => $line->cost_snapshot,
                 'total' => $lineAmount,
+                'tax_total' => (string) $returnTax,
                 'variant' => $line->variant,
             ];
 
@@ -706,6 +758,7 @@ class SaleService
             $prepared['subtotal'] = $subtotal;
             $prepared['discount_amount'] = $this->money(BigDecimal::of($subtotal)->minus($returned['total'])->__toString());
             $prepared['total'] = $returned['total'];
+            $prepared['tax_total'] = $returned['tax_total'];
             $result[] = $prepared;
             unset($requested[$original->id]);
         }
@@ -793,6 +846,11 @@ class SaleService
     private function payloadHash(array $data): string
     {
         return hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
+    }
+
+    private function includedTax(string $total, string $rate): string
+    {
+        return (string) BigDecimal::of($total)->multipliedBy($rate)->dividedBy(BigDecimal::of('100')->plus($rate), 2, RoundingMode::HalfUp);
     }
 
     private function money(string $value): string

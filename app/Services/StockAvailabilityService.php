@@ -41,7 +41,8 @@ class StockAvailabilityService
             ->leftJoinSub($devices, 'd', 'd.product_variant_id', '=', 'product_variants.id')
             ->leftJoinSub($bundles, 'b', 'b.bundle_variant_id', '=', 'product_variants.id')
             ->leftJoinSub($movements, 'm', 'm.product_variant_id', '=', 'product_variants.id')
-            ->select('product_variants.*')
+            ->leftJoin('reorder_levels as rl', fn ($join) => $join->on('rl.product_variant_id', '=', 'product_variants.id')->where('rl.location_id', $location->id)->where('rl.business_id', $business->id))
+            ->select('product_variants.*')->selectRaw('rl.quantity AS reorder_quantity')
             ->selectRaw('COALESCE(q.quantity, 0) as quantity_on_hand, COALESCE(d.device_count, 0) as devices_in_stock')
             ->selectRaw("CASE WHEN ap.product_type = 'combo' THEN COALESCE(b.capacity, 0) WHEN product_variants.tracking_mode = 'serialized' THEN COALESCE(d.device_count, 0) ELSE COALESCE(q.quantity, 0) END as available_quantity")
             ->selectRaw("CASE WHEN COALESCE(q.quantity, 0) < 0 THEN 1 WHEN ap.product_type = 'combo' AND (b.capacity IS NULL OR COALESCE(q.quantity, 0) <> 0 OR b.inconsistent = 1) THEN 1 ELSE 0 END as stock_inconsistent")
@@ -58,7 +59,7 @@ class StockAvailabilityService
 
         return [
             'available_quantity' => (string) $quantity,
-            'stock_status' => $inconsistent ? 'inconsistent' : ($quantity->isZero() ? 'out_of_stock' : 'in_stock'),
+            'stock_status' => $inconsistent ? 'inconsistent' : ($quantity->isZero() ? 'out_of_stock' : ($variant->getAttribute('reorder_quantity') !== null && $quantity->isLessThanOrEqualTo((string) $variant->getAttribute('reorder_quantity')) ? 'low_stock' : 'in_stock')),
             'can_sell' => ! $inconsistent && $quantity->isGreaterThanOrEqualTo('1')
                 && $variant->status === CatalogStatus::Active && $variant->product->status === CatalogStatus::Active,
         ];

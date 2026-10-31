@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import InventoryNavigation from '@/components/inventory/InventoryNavigation.vue';
 import AppContent from '@/components/AppContent.vue';
 import AppShell from '@/components/AppShell.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
@@ -44,6 +45,9 @@ const hasNoLocations = computed(
                         : 'No active locations are assigned to your account. Ask an administrator to assign your shop locations before making transactions.'
                 }}
             </p>
+            <InventoryNavigation
+                v-if="page.component.startsWith('inventory/')"
+            />
             <slot />
             <footer
                 class="flex shrink-0 items-center justify-center border-t border-border/60 px-4 py-2 text-center text-[11px] text-muted-foreground"

@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property ProductCondition $condition
+ */
 #[Fillable(['business_id', 'imei', 'imei2', 'serial_number', 'condition', 'unit_cost', 'unit_selling_price', 'serialized_device_id'])]
 class PurchaseLineDevice extends Model
 {
@@ -27,6 +30,7 @@ class PurchaseLineDevice extends Model
         return $this->belongsTo(SerializedDevice::class);
     }
 
+    /** @return array<string, string> */
     protected function casts(): array
     {
         return [

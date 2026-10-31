@@ -23,7 +23,7 @@ This manual describes the application as implemented in the inspected codebase. 
 
 - Creating a catalogue product does not add quantity to stock. Use **Stock receiving**, **Opening stock**, or post a purchase to record stock.
 - POS checkout creates a completed sale, records submitted payments, and posts inventory together. A sale below its total requires the **Allow credit sales** permission.
-- Customer records are not a separate module. POS accepts optional customer name, phone, and email as sale details.
+- Sales → Customers provides contact details, credit terms and account statements. POS can link paid or credit sales to a saved customer. See [shop operations improvements](../shop-operations-2026-10-31.md).
 - Repair registration, job cards, technician assignment, quotations, repair parts, and repair payments are not implemented. The serialized-device screen only has a limited in-repair status.
 
 This manual has no screenshots because a running browser preview was not available during the documentation audit. Procedures below use the real menu and field labels found in the current UI.

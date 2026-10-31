@@ -7,6 +7,7 @@ use App\Models\ProductVariant;
 use App\ProductType;
 use App\Services\LocationAccessService;
 use App\Services\StockAvailabilityService;
+use App\Support\CsvDownload;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -14,10 +15,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OutOfStockReportController extends Controller
 {
-    public function __invoke(Request $request, LocationAccessService $locations, StockAvailabilityService $availability): Response
+    public function __invoke(Request $request, LocationAccessService $locations, StockAvailabilityService $availability): Response|StreamedResponse
     {
         $filters = $request->validate([
             'location_id' => ['nullable', 'integer'], 'category_id' => ['nullable', 'integer'],
@@ -33,7 +35,7 @@ class OutOfStockReportController extends Controller
         $locationId = $request->integer('location_id') ?: ($locations->selectedLocationId($request) ?? $options->first()->id);
         $location = $locations->accessibleQuery($user)->whereKey($locationId)->firstOrFail();
 
-        return DB::transaction(function () use ($filters, $user, $business, $options, $location, $availability): Response {
+        return DB::transaction(function () use ($request, $filters, $user, $business, $options, $location, $availability): Response|StreamedResponse {
             $query = $availability->query($business, $location)->with(['product.category:id,name', 'product.brand:id,name'])
                 ->where(fn (Builder $query) => $query->where('available_quantity', '<=', 0)->orWhere('stock_inconsistent', 1));
             foreach (['category_id', 'brand_id', 'product_type'] as $field) {
@@ -58,6 +60,16 @@ class OutOfStockReportController extends Controller
             $sort = match ($filters['sort'] ?? 'sku') {
                 'quantity' => 'available_quantity', 'last_movement' => 'last_movement_at', default => 'sku'
             };
+            if ($request->boolean('export')) {
+                $export = (function () use ($query, $sort, $location): \Generator {
+                    yield ['Product', 'Variant', 'SKU', 'Barcode', 'Location', 'Available quantity'];
+                    foreach ($query->orderBy($sort)->orderBy('id')->lazy(500) as $variant) {
+                        yield [$variant->product->name, $variant->name, $variant->sku, $variant->barcode, $location->name, $variant->getAttribute('available_quantity')];
+                    }
+                })();
+
+                return CsvDownload::make('out-of-stock.csv', $export);
+            }
             $rows = $query->orderBy($sort)->orderBy('id')->paginate(25)->withQueryString()->through(function (ProductVariant $variant) use ($availability, $location, $business, $user): array {
                 return [
                     ...$availability->describe($variant),

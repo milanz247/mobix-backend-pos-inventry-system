@@ -51,6 +51,7 @@ const query = ref({
     cashier_id: props.filters.cashier_id ?? '',
     payment_status: props.filters.payment_status ?? '',
     status: props.filters.status ?? '',
+    overdue: String(props.filters.overdue ?? '0'),
 });
 let timer: ReturnType<typeof setTimeout> | undefined;
 watch(
@@ -62,6 +63,7 @@ watch(
                 router.get(
                     props.creditOnly ? '/sales/credit' : index.url(),
                     {
+                        overdue: query.value.overdue === '1' ? 1 : undefined,
                         search: query.value.search || undefined,
                         date_from: query.value.date_from || undefined,
                         date_to: query.value.date_to || undefined,
@@ -108,6 +110,14 @@ defineOptions({
             />
             <Button as-child><Link :href="posIndex()">Open POS</Link></Button>
         </div>
+        <label v-if="creditOnly" class="flex items-center gap-2 text-sm"
+            ><input
+                v-model="query.overdue"
+                type="checkbox"
+                true-value="1"
+                false-value="0"
+            />Overdue balances only</label
+        >
         <div class="surface-panel grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-4">
             <Input
                 v-model="query.search"

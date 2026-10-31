@@ -10,6 +10,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property SupplierStatus $status
+ */
 #[Fillable(['name', 'contact_person', 'email', 'phone', 'alternate_phone', 'address', 'city', 'notes', 'status'])]
 class Supplier extends Model
 {
@@ -30,6 +33,7 @@ class Supplier extends Model
         return $this->hasMany(Purchase::class);
     }
 
+    /** @return array<string, string> */
     protected function casts(): array
     {
         return ['status' => SupplierStatus::class];

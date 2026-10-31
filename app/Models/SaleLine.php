@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
 /**
+ * @property numeric-string $tax_total
  * @property int $id
  * @property int $business_id
  * @property int|null $sale_return_id
@@ -33,7 +34,7 @@ use LogicException;
  * @property-read Collection<int, SaleLineComponent> $components
  * @property-read Collection<int, SaleReturnLine> $returnLines
  */
-#[Fillable(['sale_addition_id', 'sale_return_id', 'business_id', 'product_variant_id', 'serialized_device_id', 'product_name_snapshot', 'variant_name_snapshot', 'sku_snapshot', 'barcode_snapshot', 'tracking_mode', 'is_combo', 'imei_snapshot', 'quantity', 'unit_price', 'discount_amount', 'cost_snapshot', 'subtotal', 'total'])]
+#[Fillable(['tax_total', 'sale_addition_id', 'sale_return_id', 'business_id', 'product_variant_id', 'serialized_device_id', 'product_name_snapshot', 'variant_name_snapshot', 'sku_snapshot', 'barcode_snapshot', 'tracking_mode', 'is_combo', 'imei_snapshot', 'quantity', 'unit_price', 'discount_amount', 'cost_snapshot', 'subtotal', 'total'])]
 class SaleLine extends Model
 {
     /** @use HasFactory<SaleLineFactory> */
@@ -72,7 +73,7 @@ class SaleLine extends Model
     protected function casts(): array
     {
         return [
-            'tracking_mode' => VariantTrackingMode::class,
+            'tax_total' => 'decimal:2',            'tracking_mode' => VariantTrackingMode::class,
             'is_combo' => 'boolean',
             'quantity' => 'decimal:3',
             'unit_price' => 'decimal:2',

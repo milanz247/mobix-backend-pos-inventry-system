@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Purchasing;
 
 use App\Http\Requests\Purchasing\Concerns\ValidatesPurchasePayload;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StorePurchaseRequest extends FormRequest
@@ -27,6 +28,7 @@ class StorePurchaseRequest extends FormRequest
         return $this->purchaseRules();
     }
 
+    /** @return list<callable> */
     public function after(): array
     {
         return $this->purchaseAfterValidation();

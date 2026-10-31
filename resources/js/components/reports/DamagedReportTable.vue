@@ -4,7 +4,7 @@ import { damageMoney, damageQuantity } from '@/types/damage';
 defineProps<{ rows: DamageRow[]; showCosts: boolean; currency: string }>();
 </script>
 <template>
-    <table class="data-table w-full text-sm">
+    <table class="data-table responsive-table w-full text-sm">
         <thead>
             <tr>
                 <th>Product / variant</th>
@@ -18,27 +18,30 @@ defineProps<{ rows: DamageRow[]; showCosts: boolean; currency: string }>();
         </thead>
         <tbody>
             <tr v-for="row in rows" :key="row.id">
-                <td>
+                <td data-label="Product / variant">
                     <p class="font-medium">{{ row.product }}</p>
                     <p class="text-xs text-muted-foreground">
                         {{ row.variant }}
                     </p>
                 </td>
-                <td>{{ row.model_number || '—' }}</td>
-                <td>
+                <td data-label="Model">{{ row.model_number || '—' }}</td>
+                <td data-label="SKU / Barcode">
                     <p class="font-mono text-xs">{{ row.sku }}</p>
                     <p class="text-xs text-muted-foreground">
                         {{ row.barcode || '—' }}
                     </p>
                 </td>
-                <td>
+                <td data-label="Category / Brand">
                     {{ row.category }}
                     <p class="text-xs text-muted-foreground">
                         {{ row.brand || 'Unbranded' }}
                     </p>
                 </td>
-                <td>{{ row.location }}</td>
-                <td class="text-right font-semibold tabular-nums">
+                <td data-label="Location">{{ row.location }}</td>
+                <td
+                    data-label="Damaged quantity"
+                    class="text-right font-semibold tabular-nums"
+                >
                     {{
                         row.tracking_mode === 'serialized'
                             ? row.devices
@@ -52,7 +55,11 @@ defineProps<{ rows: DamageRow[]; showCosts: boolean; currency: string }>();
                         }}
                     </p>
                 </td>
-                <td v-if="showCosts" class="text-right tabular-nums">
+                <td
+                    data-label="Cost value"
+                    v-if="showCosts"
+                    class="text-right tabular-nums"
+                >
                     {{ damageMoney(row.value ?? '0', currency) }}
                 </td>
             </tr>

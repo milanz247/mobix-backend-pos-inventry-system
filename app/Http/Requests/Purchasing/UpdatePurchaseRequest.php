@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Purchasing;
 
 use App\Http\Requests\Purchasing\Concerns\ValidatesPurchasePayload;
+use App\Models\Purchase;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdatePurchaseRequest extends FormRequest
@@ -24,9 +26,12 @@ class UpdatePurchaseRequest extends FormRequest
      */
     public function rules(): array
     {
-        return $this->purchaseRules((int) $this->route('purchase')->id);
+        $purchase = $this->route('purchase');
+
+        return $this->purchaseRules($purchase instanceof Purchase ? $purchase->id : null);
     }
 
+    /** @return list<callable> */
     public function after(): array
     {
         return $this->purchaseAfterValidation();

@@ -289,9 +289,7 @@ function submit(): void {
                 </div>
             </header>
             <div class="overflow-x-auto">
-                <table
-                    class="permission-matrix w-full min-w-[820px] table-fixed text-sm"
-                >
+                <table class="permission-matrix w-full table-fixed text-sm">
                     <colgroup>
                         <col class="w-[21%]" />
                         <col
@@ -331,6 +329,7 @@ function submit(): void {
                             <td
                                 v-for="column in permissionColumns"
                                 :key="column.key"
+                                :data-label="column.label"
                                 class="px-3 py-3 align-top"
                             >
                                 <div class="space-y-2">
@@ -427,3 +426,43 @@ function submit(): void {
         </div>
     </form>
 </template>
+
+<style scoped>
+.permission-matrix {
+    min-width: 0;
+}
+.permission-matrix td,
+.permission-matrix th {
+    overflow-wrap: anywhere;
+}
+@media (max-width: 767px) {
+    .permission-matrix,
+    .permission-matrix tbody {
+        display: block;
+    }
+    .permission-matrix thead,
+    .permission-matrix colgroup {
+        display: none;
+    }
+    .permission-matrix tbody tr {
+        display: grid;
+        padding: 0.75rem;
+        gap: 0.25rem;
+    }
+    .permission-matrix tbody th {
+        display: block;
+        padding: 0.5rem;
+    }
+    .permission-matrix td {
+        display: grid;
+        grid-template-columns: 5rem minmax(0, 1fr);
+        gap: 0.5rem;
+        padding: 0.5rem;
+    }
+    .permission-matrix td::before {
+        content: attr(data-label);
+        font-size: 0.75rem;
+        color: var(--muted-foreground);
+    }
+}
+</style>

@@ -14,7 +14,7 @@ Successful checkout posts the sale and inventory deduction together at the selec
 
 ## Does a held cart reserve stock?
 
-No. Held carts are saved in the browser's local storage for that cashier, limited to ten recent carts and pruned after seven days. They are not posted sales and do not reserve stock.
+Held carts are saved on the server for their location, so authorized cashiers can resume them at another counter. They are not posted sales and do not reserve stock. Once resumed, the current cart uses browser session storage; hold it again before handing it over.
 
 ## Can a cashier accept a partial payment?
 
@@ -30,7 +30,7 @@ No. It can mark an eligible serialized device **In repair** and later **Return t
 
 ## Can I export reports?
 
-The current sales report page has no export action. Use the on-screen filters and tables.
+Sales, out-of-stock, damaged-stock and expense reports include Download filtered CSV. Downloads preserve the selected filters and access permissions and include all matching rows.
 
 ## Why are the sales and cash figures different?
 

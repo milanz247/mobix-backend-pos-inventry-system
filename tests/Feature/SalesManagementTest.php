@@ -510,7 +510,7 @@ test('credit checkout requires a customer and saves reusable customer records', 
     $customer = Customer::query()->sole();
     expect($sale->customer_id)->toBe($customer->id)
         ->and($sale->payment_status->value)->toBe('unpaid')
-        ->and($customer->phone)->toBe('0771234567');
+        ->and($customer->phone)->toBe('+94771234567');
     $this->post(route('pos.checkout'), $payload)->assertSessionHasNoErrors();
     expect(Sale::count())->toBe(1)->and(Customer::count())->toBe(1);
 

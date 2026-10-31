@@ -44,7 +44,7 @@ defineOptions({
         <div class="flex flex-wrap items-start justify-between gap-4">
             <Heading
                 title="Inventory overview"
-                description="Live stock across only the locations you are authorized to access."
+                description="See current stock and recent changes across your branches."
             />
             <Link
                 :href="locationStock()"
@@ -98,38 +98,59 @@ defineOptions({
             v-if="!lowStockConfigured"
             class="rounded-xl border border-info/25 bg-info/5 p-4 text-sm"
         >
-            Low-stock alerts are not shown because no reorder threshold has been
-            configured. No threshold has been fabricated.
+            Set reorder levels to highlight products that need replenishing.
         </div>
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <div
-                v-for="location in locationSummary"
-                :key="location.id"
-                class="surface-panel p-4"
-            >
-                <h2 class="font-semibold">{{ location.name }}</h2>
-                <div class="mt-3 flex gap-6 text-sm">
-                    <div>
-                        <span class="text-muted-foreground">Quantity</span>
-                        <p class="text-lg font-semibold tabular-nums">
+        <Link
+            href="/inventory/reorder?alerts=1"
+            class="text-sm font-medium text-primary"
+            >View low-stock alerts and reorder levels →</Link
+        >
+        <div class="table-panel">
+            <table class="data-table responsive-table">
+                <thead>
+                    <tr>
+                        <th>Branch</th>
+                        <th>Quantity stock</th>
+                        <th>IMEI devices in stock</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="location in locationSummary" :key="location.id">
+                        <td data-label="Branch" class="font-semibold">
+                            {{ location.name }}
+                        </td>
+                        <td data-label="Quantity">
                             {{ location.quantity_on_hand }}
-                        </p>
-                    </div>
-                    <div>
-                        <span class="text-muted-foreground">Devices</span>
-                        <p class="text-lg font-semibold tabular-nums">
+                        </td>
+                        <td data-label="IMEI devices">
                             {{ location.serialized_in_stock }}
-                        </p>
-                    </div>
-                </div>
-            </div>
+                        </td>
+                        <td data-label="Actions">
+                            <Link
+                                :href="`/inventory/locations?location_id=${location.id}`"
+                                class="text-primary"
+                                >View stock</Link
+                            >
+                        </td>
+                    </tr>
+                    <tr v-if="!locationSummary.length">
+                        <td
+                            colspan="4"
+                            class="p-6 text-center text-muted-foreground"
+                        >
+                            No branches available.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
         <div class="table-panel">
             <div class="border-b p-4">
                 <h2 class="font-semibold">Recent quantity movements</h2>
             </div>
             <div class="overflow-x-auto">
-                <table class="data-table">
+                <table class="data-table responsive-table">
                     <thead>
                         <tr>
                             <th>Product</th>
@@ -144,7 +165,7 @@ defineOptions({
                             v-for="movement in recentMovements"
                             :key="movement.id"
                         >
-                            <td>
+                            <td data-label="Product">
                                 <div class="font-medium">
                                     {{ movement.product }}
                                 </div>
@@ -152,13 +173,16 @@ defineOptions({
                                     {{ movement.variant }} · {{ movement.sku }}
                                 </div>
                             </td>
-                            <td>{{ movement.location }}</td>
-                            <td>
+                            <td data-label="Location">
+                                {{ movement.location }}
+                            </td>
+                            <td data-label="Movement">
                                 <Badge variant="secondary">{{
                                     movement.type.replaceAll('_', ' ')
                                 }}</Badge>
                             </td>
                             <td
+                                data-label="Change"
                                 class="text-right font-medium tabular-nums"
                                 :class="
                                     Number(movement.delta) >= 0
@@ -169,7 +193,10 @@ defineOptions({
                                 {{ Number(movement.delta) >= 0 ? '+' : ''
                                 }}{{ movement.delta }}
                             </td>
-                            <td class="text-right tabular-nums">
+                            <td
+                                data-label="Balance"
+                                class="text-right tabular-nums"
+                            >
                                 {{ movement.balance_after }}
                             </td>
                         </tr>

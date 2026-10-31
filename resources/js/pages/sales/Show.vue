@@ -18,6 +18,7 @@ type SaleData = {
     id: number;
     sale_number: string;
     posted_at: string;
+    due_date: string | null;
     status: string;
     source_label: string;
     payment_status: string;
@@ -201,6 +202,9 @@ defineOptions({
                     <div>
                         <p class="text-xs text-muted-foreground">Date / time</p>
                         <p class="font-medium">{{ sale.posted_at }}</p>
+                        <p v-if="sale.due_date" class="text-sm">
+                            Payment due {{ sale.due_date }}
+                        </p>
                     </div>
                     <div>
                         <p class="text-xs text-muted-foreground">Location</p>
@@ -373,7 +377,8 @@ defineOptions({
                         >
                     </div>
                     <div class="flex justify-between text-sm">
-                        <span>Tax</span><span>{{ money(sale.tax_total) }}</span>
+                        <span>Tax included</span
+                        ><span>{{ money(sale.tax_total) }}</span>
                     </div>
                     <div class="flex justify-between border-t pt-3 font-bold">
                         <span>{{

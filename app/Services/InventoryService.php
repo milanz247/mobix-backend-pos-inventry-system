@@ -303,7 +303,6 @@ class InventoryService
         }, 3);
     }
 
-    /** @param list<array<string, mixed>> $items */
     public function returnSale(User $user, SaleReturn $saleReturn): InventoryOperation
     {
         return DB::transaction(function () use ($user, $saleReturn): InventoryOperation {
@@ -394,7 +393,7 @@ class InventoryService
                 throw ValidationException::withMessages(['lines' => __('Insufficient component stock for SKU :sku.', ['sku' => $resolved['sku']])]);
             }
 
-            $variant = ProductVariant::query()->with('product')->findOrFail($resolved['product_variant_id']);
+            $variant = ProductVariant::query()->with('product')->findOrFail((int) $resolved['product_variant_id']);
             $baseCost = (string) $variant->cost_price;
             if ($variant->tracking_mode === VariantTrackingMode::QuantityBased) {
                 $quantity = $this->normalizeQuantity((string) $resolved['required']);

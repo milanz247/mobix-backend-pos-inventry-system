@@ -9,10 +9,18 @@ defineProps<{
 }>();
 </script>
 <template>
-    <table class="data-table w-full text-sm">
+    <table class="data-table responsive-table w-full text-sm">
         <thead>
             <tr>
-                <th>{{ groupBy === 'brand' ? 'Brand' : 'Category' }}</th>
+                <th>
+                    {{
+                        groupBy === 'branch'
+                            ? 'Branch'
+                            : groupBy === 'brand'
+                              ? 'Brand'
+                              : 'Category'
+                    }}
+                </th>
                 <th class="text-right">SKUs</th>
                 <th class="text-right">Quantity items</th>
                 <th class="text-right">IMEI devices</th>
@@ -21,13 +29,21 @@ defineProps<{
         </thead>
         <tbody>
             <tr v-for="group in groups" :key="group.name">
-                <td class="font-medium">{{ group.name }}</td>
-                <td class="text-right">{{ group.skus }}</td>
-                <td class="text-right tabular-nums">
+                <td data-label="Details" class="font-medium">
+                    {{ group.name }}
+                </td>
+                <td data-label="SKUs" class="text-right">{{ group.skus }}</td>
+                <td data-label="Quantity items" class="text-right tabular-nums">
                     {{ damageQuantity(group.quantity) }}
                 </td>
-                <td class="text-right">{{ group.devices }}</td>
-                <td v-if="showCosts" class="text-right tabular-nums">
+                <td data-label="IMEI devices" class="text-right">
+                    {{ group.devices }}
+                </td>
+                <td
+                    data-label="Cost value"
+                    v-if="showCosts"
+                    class="text-right tabular-nums"
+                >
                     {{ damageMoney(group.value ?? '0', currency) }}
                 </td>
             </tr>

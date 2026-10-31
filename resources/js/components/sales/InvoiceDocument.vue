@@ -312,6 +312,9 @@ const outstandingBalance = computed(() => {
         </div>
 
         <div class="invoice-section mt-4 ml-auto max-w-xs space-y-1 text-sm">
+            <p v-if="sale.due_date" class="font-semibold">
+                Payment due {{ sale.due_date }}
+            </p>
             <div class="flex justify-between">
                 <span>Subtotal</span><span>{{ money(sale.subtotal) }}</span>
             </div>
@@ -326,7 +329,8 @@ const outstandingBalance = computed(() => {
                 v-if="business.invoice_show_tax && sale.tax_total !== '0.00'"
                 class="flex justify-between"
             >
-                <span>Tax</span><span>{{ money(sale.tax_total) }}</span>
+                <span>Tax included</span
+                ><span>{{ money(sale.tax_total) }}</span>
             </div>
             <div
                 class="invoice-accent invoice-accent-border mt-2 flex justify-between border-y py-2 text-base font-bold"

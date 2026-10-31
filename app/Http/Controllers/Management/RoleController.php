@@ -22,8 +22,14 @@ class RoleController extends Controller
      */
     public function index(Request $request): Response
     {
+        $filters = $request->validate(['search' => ['nullable', 'string', 'max:100']]);
+        $search = trim($filters['search'] ?? '');
+        $roles = Role::query()->withCount(['users', 'permissions'])
+            ->when($search !== '', fn ($q) => $q->where('name', 'like', "%{$search}%"))
+            ->orderByDesc('is_system')->orderBy('name')->paginate(15)->withQueryString();
+
         return Inertia::render('management/roles/Index', [
-            'roles' => Role::query()->withCount(['users', 'permissions'])->orderByDesc('is_system')->orderBy('name')->get(),
+            'roles' => $roles->items(), 'pagination' => $roles->linkCollection(), 'total' => $roles->total(), 'search' => $search,
             'permissionGroups' => $request->user()->can(PermissionName::RolesCreate->value)
                 ? $this->permissionGroups($request->user())
                 : [],

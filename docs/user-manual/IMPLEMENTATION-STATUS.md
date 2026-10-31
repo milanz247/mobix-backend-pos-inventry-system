@@ -1,3 +1,5 @@
+> Updated 2026-10-31: see [shop operations improvements](../shop-operations-2026-10-31.md) for customer accounts, credit terms, stock alerts, server-held carts, tax and CSV exports. Repair job management and backup/restore remain excluded.
+
 # Implementation status and documentation audit
 
 Audit basis: route list, route middleware, Vue page/components, controllers, request validation, services, models, permission enum/seeder, and available project tests were inspected. No running browser was available, so runtime visuals and real printer/email delivery could not be tested. The guide intentionally describes current code behavior rather than proposed workflows.
@@ -16,11 +18,11 @@ Audit basis: route list, route middleware, Vue page/components, controllers, req
 
 ## Partially implemented or limited
 
-- **Customer operations:** customer name, phone, and email are captured on individual POS sales, but there is no independent customer directory, deduplication, search/picker, or customer history module.
+- **Customer operations:** customer directory, bounded POS search, normalized phone matching, credit terms and location-scoped statements are implemented. Existing historical unlinked sales are not automatically assigned to customers.
 - **Repair:** serialized devices can move to/from an `in_repair` status with events. No repair-management workflow exists. A Repair centre location type and Technician role do not mean repair jobs are implemented.
-- **Low stock:** inventory overview can indicate that no reorder threshold is configured; no threshold management or alert workflow is present.
-- **Tax:** invoice settings control whether tax is displayed, but checkout assigns `tax_total` to zero; no tax rate/calculation setup is present.
-- **Reporting:** sales reports include tables and filters but no export button. Dashboard gross profit is based on stored sale costs/returns only, not full net business profit.
+- **Low stock:** location-specific reorder levels, low-stock screens and dashboard attention counts are implemented. External email/SMS notifications are not included.
+- **Tax:** business settings controls the tax-inclusive rate, default zero. Checkout, returns and replacements retain per-line tax snapshots.
+- **Reporting:** sales, stock, damaged-stock and expense reports support filtered CSV downloads. Dashboard gross profit excludes included tax and returned margin, but excludes operating expenses and is not net business profit.
 - **Email invitation/reset:** UI and password broker flow exist, but actual delivery could not be runtime verified and depends on mail configuration.
 - **Receipt printing:** receipt rendering and browser print action exist; physical output depends on browser/printer and could not be verified in this audit.
 - **Location selection:** operational forms select locations individually. There is no persistent global branch switcher in the reviewed sidebar.
@@ -28,10 +30,6 @@ Audit basis: route list, route middleware, Vue page/components, controllers, req
 ## Missing features (not documented as workflows)
 
 - Repair ticket/job card intake, technician assignment, quotations/approval, repair status pipeline, parts consumption, repair payments, warranty, and delivery.
-- Dedicated customer CRUD/CRM pages.
-- Report export/download control.
-- Reorder-threshold administration and automated low-stock notifications.
-- Tax calculation/configuration for sales.
 - Product stock editing from product creation; stock is managed in inventory/purchase workflows instead.
 
 ## Runtime behavior not independently verified

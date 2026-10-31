@@ -21,8 +21,8 @@ class SalePaymentFactory extends Factory
     public function definition(): array
     {
         return [
-            'business_id' => fn (array $attributes): int => Sale::query()->findOrFail($attributes['sale_id'])->business_id,
             'sale_id' => Sale::factory(),
+            'business_id' => fn (array $attributes): int => Sale::query()->findOrFail((int) $attributes['sale_id'])->business_id,
             'amount' => '100.00',
             'operation_key' => fn (): string => Str::uuid()->toString(),
             'payload_hash' => fn (): string => hash('sha256', Str::uuid()->toString()),

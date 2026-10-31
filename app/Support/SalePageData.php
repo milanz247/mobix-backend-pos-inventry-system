@@ -28,6 +28,7 @@ class SalePageData
             'id' => $sale->id,
             'sale_number' => $sale->sale_number,
             'is_credit' => (bool) $sale->is_credit,
+            'due_date' => $sale->due_date?->toDateString(),
             'posted_at' => $sale->posted_at->format('Y-m-d H:i:s'),
             'status' => $sale->status->value,
             'source' => $sale->source->value,
@@ -35,6 +36,7 @@ class SalePageData
             'payment_status' => $sale->payment_status->value,
             'location' => ['id' => $sale->location->id, 'name' => $sale->location->name, 'code' => $sale->location->code],
             'cashier' => $sale->cashier->name,
+            'customer_id' => $sale->customer_id,
             'customer' => [
                 'name' => $sale->customer_name,
                 'phone' => $sale->customer_phone,

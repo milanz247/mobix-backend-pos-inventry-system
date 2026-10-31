@@ -7,18 +7,30 @@ import {
     useForm,
     usePoll,
 } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
 import {
     Barcode,
-    CircleCheckBig,
     LoaderCircle,
     Percent,
     Plus,
-    Printer,
     Search,
     ShoppingCart,
     Trash2,
 } from '@lucide/vue';
+import PosReceiptDialog from '@/components/sales/PosReceiptDialog.vue';
+import PosDiscountDialog from '@/components/sales/PosDiscountDialog.vue';
+import type { CompletedSale } from '@/types/pos';
+import { toast } from 'vue-sonner';
+import { api } from '@/lib/api';
+import CustomerPicker from '@/components/sales/CustomerPicker.vue';
+import type { SavedCustomer } from '@/components/sales/CustomerPicker.vue';
 import ConfirmActionDialog from '@/components/ConfirmActionDialog.vue';
 import PosCashDrawer from '@/components/shifts/PosCashDrawer.vue';
 import type { PosDrawer } from '@/types/shift';
@@ -84,6 +96,12 @@ type Payment = {
 };
 type DiscountMode = 'percentage' | 'amount';
 type HeldCart = {
+    customer_id?: number | null;
+    customer_name?: string;
+    customer_phone?: string;
+    customer_email?: string;
+    notes?: string;
+    sale_source?: string;
     id: string;
     held_at: string;
     location_id: number;
@@ -91,6 +109,13 @@ type HeldCart = {
     order_discount: string;
 };
 type ActiveCartSnapshot = {
+    operation_key: string;
+    customer: SavedCustomer | null;
+    customer_name: string;
+    customer_phone: string;
+    customer_email: string;
+    notes: string;
+    due_date: string;
     saved_at: string;
     location_id: number;
     lines: CartLine[];
@@ -114,16 +139,6 @@ type PosSettings = {
     auto_print_receipt: boolean;
     products_per_page: number;
 };
-type CompletedSale = {
-    id: number;
-    sale_number: string;
-    customer: string;
-    total: string;
-    paid_total: string;
-    outstanding: string;
-    cash_tendered: string | null;
-    change_given: string;
-};
 
 const props = defineProps<{
     variants: { data: Variant[] };
@@ -138,6 +153,8 @@ const props = defineProps<{
         brand_id: number | null;
         location_id: number;
     };
+    taxRate: string;
+    canViewCustomers: boolean;
     currency: string;
     cashierId: number;
     drawer: PosDrawer;
@@ -198,29 +215,18 @@ const creditCustomerId = ref(
     props.creditSale ? String(props.creditSale.customer_id) : '',
 );
 const creditPaid = ref('0.00');
-const customerSearch = ref('');
-function normalizedCustomerSearch(value: string): string {
-    return value.toLowerCase().replace(/[\s()+.-]+/g, '');
-}
-const selectedCreditCustomer = computed(() =>
-    props.customers.find(
-        (customer) => String(customer.id) === creditCustomerId.value,
-    ),
-);
-const filteredCustomers = computed(() => {
-    const query = normalizedCustomerSearch(customerSearch.value);
-    return props.customers.filter(
-        (customer) =>
-            normalizedCustomerSearch(customer.name).includes(query) ||
-            normalizedCustomerSearch(customer.phone).includes(query),
-    );
+const selectedCustomer = ref<SavedCustomer | null>(null);
+const dueDate = ref('');
+watch(selectedCustomer, (customer) => {
+    creditCustomerId.value = customer ? String(customer.id) : '';
+    if (customer) {
+        customerName.value = customer.name;
+        customerPhone.value = customer.phone;
+        customerEmail.value = customer.email ?? '';
+    }
 });
-watch(creditModalOpen, (open) => {
-    if (open) router.reload({ only: ['customers'] });
-});
-watch(customerSearch, () => {
-    if (!props.creditSale) creditCustomerId.value = '';
-});
+const cartSaving = ref(false);
+const mobileCartOpen = ref(false);
 const customerName = ref('');
 const customerPhone = ref('');
 const customerEmail = ref('');
@@ -243,12 +249,16 @@ const heldCartStorageKey = `nalakamobile:pos-held-carts:${props.cashierId}${prop
 const activeCartStorageKey = `nalakamobile:pos-active-cart:${props.cashierId}${props.creditSale ? `:credit:${props.creditSale.id}` : ''}`;
 const activeCartLifetime = 12 * 60 * 60 * 1000;
 let activeCartRestored = false;
+function newOperationKey(): string {
+    return crypto.randomUUID();
+}
 const form = useForm({
-    operation_key: crypto.randomUUID(),
+    operation_key: newOperationKey(),
     location_id: Number(locationId.value),
     credit_sale_id: null as number | null,
     is_credit: false,
     customer_id: null as number | null,
+    due_date: null as string | null,
     customer_name: '',
     customer_phone: '',
     customer_email: '',
@@ -300,6 +310,7 @@ const needsExactCashReset = computed(() => {
 });
 const showAnyCustomerDetails = computed(
     () =>
+        props.canViewCustomers ||
         props.posSettings.show_customer_name ||
         props.posSettings.show_customer_phone ||
         props.posSettings.show_customer_email ||
@@ -364,7 +375,19 @@ watch([search, categoryId, brandId, locationId], () => {
     }, 250);
 });
 watch(
-    [cart, orderDiscount, saleSource, locationId],
+    [
+        cart,
+        orderDiscount,
+        saleSource,
+        locationId,
+        selectedCustomer,
+        customerName,
+        customerPhone,
+        customerEmail,
+        notes,
+        dueDate,
+        () => form.operation_key,
+    ],
     () => {
         if (activeCartRestored) saveActiveCart();
     },
@@ -379,6 +402,7 @@ watch(
     },
 );
 onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleShortcut);
     cancelShiftPoll?.();
     if (searchTimer) clearTimeout(searchTimer);
     closePendingReceiptWindow();
@@ -412,18 +436,8 @@ onMounted(() => {
         sidebarWrapper.style.overflow = 'hidden';
     }
 
-    try {
-        const stored = window.localStorage.getItem(heldCartStorageKey);
-        const parsed: unknown = stored ? JSON.parse(stored) : [];
-        heldCarts.value = Array.isArray(parsed)
-            ? parsed
-                  .map(restoreHeldCart)
-                  .filter((held): held is HeldCart => held !== null)
-            : [];
-        saveHeldCarts();
-    } catch {
-        heldCarts.value = [];
-    }
+    void loadHeldCarts();
+    window.addEventListener('keydown', handleShortcut);
 
     restoreActiveCart();
     activeCartRestored = true;
@@ -692,6 +706,13 @@ function saveActiveCart(): void {
         }
 
         const snapshot: ActiveCartSnapshot = {
+            operation_key: form.operation_key,
+            customer: selectedCustomer.value,
+            customer_name: customerName.value,
+            customer_phone: customerPhone.value,
+            customer_email: customerEmail.value,
+            notes: notes.value,
+            due_date: dueDate.value,
             saved_at: new Date().toISOString(),
             location_id: Number(locationId.value),
             lines: copyCartLines(cart.value),
@@ -740,6 +761,45 @@ function restoreActiveCart(): void {
             return;
         }
 
+        if (
+            typeof parsed.operation_key === 'string' &&
+            /^[0-9a-f-]{36}$/i.test(parsed.operation_key)
+        )
+            form.operation_key = parsed.operation_key;
+        selectedCustomer.value =
+            isRecord(parsed.customer) &&
+            typeof parsed.customer.id === 'number' &&
+            typeof parsed.customer.name === 'string' &&
+            typeof parsed.customer.phone === 'string'
+                ? {
+                      id: parsed.customer.id,
+                      name: parsed.customer.name,
+                      phone: parsed.customer.phone,
+                      email: nullableString(parsed.customer.email),
+                      credit_limit: nullableString(
+                          parsed.customer.credit_limit,
+                      ),
+                      credit_days:
+                          typeof parsed.customer.credit_days === 'number'
+                              ? parsed.customer.credit_days
+                              : 30,
+                  }
+                : null;
+        customerName.value =
+            typeof parsed.customer_name === 'string'
+                ? parsed.customer_name
+                : '';
+        customerPhone.value =
+            typeof parsed.customer_phone === 'string'
+                ? parsed.customer_phone
+                : '';
+        customerEmail.value =
+            typeof parsed.customer_email === 'string'
+                ? parsed.customer_email
+                : '';
+        notes.value = typeof parsed.notes === 'string' ? parsed.notes : '';
+        dueDate.value =
+            typeof parsed.due_date === 'string' ? parsed.due_date : '';
         cart.value = lines;
         orderDiscount.value = parsed.order_discount;
         saleSource.value = props.saleSources.some(
@@ -759,16 +819,75 @@ function clearActiveCart(): void {
         // Storage may be unavailable in restricted browser modes.
     }
 }
-function saveHeldCarts(): void {
+async function loadHeldCarts(): Promise<void> {
     try {
-        window.localStorage.setItem(
-            heldCartStorageKey,
-            JSON.stringify(heldCarts.value.slice(0, 10)),
+        // Import existing local carts once without discarding them on a failed save.
+        const legacy = window.localStorage.getItem(heldCartStorageKey);
+        if (legacy) {
+            const parsed: unknown = JSON.parse(legacy);
+            if (Array.isArray(parsed)) {
+                for (const entry of parsed) {
+                    const held = restoreHeldCart(entry);
+                    if (held)
+                        await api('/pos/held-carts', {
+                            method: 'POST',
+                            body: JSON.stringify(held),
+                        });
+                }
+            }
+            window.localStorage.removeItem(heldCartStorageKey);
+        }
+        const rows = await api<HeldCart[]>(
+            `/pos/held-carts?location_id=${locationId.value}`,
         );
-    } catch {
-        // The current cart remains usable when browser storage is unavailable.
+        heldCarts.value = rows;
+    } catch (error) {
+        toast.error(
+            error instanceof Error
+                ? error.message
+                : 'Could not load saved carts.',
+        );
     }
 }
+watch(
+    () => props.selectedLocation.id,
+    () => {
+        void loadHeldCarts();
+    },
+);
+function handleShortcut(event: KeyboardEvent): void {
+    if (
+        creditModalOpen.value ||
+        customerModalOpen.value ||
+        discountModalOpen.value ||
+        receiptModalOpen.value
+    )
+        return;
+    if (!event.altKey || event.ctrlKey || event.metaKey) return;
+    const key = event.key.toLowerCase();
+    if (!['s', 'h', 'p'].includes(key)) return;
+    event.preventDefault();
+    if (key === 's') {
+        mobileCartOpen.value = false;
+        void nextTick(() =>
+            document
+                .querySelector<HTMLInputElement>(
+                    '[aria-label="Search products or scan barcode or IMEI"]',
+                )
+                ?.focus(),
+        );
+    }
+    if (key === 'h') void holdCart();
+    if (key === 'p') {
+        mobileCartOpen.value = true;
+        void nextTick(() =>
+            document
+                .querySelector<HTMLInputElement>('[data-cash-input]')
+                ?.focus(),
+        );
+    }
+}
+
 function copyCartLines(lines: CartLine[]): CartLine[] {
     return lines.map((line) => ({
         variant: { ...line.variant },
@@ -778,40 +897,93 @@ function copyCartLines(lines: CartLine[]): CartLine[] {
         device_identifier: line.device_identifier,
     }));
 }
-function holdCart(): void {
-    if (cart.value.length === 0) return;
-    heldCarts.value.unshift({
-        id: crypto.randomUUID(),
-        held_at: new Date().toISOString(),
-        location_id: Number(locationId.value),
-        lines: copyCartLines(cart.value),
-        order_discount: orderDiscount.value,
-    });
-    heldCarts.value = heldCarts.value.slice(0, 10);
-    saveHeldCarts();
-    cart.value = [];
-    orderDiscount.value = '0.00';
-    customerName.value = '';
-    customerPhone.value = '';
-    customerEmail.value = '';
-    notes.value = '';
-    resetCashPayment();
-    clearActiveCart();
+let pendingHold: { id: string; data: string } | null = null;
+async function holdCart(): Promise<boolean> {
+    if (
+        !cart.value.length ||
+        cartSaving.value ||
+        form.processing ||
+        props.creditSale
+    )
+        return false;
+    cartSaving.value = true;
+    try {
+        const held: HeldCart = {
+            id: crypto.randomUUID(),
+            held_at: new Date().toISOString(),
+            location_id: Number(locationId.value),
+            lines: copyCartLines(cart.value),
+            order_discount: orderDiscount.value,
+            customer_id: selectedCustomer.value?.id ?? null,
+            customer_name: customerName.value,
+            customer_phone: customerPhone.value,
+            customer_email: customerEmail.value,
+            notes: notes.value,
+            sale_source: saleSource.value,
+        };
+        const fingerprint = JSON.stringify({ ...held, id: '', held_at: '' });
+        if (pendingHold?.data === fingerprint) held.id = pendingHold.id;
+        else pendingHold = { id: held.id, data: fingerprint };
+        await api('/pos/held-carts', {
+            method: 'POST',
+            body: JSON.stringify(held),
+        });
+        pendingHold = null;
+        resetSale();
+        selectedCustomer.value = null;
+        await loadHeldCarts();
+        toast.success('Cart saved for this location.');
+        return true;
+    } catch (error) {
+        toast.error(
+            error instanceof Error ? error.message : 'Could not save cart.',
+        );
+        return false;
+    } finally {
+        cartSaving.value = false;
+    }
 }
-function resumeHeldCart(id: string): void {
-    const held = heldCarts.value.find((item) => item.id === id);
-    if (!held) return;
-    if (cart.value.length > 0) holdCart();
-    cart.value = held.lines;
-    locationId.value = String(held.location_id);
-    orderDiscount.value = held.order_discount;
-    heldCarts.value = heldCarts.value.filter((item) => item.id !== id);
-    saveHeldCarts();
-    resetCashPayment();
+async function resumeHeldCart(id: string): Promise<void> {
+    if (cartSaving.value || form.processing) return;
+    if (cart.value.length && !(await holdCart())) return;
+    cartSaving.value = true;
+    try {
+        const held = await api<HeldCart>(`/pos/held-carts/${id}/claim`, {
+            method: 'POST',
+        });
+        cart.value = held.lines;
+        orderDiscount.value = held.order_discount;
+        customerName.value = held.customer_name ?? '';
+        customerPhone.value = held.customer_phone ?? '';
+        customerEmail.value = held.customer_email ?? '';
+        notes.value = held.notes ?? '';
+        saleSource.value = held.sale_source ?? 'in_store_pos';
+        selectedCustomer.value = held.customer_id
+            ? {
+                  id: held.customer_id,
+                  name: customerName.value,
+                  phone: customerPhone.value,
+                  email: customerEmail.value,
+                  credit_limit: null,
+                  credit_days: 30,
+              }
+            : null;
+        resetCashPayment();
+        saveActiveCart();
+        mobileCartOpen.value = true;
+        await loadHeldCarts();
+    } catch (error) {
+        toast.error(
+            error instanceof Error ? error.message : 'Could not resume cart.',
+        );
+        await loadHeldCarts();
+    } finally {
+        cartSaving.value = false;
+    }
 }
 function selectHeldCart(event: Event): void {
     const select = event.target as HTMLSelectElement;
-    if (select.value !== '') resumeHeldCart(select.value);
+    if (select.value) void resumeHeldCart(select.value);
     select.value = '';
 }
 function clearCart(): void {
@@ -877,6 +1049,7 @@ function remainingCash(payment: Payment): bigint {
 function resetSale(): void {
     cart.value = [];
     orderDiscount.value = '0.00';
+    selectedCustomer.value = null;
     customerName.value = '';
     customerPhone.value = '';
     customerEmail.value = '';
@@ -1015,6 +1188,7 @@ function submitCheckout(credit = false): void {
         cart.value.length === 0 ||
         !hasActiveShift.value ||
         drawerProcessing.value ||
+        cartSaving.value ||
         form.processing
     )
         return;
@@ -1022,9 +1196,9 @@ function submitCheckout(credit = false): void {
     form.credit_sale_id = props.creditSale?.id ?? null;
     form.is_credit = credit;
     form.customer_id =
-        credit && creditCustomerId.value
-            ? Number(creditCustomerId.value)
-            : null;
+        props.creditSale?.customer_id ?? selectedCustomer.value?.id ?? null;
+    form.due_date =
+        credit && !props.creditSale && dueDate.value ? dueDate.value : null;
     form.location_id = Number(locationId.value);
     form.customer_name =
         credit || props.posSettings.show_customer_name
@@ -1092,7 +1266,8 @@ function submitCheckout(credit = false): void {
             creditModalOpen.value = false;
             creditCustomerId.value = '';
             creditPaid.value = '0.00';
-            customerSearch.value = '';
+            selectedCustomer.value = null;
+            dueDate.value = '';
             resetSale();
         },
         onError: () => closePendingReceiptWindow(),
@@ -1107,6 +1282,8 @@ defineOptions({
 <template>
     <div
         class="page-shell h-0 min-h-0 w-full max-w-full flex-1 overflow-hidden"
+        :inert="cartSaving"
+        :aria-busy="cartSaving"
     >
         <Head title="POS checkout" />
         <div
@@ -1139,11 +1316,28 @@ defineOptions({
                 />
             </Teleport>
 
+            <div class="flex shrink-0 gap-2 lg:hidden">
+                <Button
+                    :variant="mobileCartOpen ? 'outline' : 'default'"
+                    @click="mobileCartOpen = false"
+                    >Products</Button
+                >
+                <Button
+                    :variant="mobileCartOpen ? 'default' : 'outline'"
+                    @click="mobileCartOpen = true"
+                    >Cart ({{ cart.length }}) · {{ money(cartTotal()) }}</Button
+                >
+            </div>
+            <p class="hidden text-xs text-muted-foreground lg:block">
+                Alt+S search · Alt+H hold cart · Alt+P payment · Prices include
+                {{ taxRate }}% tax
+            </p>
             <div
                 class="grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.85fr)]"
             >
                 <div
-                    class="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden"
+                    class="min-h-0 min-w-0 flex-col gap-2 overflow-hidden lg:flex"
+                    :class="mobileCartOpen ? 'hidden' : 'flex'"
                 >
                     <div class="surface-panel flex flex-wrap gap-2 p-2">
                         <div class="relative min-w-56 flex-1">
@@ -1353,7 +1547,8 @@ defineOptions({
                 </div>
 
                 <aside
-                    class="surface-panel flex h-fit min-w-0 flex-col overflow-hidden lg:h-full lg:min-h-0"
+                    class="surface-panel h-full min-h-0 min-w-0 flex-col overflow-hidden lg:flex"
+                    :class="mobileCartOpen ? 'flex' : 'hidden'"
                 >
                     <div
                         class="flex items-center justify-between gap-2 border-b bg-muted/40 p-3"
@@ -1391,7 +1586,12 @@ defineOptions({
                                 size="sm"
                                 variant="outline"
                                 class="min-w-0 px-2"
-                                :disabled="cart.length === 0"
+                                :disabled="
+                                    cart.length === 0 ||
+                                    cartSaving ||
+                                    !!creditSale ||
+                                    form.processing
+                                "
                                 @click="holdCart"
                                 >Hold cart</Button
                             >
@@ -1719,6 +1919,7 @@ defineOptions({
                                 </div>
                                 <Input
                                     id="cash-tendered"
+                                    data-cash-input
                                     v-model="payments[0].cash_tendered"
                                     inputmode="decimal"
                                     :placeholder="money(cartTotal())"
@@ -1827,138 +2028,26 @@ defineOptions({
             </div>
         </section>
 
-        <Dialog v-model:open="discountModalOpen">
-            <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-md">
-                <DialogHeader class="border-b bg-muted/30 px-5 py-4 text-left">
-                    <DialogTitle>
-                        {{
-                            discountLineIndex === null
-                                ? 'Total discount'
-                                : 'Product discount'
-                        }}
-                    </DialogTitle>
-                    <DialogDescription>
-                        <template v-if="discountLineIndex === null">
-                            Apply a percentage or fixed amount to the whole
-                            order.
-                        </template>
-                        <template v-else>
-                            {{ cart[discountLineIndex]?.variant.name }} ·
-                            {{ cart[discountLineIndex]?.variant.variant }}
-                        </template>
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div class="space-y-4 p-5">
-                    <div class="grid grid-cols-2 rounded-lg bg-muted p-1">
-                        <Button
-                            type="button"
-                            size="sm"
-                            :variant="
-                                discountMode === 'percentage'
-                                    ? 'default'
-                                    : 'ghost'
-                            "
-                            @click="discountMode = 'percentage'"
-                        >
-                            Percentage
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            :variant="
-                                discountMode === 'amount' ? 'default' : 'ghost'
-                            "
-                            @click="discountMode = 'amount'"
-                        >
-                            Fixed amount
-                        </Button>
-                    </div>
-
-                    <div class="grid gap-1.5">
-                        <Label for="discount-value">
-                            {{
-                                discountMode === 'percentage'
-                                    ? 'Discount percentage'
-                                    : `Discount amount (${currency})`
-                            }}
-                        </Label>
-                        <div class="relative">
-                            <Input
-                                id="discount-value"
-                                v-model="discountValue"
-                                inputmode="decimal"
-                                class="h-12 pr-14 text-lg font-semibold tabular-nums"
-                                :placeholder="
-                                    discountMode === 'percentage' ? '0' : '0.00'
-                                "
-                            />
-                            <span
-                                class="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-sm font-semibold text-muted-foreground"
-                            >
-                                {{
-                                    discountMode === 'percentage'
-                                        ? '%'
-                                        : currency
-                                }}
-                            </span>
-                        </div>
-                        <p
-                            v-if="
-                                discountMode === 'percentage' &&
-                                minorUnits(discountValue) > 10000n
-                            "
-                            class="text-xs text-destructive"
-                        >
-                            Percentage is limited to 100%.
-                        </p>
-                    </div>
-
-                    <div
-                        class="space-y-2 rounded-lg border bg-muted/20 p-3 text-sm"
-                    >
-                        <div class="flex justify-between gap-3">
-                            <span class="text-muted-foreground"
-                                >Before discount</span
-                            >
-                            <span class="font-medium tabular-nums">{{
-                                money(discountBase)
-                            }}</span>
-                        </div>
-                        <div class="flex justify-between gap-3">
-                            <span class="text-muted-foreground">Discount</span>
-                            <span class="font-medium text-primary tabular-nums"
-                                >-{{ money(discountPreview) }}</span
-                            >
-                        </div>
-                        <div class="flex justify-between gap-3 border-t pt-2">
-                            <span class="font-semibold">After discount</span>
-                            <span class="font-bold tabular-nums">{{
-                                money(discountBase - discountPreview)
-                            }}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <DialogFooter
-                    class="flex-row justify-between border-t bg-muted/20 p-3"
-                >
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        @click="clearDiscount"
-                    >
-                        Clear
-                    </Button>
-                    <Button type="button" @click="applyDiscount">
-                        Apply discount
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <PosDiscountDialog
+            v-model:open="discountModalOpen"
+            v-model:mode="discountMode"
+            v-model:value="discountValue"
+            :line-name="
+                discountLineIndex === null
+                    ? null
+                    : `${cart[discountLineIndex]?.variant.name} · ${cart[discountLineIndex]?.variant.variant}`
+            "
+            :currency="currency"
+            :discount-base="discountBase"
+            :discount-preview="discountPreview"
+            :money="money"
+            :minor-units="minorUnits"
+            @clear="clearDiscount"
+            @apply="applyDiscount"
+        />
 
         <Dialog v-model:open="creditModalOpen">
-            <DialogContent>
+            <DialogContent class="max-h-[calc(100dvh-2rem)] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Credit sale</DialogTitle>
                     <DialogDescription
@@ -1979,51 +2068,16 @@ defineOptions({
                         </p>
                     </div>
                     <template v-else>
-                        <Label for="credit-search">Find customer</Label>
-                        <Input
-                            id="credit-search"
-                            v-model="customerSearch"
-                            placeholder="Search name or phone"
-                            autocomplete="off"
+                        <CustomerPicker
+                            v-model="selectedCustomer"
+                            :currency="currency"
                         />
-                        <div
-                            class="max-h-40 overflow-y-auto rounded-md border"
-                            aria-label="Customer search results"
-                        >
-                            <button
-                                v-for="customer in filteredCustomers"
-                                :key="customer.id"
-                                type="button"
-                                class="block w-full border-b px-3 py-2 text-left text-sm hover:bg-muted"
-                                :class="
-                                    creditCustomerId === String(customer.id)
-                                        ? 'bg-muted font-semibold'
-                                        : ''
-                                "
-                                @click="creditCustomerId = String(customer.id)"
-                            >
-                                {{ customer.name }} · {{ customer.phone }}
-                            </button>
-                            <p
-                                v-if="filteredCustomers.length === 0"
-                                class="p-3 text-sm text-muted-foreground"
-                            >
-                                No saved customer found. Enter a new customer
-                                below.
-                            </p>
-                        </div>
-                        <p
-                            v-if="selectedCreditCustomer"
-                            class="text-sm font-semibold"
-                        >
-                            Selected: {{ selectedCreditCustomer.name }} ·
-                            {{ selectedCreditCustomer.phone }}
-                        </p>
                         <Button
                             v-if="canCreateCustomer"
                             type="button"
                             variant="outline"
                             @click="
+                                selectedCustomer = null;
                                 creditCustomerId = '';
                                 customerName = '';
                                 customerPhone = '';
@@ -2045,6 +2099,17 @@ defineOptions({
                             required
                         />
                     </template>
+                    <template v-if="!creditSale">
+                        <Label for="credit-due"
+                            >Payment due date (optional)</Label
+                        >
+                        <Input id="credit-due" v-model="dueDate" type="date" />
+                        <p class="text-xs text-muted-foreground">
+                            Leave blank to use the customer's credit terms.
+                            Overdue invoices must be settled before extending
+                            more credit.
+                        </p>
+                    </template>
                     <Label for="credit-paid">Cash paid today</Label>
                     <Input
                         id="credit-paid"
@@ -2053,7 +2118,10 @@ defineOptions({
                         min="0"
                         step="0.01"
                     />
-                    <p>New items: {{ money(cartTotal()) }}</p>
+                    <p>
+                        New items: {{ money(cartTotal()) }} (includes
+                        {{ taxRate }}% tax)
+                    </p>
                     <p class="font-semibold">
                         Balance due:
                         {{
@@ -2095,7 +2163,9 @@ defineOptions({
         </Dialog>
 
         <Dialog v-model:open="customerModalOpen">
-            <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-lg">
+            <DialogContent
+                class="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-lg"
+            >
                 <DialogHeader class="border-b bg-muted/30 px-5 py-4 text-left">
                     <DialogTitle>Customer details &amp; notes</DialogTitle>
                     <DialogDescription>
@@ -2104,6 +2174,12 @@ defineOptions({
                 </DialogHeader>
 
                 <div class="grid gap-3 p-5 sm:grid-cols-2">
+                    <CustomerPicker
+                        v-if="canViewCustomers"
+                        v-model="selectedCustomer"
+                        :currency="currency"
+                        class="sm:col-span-2"
+                    />
                     <div
                         v-if="posSettings.show_customer_name"
                         class="grid gap-1.5"
@@ -2111,6 +2187,7 @@ defineOptions({
                         <Label for="customer-name">Customer name</Label>
                         <Input
                             id="customer-name"
+                            :disabled="!!selectedCustomer"
                             v-model="customerName"
                             autocomplete="name"
                             placeholder="Walk-in customer"
@@ -2123,6 +2200,7 @@ defineOptions({
                         <Label for="customer-phone">Phone</Label>
                         <Input
                             id="customer-phone"
+                            :disabled="!!selectedCustomer"
                             v-model="customerPhone"
                             inputmode="tel"
                             autocomplete="tel"
@@ -2136,6 +2214,7 @@ defineOptions({
                         <Label for="customer-email">Email</Label>
                         <Input
                             id="customer-email"
+                            :disabled="!!selectedCustomer"
                             v-model="customerEmail"
                             type="email"
                             autocomplete="email"
@@ -2164,87 +2243,14 @@ defineOptions({
             </DialogContent>
         </Dialog>
 
-        <Dialog v-model:open="receiptModalOpen">
-            <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-sm">
-                <DialogHeader
-                    class="items-center border-b px-5 py-5 text-center"
-                >
-                    <span
-                        class="mb-1 grid size-12 place-items-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                    >
-                        <CircleCheckBig class="size-7" />
-                    </span>
-                    <DialogTitle>Sale completed</DialogTitle>
-                    <DialogDescription v-if="completedSale">
-                        {{ completedSale.sale_number }} ·
-                        {{ completedSale.customer }}
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div v-if="completedSale" class="space-y-3 p-5">
-                    <div class="flex justify-between gap-3 text-sm">
-                        <span class="text-muted-foreground">Sale total</span>
-                        <span class="font-semibold tabular-nums">{{
-                            money(minorUnits(completedSale.total))
-                        }}</span>
-                    </div>
-                    <div
-                        v-if="completedSale.cash_tendered"
-                        class="flex justify-between gap-3 text-sm"
-                    >
-                        <span class="text-muted-foreground">Cash received</span>
-                        <span class="font-semibold tabular-nums">{{
-                            money(minorUnits(completedSale.cash_tendered))
-                        }}</span>
-                    </div>
-                    <div
-                        class="rounded-xl bg-primary px-4 py-4 text-center text-primary-foreground"
-                    >
-                        <p
-                            class="text-xs font-medium text-primary-foreground/75"
-                        >
-                            {{
-                                minorUnits(completedSale.outstanding) > 0n
-                                    ? 'Credit balance due'
-                                    : 'Change to customer'
-                            }}
-                        </p>
-                        <p class="mt-1 text-3xl font-bold tabular-nums">
-                            {{
-                                money(
-                                    minorUnits(
-                                        minorUnits(completedSale.outstanding) >
-                                            0n
-                                            ? completedSale.outstanding
-                                            : completedSale.change_given,
-                                    ),
-                                )
-                            }}
-                        </p>
-                    </div>
-                </div>
-
-                <DialogFooter class="flex-row border-t bg-muted/30 p-3">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        class="flex-1"
-                        @click="receiptModalOpen = false"
-                    >
-                        Next sale
-                    </Button>
-                    <Button
-                        v-if="completedSale && canPrintReceipt"
-                        type="button"
-                        class="flex-1"
-                        @click="printCompletedSaleReceipt"
-                    >
-                        <Printer class="size-4" />
-                        Print receipt
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <PosReceiptDialog
+            v-model:open="receiptModalOpen"
+            :completed-sale="completedSale"
+            :can-print-receipt="canPrintReceipt"
+            :money="money"
+            :minor-units="minorUnits"
+            @print="printCompletedSaleReceipt"
+        />
 
         <iframe
             v-if="receiptPrintUrl"

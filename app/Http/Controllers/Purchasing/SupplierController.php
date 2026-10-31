@@ -26,6 +26,7 @@ class SupplierController extends Controller
         $business = Business::query()->where('setup_key', 'initial')->sole();
         $search = $request->string('search')->trim()->toString();
         $status = SupplierStatus::tryFrom($request->string('status')->toString());
+        $statusValue = $status->value ?? '';
         $allowedLocationIds = $locationAccess->accessibleQuery($request->user())->select('locations.id');
         $suppliers = $business->suppliers()->withCount(['purchases' => fn ($query) => $query
             ->whereIn('location_id', $allowedLocationIds)
@@ -50,7 +51,7 @@ class SupplierController extends Controller
 
         return Inertia::render('purchasing/suppliers/Index', [
             'suppliers' => $suppliers,
-            'filters' => ['search' => $search, 'status' => $status?->value ?? ''],
+            'filters' => ['search' => $search, 'status' => $statusValue],
             'statuses' => array_map(fn (SupplierStatus $item): array => ['value' => $item->value, 'label' => $item->label()], SupplierStatus::cases()),
         ]);
     }

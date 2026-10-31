@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
+ * @property Carbon $invoice_date
  * @property numeric-string $subtotal
  * @property numeric-string $discount_total
  * @property numeric-string $total
@@ -79,6 +81,7 @@ class Purchase extends Model
         return $this->belongsTo(User::class, 'posted_by');
     }
 
+    /** @return array<string, string> */
     protected function casts(): array
     {
         return [

@@ -30,7 +30,9 @@ class UserAdministrationService
             $this->ensureRolesMayBeAssigned($actor, $roles);
 
             $user = User::query()->create(Arr::except($attributes, ['role_ids', 'location_ids', 'password_confirmation']));
+            $beforeRoles = $user->roles()->pluck('name')->all();
             $user->syncRoles($roles);
+            app(ActivityLogService::class)->record('roles_updated', 'User', (string) $user->id, $user->name, ['before' => ['roles' => $beforeRoles], 'after' => ['roles' => $roles->pluck('name')->all()]]);
             $this->syncLocations($actor, $user, $attributes);
 
             return $user;
@@ -69,7 +71,9 @@ class UserAdministrationService
 
             $this->syncLocations($actor, $managedUser, $attributes);
             $managedUser->update(Arr::except($attributes, ['role_ids', 'location_ids', 'password_confirmation']));
+            $beforeRoles = $managedUser->roles()->pluck('name')->all();
             $managedUser->syncRoles($roles);
+            app(ActivityLogService::class)->record('roles_updated', 'User', (string) $managedUser->id, $managedUser->name, ['before' => ['roles' => $beforeRoles], 'after' => ['roles' => $roles->pluck('name')->all()]]);
 
             return $managedUser;
         });
@@ -179,7 +183,9 @@ class UserAdministrationService
         if ($this->isOwner($user) || $user->ownedBusiness()->exists()) {
             return;
         }
+        $beforeLocations = $user->locations()->pluck('locations.id')->all();
         $user->locations()->sync($ids);
+        app(ActivityLogService::class)->record('locations_updated', 'User', (string) $user->id, $user->name, ['before' => ['location_ids' => $beforeLocations], 'after' => ['location_ids' => $ids]]);
         $user->unsetRelation('locations');
     }
 

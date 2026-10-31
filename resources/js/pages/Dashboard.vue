@@ -24,6 +24,7 @@ type TrendRow = {
 };
 
 const props = defineProps<{
+    attention: { label: string; value: number; href: string }[];
     overview: {
         sales_total: string;
         completed_sales: number;
@@ -54,7 +55,7 @@ const overviewCards = computed(() => [
     {
         label: "Today's sales",
         value: money(props.overview.sales_total),
-        detail: 'Gross value of sales posted today',
+        detail: 'Gross value posted today, including tax',
         icon: CircleDollarSign,
         tone: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     },
@@ -247,6 +248,18 @@ defineOptions({
             </div>
         </div>
 
+        <div v-if="attention.length" class="grid gap-3 sm:grid-cols-3">
+            <Link
+                v-for="item in attention"
+                :key="item.label"
+                :href="item.href"
+                class="surface-panel p-4 hover:border-primary"
+            >
+                <p class="text-sm text-muted-foreground">{{ item.label }}</p>
+                <p class="text-2xl font-semibold">{{ item.value }}</p>
+                <span class="text-sm text-primary">Review →</span>
+            </Link>
+        </div>
         <section aria-labelledby="sales-overview-heading" class="space-y-2">
             <div>
                 <h2 id="sales-overview-heading" class="font-semibold">
@@ -311,7 +324,7 @@ defineOptions({
                     <p class="text-sm text-muted-foreground">
                         {{
                             canViewCosts
-                                ? 'Net sales after returns and profit from recorded cost snapshots.'
+                                ? 'Sales include tax. Gross profit excludes included tax and returned margin, but excludes operating expenses; it is not net business profit.'
                                 : 'Net sales after returns for your authorized locations.'
                         }}
                     </p>

@@ -60,7 +60,6 @@ import {
 } from '@/routes/purchases';
 import { index as posIndex } from '@/routes/pos';
 import { index as salesIndex, reports as salesReports } from '@/routes/sales';
-import { edit as editSecurity } from '@/routes/security';
 import { index as shiftsIndex } from '@/routes/shifts';
 import { outOfStock, expenses, currentShift } from '@/routes/reports';
 import type { Auth, NavItem } from '@/types';
@@ -103,6 +102,10 @@ const inventoryNavItems = computed<NavItem[]>(() => [
     ...(can('inventory.view')
         ? [
               { title: 'Overview', href: inventoryIndex() },
+              {
+                  title: 'Reorder levels / alerts',
+                  href: '/inventory/reorder?alerts=1',
+              },
               { title: 'Stock by location', href: inventoryLocations() },
           ]
         : []),
@@ -137,6 +140,9 @@ const purchasingNavItems = computed<NavItem[]>(() => [
         : []),
 ]);
 const salesNavItems = computed<NavItem[]>(() => [
+    ...(can('customers.view')
+        ? [{ title: 'Customers', href: '/customers' }]
+        : []),
     ...(can('sales.view') && can('credit-sales.view')
         ? [{ title: 'Credit sales', href: '/sales/credit' }]
         : []),
@@ -146,11 +152,24 @@ const salesNavItems = computed<NavItem[]>(() => [
         : []),
 ]);
 const reportNavItems = computed<NavItem[]>(() => [
+    ...(can('activity-logs.view')
+        ? [{ title: 'System activity log', href: '/reports/activity' }]
+        : []),
+    ...(can('products.view') && can('product-activity.view')
+        ? [{ title: 'Product activity log', href: '/reports/product-activity' }]
+        : []),
+    ...(can('shifts.view') && can('shift-reports.view')
+        ? [{ title: 'Cashier shift sales', href: '/reports/shift-sales' }]
+        : []),
     ...(can('sales.reports.view')
-        ? [{ title: 'Sales reports', href: salesReports() }]
+        ? [
+              { title: 'Daily sales', href: '/reports/daily-sales' },
+              { title: 'All sales report', href: '/reports/all-sales' },
+              { title: 'Sales summary', href: salesReports() },
+          ]
         : []),
     ...(can('stock-reports.view')
-        ? [{ title: 'Out-of-Stock Products', href: outOfStock() }]
+        ? [{ title: 'Out-of-stock report', href: outOfStock() }]
         : []),
     ...(can('damaged-reports.view')
         ? [{ title: 'Damaged stock report', href: '/reports/damaged-stock' }]
@@ -176,7 +195,6 @@ const settingsNavItems = computed<NavItem[]>(() => [
         ? [{ title: 'Locations', href: locationsIndex() }]
         : []),
     { title: 'My profile', href: editProfile() },
-    { title: 'Security', href: editSecurity() },
 ]);
 
 const { isCurrentUrl } = useCurrentUrl();

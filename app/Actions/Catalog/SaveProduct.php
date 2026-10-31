@@ -6,6 +6,7 @@ use App\Models\Business;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\ProductType;
+use App\Services\ActivityLogService;
 use App\VariantTrackingMode;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
@@ -41,6 +42,7 @@ class SaveProduct
 
         try {
             $product = DB::transaction(function () use ($business, $attributes, $product, $variantRows): Product {
+                $beforeCatalogue = $product?->load('variants.bundleComponents')->toArray() ?? [];
                 if ($product === null) {
                     $product = $business->products()->create($attributes);
                 } else {
@@ -93,7 +95,10 @@ class SaveProduct
                     ->whereNotIn('id', $retainedVariantIds)
                     ->update(['status' => 'inactive', 'updated_at' => now()]);
 
-                return $product->refresh();
+                $product->refresh()->load('variants.bundleComponents');
+                app(ActivityLogService::class)->record('catalogue_saved', 'Product', (string) $product->id, $product->name, ['before' => $beforeCatalogue, 'after' => $product->toArray()], $business->id, null, $product->id, $product->name);
+
+                return $product;
             }, attempts: 3);
         } catch (Throwable $exception) {
             if (is_string($newImagePath)) {

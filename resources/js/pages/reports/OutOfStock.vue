@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ExportCsv from '@/components/reports/ExportCsv.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import ReportFilters from '@/components/reports/ReportFilters.vue';
@@ -40,6 +41,7 @@ defineProps<{
             title="Out-of-Stock Products"
             description="Current location balances and eligible devices, including variants with no stock record. Negative balances and invalid bundle configurations are flagged separately."
         />
+        <ExportCsv />
         <ReportFilters
             :action="outOfStock().url"
             :filters="filters"

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CashierShiftController;
+use App\Http\Controllers\Sales\HeldCartController;
 use App\Http\Controllers\Sales\PosController;
 use App\Http\Controllers\Sales\SaleController;
 use App\Http\Controllers\Sales\SalePaymentController;
@@ -8,6 +9,9 @@ use App\Http\Controllers\Sales\SaleReturnController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function (): void {
+    Route::get('pos/held-carts', [HeldCartController::class, 'index'])->middleware('can:sales.pos')->name('pos.carts.index');
+    Route::post('pos/held-carts', [HeldCartController::class, 'store'])->middleware('can:sales.pos')->name('pos.carts.store');
+    Route::post('pos/held-carts/{cart}/claim', [HeldCartController::class, 'claim'])->middleware('can:sales.pos')->name('pos.carts.claim');
     Route::get('pos', [PosController::class, 'index'])->middleware('can:sales.pos')->name('pos.index');
     Route::post('pos/checkout', [PosController::class, 'checkout'])->middleware(['can:sales.pos', 'can:sales.create', 'can:sales.view'])->name('pos.checkout');
 

@@ -28,6 +28,7 @@ class UpdateBusinessSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'tax_rate' => ['sometimes', 'required', 'numeric', 'between:0,100', 'decimal:0,2'],
             'name' => ['required', 'string', 'max:150'],
             'business_type' => ['required', Rule::enum(BusinessType::class)],
             'email' => ['nullable', 'string', 'email', 'max:254'],

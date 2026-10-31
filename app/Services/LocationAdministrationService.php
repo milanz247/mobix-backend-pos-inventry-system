@@ -101,6 +101,7 @@ class LocationAdministrationService
             }
 
             $location->users()->sync($userIds);
+            app(ActivityLogService::class)->record('users_assigned', 'Location', (string) $location->id, $location->name, ['before' => ['user_ids' => $currentlyAssigned], 'after' => ['user_ids' => $userIds]], $business->id, $location->id, actor: $actor);
         });
     }
 

@@ -24,6 +24,7 @@ class BusinessSettingsController extends Controller
         return Inertia::render('settings/Business', [
             'canUpdate' => request()->user()->can('business-settings.update'),
             'business' => [
+                'tax_rate' => $business->tax_rate,
                 'name' => $business->name,
                 'logo_url' => $business->logo_path === null
                     ? null

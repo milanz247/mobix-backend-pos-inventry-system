@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Sales;
 
 use App\SaleSource;
+use App\Services\LocationAccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,6 +18,7 @@ class CheckoutRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'due_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:'.now(app(LocationAccessService::class)->business()->timezone)->toDateString()],
             'credit_sale_id' => ['nullable', 'integer'],
             'is_credit' => ['sometimes', 'boolean'],
             'customer_id' => ['nullable', 'integer'],

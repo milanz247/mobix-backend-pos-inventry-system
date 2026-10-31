@@ -10,9 +10,11 @@ use App\Models\SaleReturn;
 use App\Models\User;
 use App\SalePaymentStatus;
 use App\SaleStatus;
+use App\Services\CustomerAccountService;
 use App\Services\LocationAccessService;
 use App\Services\SalesActivityService;
 use App\Services\SaleService;
+use App\Support\CsvDownload;
 use App\Support\SalePageData;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -20,10 +22,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SaleController extends Controller
 {
-    public function reports(Request $request, LocationAccessService $locationAccess, SalesActivityService $activity): Response
+    public function reports(Request $request, LocationAccessService $locationAccess, SalesActivityService $activity): Response|StreamedResponse
     {
         $business = $locationAccess->business();
         $filters = $request->validate([
@@ -60,6 +63,24 @@ class SaleController extends Controller
             ->orderByDesc('quantity_sold')->limit(10)->get()
             ->map(fn (object $row): array => ['product_name' => (string) $row->product_name_snapshot, 'variant_name' => (string) $row->variant_name_snapshot, 'sku' => (string) $row->sku_snapshot, 'quantity_sold' => (string) $row->quantity_sold, 'gross_total' => (string) $row->gross_total]);
 
+        if ($request->boolean('export')) {
+            $rows = (function () use ($sales, $grossSales, $returnsTotal, $paymentsTotal, $refundsTotal, $netSales): \Generator {
+                yield ['Metric', 'Amount'];
+                yield ['Gross sales (tax included)', $grossSales];
+                yield ['Returns', $returnsTotal];
+                yield ['Net sales (tax included)', (string) $netSales];
+                yield ['Payments received', $paymentsTotal];
+                yield ['Refunds', $refundsTotal];
+                yield [];
+                yield ['Invoice', 'Activity', 'Date (UTC)', 'Customer', 'Amount (tax included)'];
+                foreach ((clone $sales)->orderBy('posted_at')->cursor() as $row) {
+                    yield [$row->sale_number, $row->event_type, $row->posted_at, $row->customer_name, $row->total];
+                }
+            })();
+
+            return CsvDownload::make('sales-report.csv', $rows);
+        }
+
         return Inertia::render('sales/Reports', [
             'summary' => [
                 'sales_count' => (int) (clone $sales)->sum('initial_sale'),
@@ -83,6 +104,7 @@ class SaleController extends Controller
     {
         $business = $locationAccess->business();
         $filters = $request->validate([
+            'overdue' => ['nullable', 'boolean'],
             'search' => ['nullable', 'string', 'max:100'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
@@ -95,7 +117,8 @@ class SaleController extends Controller
         $paymentStatus = SalePaymentStatus::tryFrom((string) ($filters['payment_status'] ?? ''));
         $status = SaleStatus::tryFrom((string) ($filters['status'] ?? ''));
         $accessibleLocationIds = $locationAccess->accessibleQuery($request->user())->select('locations.id');
-        $sales = $business->sales()->whereIn('location_id', $accessibleLocationIds)
+        $sales = app(CustomerAccountService::class)->balances($business, $request->user())->whereIn('location_id', $accessibleLocationIds)
+            ->when($request->boolean('overdue'), fn ($q) => $q->where('balance_due', '>', 0)->where('due_date', '<', now($business->timezone)->toDateString()))
             ->when(! $request->user()->can('credit-sales.view'), fn (Builder $query): Builder => $query->where('is_credit', false))
             ->when($request->route('credit'), fn (Builder $query): Builder => $query->where('is_credit', true))
             ->with(['location:id,name,code', 'cashier:id,name'])->withCount('lines')
@@ -138,6 +161,7 @@ class SaleController extends Controller
             'locations' => $locationAccess->accessibleQuery($request->user())->orderBy('name')->get(['id', 'name']),
             'cashiers' => User::query()->whereIn('id', $cashierIds)->orderBy('name')->get(['id', 'name']),
             'filters' => [
+                'overdue' => $request->boolean('overdue') ? 1 : 0,
                 'search' => $search,
                 'date_from' => $filters['date_from'] ?? '',
                 'date_to' => $filters['date_to'] ?? '',

@@ -14,6 +14,7 @@ type Option = {
 };
 
 type Business = {
+    tax_rate: string;
     name: string;
     logo_url: string | null;
     business_type: string;
@@ -72,6 +73,26 @@ defineOptions({
             </p>
             <fieldset :disabled="!canUpdate" class="contents">
                 <div class="grid gap-5 sm:grid-cols-2">
+                    <div class="grid gap-2 sm:col-span-2">
+                        <Label for="tax_rate"
+                            >Tax included in selling prices (%)</Label
+                        >
+                        <Input
+                            id="tax_rate"
+                            name="tax_rate"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            :default-value="business.tax_rate"
+                        />
+                        <p class="text-sm text-muted-foreground">
+                            Selling prices include this tax. It is calculated
+                            after discounts and shown on receipts. Use zero when
+                            no tax applies. Changes apply to new items only.
+                        </p>
+                        <InputError :message="errors.tax_rate" />
+                    </div>
                     <div class="grid gap-2 sm:col-span-2">
                         <Label for="logo">Business logo</Label>
                         <div

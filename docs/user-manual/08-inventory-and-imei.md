@@ -4,7 +4,7 @@
 
 Open **Inventory → Overview** (`inventory.view`) for total quantity on hand, serialized devices in stock, tracked variants, authorized locations, location summaries, and recent quantity movements. Choose **View stock by location** for the detailed list. Search by product/SKU/barcode and filter by location, tracking type, category, or brand. Pagination controls move between result pages.
 
-The overview explicitly indicates when no reorder threshold is configured; in that case it does not display low-stock alerts. This version has no configured low-stock threshold editor/alert workflow.
+Use Inventory → Reorder levels / alerts to set a threshold per SKU and location. Blank disables alerts; zero alerts when stock runs out. The low-stock filter and dashboard show saleable quantities at or below their configured level.
 
 ## Stock receiving
 

@@ -12,6 +12,7 @@ type Field = {
 };
 const props = defineProps<{
     action: string;
+    preserve?: string[];
     filters: Record<string, string | number>;
     fields: Field[];
 }>();
@@ -29,7 +30,14 @@ function apply(): void {
     router.get(
         props.action,
         Object.fromEntries(
-            Object.entries(values).filter(([, value]) => value !== ''),
+            Object.entries({
+                ...Object.fromEntries(
+                    (props.preserve ?? [])
+                        .filter((key) => props.filters[key] !== undefined)
+                        .map((key) => [key, props.filters[key]]),
+                ),
+                ...values,
+            }).filter(([, value]) => value !== ''),
         ),
         {
             preserveScroll: true,

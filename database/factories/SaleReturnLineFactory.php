@@ -20,9 +20,9 @@ class SaleReturnLineFactory extends Factory
     public function definition(): array
     {
         return [
-            'business_id' => fn (array $attributes): int => SaleLine::query()->findOrFail($attributes['sale_line_id'])->business_id,
-            'sale_return_id' => SaleReturn::factory(),
             'sale_line_id' => SaleLine::factory(),
+            'business_id' => fn (array $attributes): int => SaleLine::query()->findOrFail((int) $attributes['sale_line_id'])->business_id,
+            'sale_return_id' => SaleReturn::factory(),
             'sale_line_component_id' => null,
             'serialized_device_id' => null,
             'is_component' => false,

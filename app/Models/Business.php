@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
+ * @property numeric-string $tax_rate
  * @property int $id
  * @property int $owner_id
  * @property string $setup_key
@@ -62,7 +63,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'business_type', 'email', 'phone', 'address', 'city', 'country', 'currency', 'timezone', 'time_format', 'logo_path', 'invoice_footer', 'invoice_return_policy', 'invoice_title', 'invoice_paper_size', 'invoice_thermal_width', 'invoice_accent_color', 'invoice_show_logo', 'invoice_show_business_details', 'invoice_show_customer', 'invoice_show_cashier', 'invoice_show_payment_details', 'invoice_show_tax', 'invoice_show_product_codes', 'invoice_show_line_discounts', 'pos_show_sale_source', 'pos_show_customer_name', 'pos_show_customer_phone', 'pos_show_customer_email', 'pos_show_sale_notes', 'pos_show_pay_exact', 'pos_allow_price_override', 'pos_require_imei_on_sale', 'pos_show_date_time', 'pos_show_sales_history', 'pos_show_category_filter', 'pos_show_brand_filter', 'pos_show_location_filter', 'pos_show_receipt_after_sale', 'pos_auto_print_receipt', 'pos_products_per_page', 'status'])]
+#[Fillable(['tax_rate', 'name', 'business_type', 'email', 'phone', 'address', 'city', 'country', 'currency', 'timezone', 'time_format', 'logo_path', 'invoice_footer', 'invoice_return_policy', 'invoice_title', 'invoice_paper_size', 'invoice_thermal_width', 'invoice_accent_color', 'invoice_show_logo', 'invoice_show_business_details', 'invoice_show_customer', 'invoice_show_cashier', 'invoice_show_payment_details', 'invoice_show_tax', 'invoice_show_product_codes', 'invoice_show_line_discounts', 'pos_show_sale_source', 'pos_show_customer_name', 'pos_show_customer_phone', 'pos_show_customer_email', 'pos_show_sale_notes', 'pos_show_pay_exact', 'pos_allow_price_override', 'pos_require_imei_on_sale', 'pos_show_date_time', 'pos_show_sales_history', 'pos_show_category_filter', 'pos_show_brand_filter', 'pos_show_location_filter', 'pos_show_receipt_after_sale', 'pos_auto_print_receipt', 'pos_products_per_page', 'status'])]
 class Business extends Model
 {
     /** @use HasFactory<BusinessFactory> */
@@ -74,6 +75,7 @@ class Business extends Model
      * @var array<string, bool|int|string>
      */
     protected $attributes = [
+        'tax_rate' => '0.00',
         'country' => 'Sri Lanka',
         'currency' => 'LKR',
         'timezone' => 'Asia/Colombo',
@@ -187,7 +189,7 @@ class Business extends Model
     protected function casts(): array
     {
         return [
-            'invoice_show_logo' => 'boolean',
+            'tax_rate' => 'decimal:2',            'invoice_show_logo' => 'boolean',
             'invoice_show_business_details' => 'boolean',
             'invoice_show_customer' => 'boolean',
             'invoice_show_cashier' => 'boolean',

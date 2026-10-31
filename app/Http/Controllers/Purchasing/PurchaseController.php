@@ -23,7 +23,9 @@ class PurchaseController extends Controller
         $business = $locationAccess->business();
         $search = $request->string('search')->trim()->toString();
         $status = PurchaseStatus::tryFrom($request->string('status')->toString());
+        $statusValue = $status->value ?? '';
         $paymentStatus = PurchasePaymentStatus::tryFrom($request->string('payment_status')->toString());
+        $paymentStatusValue = $paymentStatus->value ?? '';
         $locationIds = $locationAccess->accessibleQuery($request->user())->select('locations.id');
         $purchases = $business->purchases()->whereIn('location_id', $locationIds)
             ->with(['supplier:id,name', 'location:id,name,code'])
@@ -53,8 +55,8 @@ class PurchaseController extends Controller
             'locations' => array_values($locationAccess->accessibleQuery($request->user())->where('status', 'active')->orderBy('name')->get(['id', 'name'])->map(fn ($location): array => ['id' => $location->id, 'name' => $location->name])->all()),
             'filters' => [
                 'search' => $search,
-                'status' => $status?->value ?? '',
-                'payment_status' => $paymentStatus?->value ?? '',
+                'status' => $statusValue,
+                'payment_status' => $paymentStatusValue,
                 'location_id' => $request->input('location_id', ''),
             ],
             'statuses' => array_map(fn (PurchaseStatus $item): array => ['value' => $item->value, 'label' => str($item->value)->replace('_', ' ')->title()->toString()], PurchaseStatus::cases()),

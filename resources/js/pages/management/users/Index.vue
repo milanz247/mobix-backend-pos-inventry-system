@@ -215,13 +215,14 @@ defineOptions({
         </div>
 
         <div class="table-panel">
-            <table class="data-table">
+            <table class="data-table responsive-table">
                 <colgroup>
-                    <col class="w-[24%]" />
+                    <col class="w-[22%]" />
+                    <col class="w-[14%]" />
                     <col class="w-[16%]" />
-                    <col class="w-[23%]" />
+                    <col class="w-[18%]" />
                     <col class="w-[12%]" />
-                    <col class="w-[25%]" />
+                    <col class="w-[18%]" />
                 </colgroup>
                 <thead>
                     <tr>
@@ -235,17 +236,18 @@ defineOptions({
                 </thead>
                 <tbody>
                     <tr v-for="user in users.data" :key="user.id">
-                        <td class="truncate">
+                        <td data-label="User" class="break-words">
                             <div class="font-medium">{{ user.name }}</div>
                             <div class="text-muted-foreground">
                                 {{ user.email }}
                             </div>
                         </td>
-                        <td>{{ user.phone || '—' }}</td>
-                        <td>
+                        <td data-label="Contact">{{ user.phone || '—' }}</td>
+                        <td data-label="Role">
                             <div class="flex flex-wrap gap-1">
                                 <Badge
                                     v-for="role in user.roles"
+                                    class="h-auto max-w-full text-left break-words whitespace-normal"
                                     :key="role.id"
                                     variant="secondary"
                                 >
@@ -253,7 +255,7 @@ defineOptions({
                                 </Badge>
                             </div>
                         </td>
-                        <td>
+                        <td data-label="Locations">
                             <span
                                 v-if="
                                     user.roles.some(
@@ -268,7 +270,7 @@ defineOptions({
                                     .join(', ') || 'Not assigned'
                             }}</span>
                         </td>
-                        <td>
+                        <td data-label="Status">
                             <Badge
                                 :variant="
                                     user.status === 'active'
@@ -279,7 +281,7 @@ defineOptions({
                                 {{ user.status }}
                             </Badge>
                         </td>
-                        <td class="text-right">
+                        <td data-label="Actions" class="text-right">
                             <RowActions
                                 v-if="
                                     user.can_manage &&

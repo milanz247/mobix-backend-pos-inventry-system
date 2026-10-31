@@ -6,7 +6,7 @@ defineProps<{
 
 <template>
     <div
-        class="flex items-center justify-end gap-1.5"
+        class="flex flex-wrap items-center justify-end gap-1.5"
         role="group"
         :aria-label="`Actions for ${label}`"
     >

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Purchasing;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StorePurchaseReturnRequest extends FormRequest

@@ -20,8 +20,8 @@ class SaleLineComponentFactory extends Factory
     public function definition(): array
     {
         return [
-            'business_id' => fn (array $attributes): int => SaleLine::query()->findOrFail($attributes['sale_line_id'])->business_id,
             'sale_line_id' => SaleLine::factory(),
+            'business_id' => fn (array $attributes): int => SaleLine::query()->findOrFail((int) $attributes['sale_line_id'])->business_id,
             'product_variant_id' => ProductVariant::factory(),
             'serialized_device_id' => null,
             'sku_snapshot' => strtoupper(fake()->bothify('SKU-####')),

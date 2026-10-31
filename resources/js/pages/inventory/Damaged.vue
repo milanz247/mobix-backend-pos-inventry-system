@@ -519,7 +519,9 @@ defineOptions({
                 </p>
             </div>
 
-            <table class="data-table hidden min-w-[1000px] table-auto sm:table">
+            <table
+                class="data-table responsive-table hidden table-auto sm:table"
+            >
                 <thead>
                     <tr>
                         <th>Product</th>
@@ -533,7 +535,7 @@ defineOptions({
                 </thead>
                 <tbody>
                     <tr v-for="entry in entries.data" :key="entry.id">
-                        <td>
+                        <td data-label="Product">
                             {{ entry.product }} · {{ entry.variant }}
                             <p class="text-xs text-muted-foreground">
                                 SKU {{ entry.sku }} · Model
@@ -544,16 +546,16 @@ defineOptions({
                                 {{ entry.brand || 'Unbranded' }}
                             </p>
                         </td>
-                        <td>{{ entry.location }}</td>
-                        <td>
+                        <td data-label="Location">{{ entry.location }}</td>
+                        <td data-label="Received">
                             {{ damageQuantity(entry.quantity) }}
                         </td>
-                        <td>
+                        <td data-label="Remaining damaged">
                             <strong>{{
                                 damageQuantity(entry.remaining)
                             }}</strong>
                         </td>
-                        <td>
+                        <td data-label="Source / Reason">
                             <Link
                                 v-if="entry.sale_id && canViewSales"
                                 :href="`/sales/${entry.sale_id}`"
@@ -565,8 +567,8 @@ defineOptions({
                                 {{ entry.notes }}
                             </p>
                         </td>
-                        <td>{{ entry.date }}</td>
-                        <td>
+                        <td data-label="Date">{{ entry.date }}</td>
+                        <td data-label="Action">
                             <Button
                                 v-if="canAdjust && Number(entry.remaining) > 0"
                                 variant="outline"
@@ -641,7 +643,7 @@ defineOptions({
                 </p>
             </div>
 
-            <table class="data-table hidden sm:table">
+            <table class="data-table responsive-table hidden sm:table">
                 <thead>
                     <tr>
                         <th>Product</th>
@@ -652,7 +654,7 @@ defineOptions({
                 </thead>
                 <tbody>
                     <tr v-for="device in devices.data" :key="device.id">
-                        <td>
+                        <td data-label="Product">
                             <p>{{ device.product }} · {{ device.variant }}</p>
                             <p class="text-xs text-muted-foreground">
                                 SKU {{ device.sku }} · Model
@@ -663,9 +665,9 @@ defineOptions({
                                 {{ device.brand || 'Unbranded' }}
                             </p>
                         </td>
-                        <td>{{ device.imei }}</td>
-                        <td>{{ device.location }}</td>
-                        <td>
+                        <td data-label="IMEI">{{ device.imei }}</td>
+                        <td data-label="Location">{{ device.location }}</td>
+                        <td data-label="Action">
                             <Link
                                 v-if="canManageDevices && canViewDevices"
                                 :href="`/inventory/devices?search=${device.imei}`"

@@ -48,6 +48,7 @@ class PurchaseLine extends Model
         return $this->hasMany(PurchaseReturnLine::class);
     }
 
+    /** @return array<string, string> */
     protected function casts(): array
     {
         return [

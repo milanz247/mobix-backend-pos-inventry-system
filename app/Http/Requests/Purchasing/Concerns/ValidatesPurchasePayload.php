@@ -49,7 +49,7 @@ trait ValidatesPurchasePayload
                 return;
             }
 
-            $lines = $this->input('lines', []);
+            $lines = $this->array('lines');
             $business = app(LocationAccessService::class)->business();
             $variantIds = collect($lines)->pluck('product_variant_id')->filter()->map(fn ($id): int => (int) $id)->unique();
             $variants = $business->productVariants()->with('product')->whereIn('id', $variantIds)->get()->keyBy('id');
@@ -85,7 +85,7 @@ trait ValidatesPurchasePayload
                     continue;
                 }
 
-                if ($variant->tracking_mode !== VariantTrackingMode::Serialized || ! is_array($devices) || count($devices) < 1) {
+                if (! is_array($devices) || count($devices) < 1) {
                     $validator->errors()->add("lines.{$index}.devices", __('Add at least one serialized device for this variant.'));
 
                     continue;

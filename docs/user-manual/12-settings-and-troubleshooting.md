@@ -2,7 +2,7 @@
 
 ## Settings overview
 
-Open **Settings** from the sidebar. Available sections are **Business settings**, **Invoice settings**, **Locations**, and **Security**. The settings landing route sends users without business-settings access to Security. Editing business/invoice data requires `business-settings.update`; viewing requires `business-settings.view`. Location access uses location permissions. Security settings are available to signed-in users for their own password/security operations.
+Open **Settings** from the sidebar. Business settings, Invoice settings, POS screen settings and Locations have separate pages. My profile contains photo/contact details, password, 2FA and passkeys. The settings entry sends users without business-settings access to My profile. Each settings page has its own view/update permissions; location access uses location permissions. There is no repeated Workspace / Personal / Security hub within these pages.
 
 ## Invoice designer
 

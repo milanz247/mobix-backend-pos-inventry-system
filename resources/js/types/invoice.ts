@@ -2,6 +2,7 @@ export type InvoiceSale = {
     id: number;
     sale_number: string;
     posted_at: string;
+    due_date?: string | null;
     cashier: string;
     location: { name: string; code: string };
     customer: {

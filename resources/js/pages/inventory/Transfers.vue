@@ -50,7 +50,7 @@ defineOptions({
     <section class="page-shell">
         <Heading
             title="Stock transfers"
-            description="Move quantity stock and exact serialized devices between authorized locations in one transaction."
+            description="Choose the sending and receiving branches, then select the items to move."
         />
         <form
             class="surface-panel space-y-6 p-5"

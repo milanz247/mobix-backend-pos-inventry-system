@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog';
 import { getInitials } from '@/composables/useInitials';
 import { edit as editProfile } from '@/routes/profile-settings';
-import { edit as editSecurity } from '@/routes/security';
+import SecuritySettings from '@/components/settings/SecuritySettings.vue';
+import type { Props as SecurityProps } from '@/components/settings/SecuritySettings.vue';
 
 type Profile = {
     name: string;
@@ -32,6 +33,7 @@ type Location = {
 };
 
 const props = defineProps<{
+    securitySettings: SecurityProps;
     profile: Profile;
     roles: string[];
     locations: Location[];
@@ -300,7 +302,7 @@ defineOptions({
                     </span>
                 </div>
                 <Button as-child variant="outline">
-                    <Link :href="editSecurity()">Password and security</Link>
+                    <Link href="#security">Password and security</Link>
                 </Button>
             </section>
 
@@ -345,6 +347,13 @@ defineOptions({
             </section>
         </div>
 
+        <section
+            id="security"
+            class="surface-panel scroll-mt-20 space-y-5 p-5 sm:p-6"
+        >
+            <h2 class="text-lg font-semibold">Password and security</h2>
+            <SecuritySettings v-bind="securitySettings" />
+        </section>
         <ConfirmActionDialog
             :open="confirmation.isOpen.value"
             :title="confirmation.title.value"

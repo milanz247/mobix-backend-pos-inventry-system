@@ -10,6 +10,7 @@ use App\Models\StockMovement;
 use App\SerializedDeviceStatus;
 use App\Services\LocationAccessService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -56,7 +57,7 @@ class InventoryOverviewController extends Controller
             ],
             'recentMovements' => $recent,
             'locationSummary' => $locationSummary,
-            'lowStockConfigured' => false,
+            'lowStockConfigured' => DB::table('reorder_levels')->where('business_id', $business->id)->whereIn('location_id', $locationIds)->exists(),
         ]);
     }
 }

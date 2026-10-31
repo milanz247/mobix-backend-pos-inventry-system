@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ExportCsv from '@/components/reports/ExportCsv.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { Printer, ArrowLeft } from '@lucide/vue';
@@ -16,6 +17,9 @@ const props = defineProps<{
     rows: Paginated<DamageRow>;
     summary: DamageSummary;
     groups: DamageGroup[];
+    categoryGroups: Paginated<DamageGroup>;
+    branchGroups: Paginated<DamageGroup>;
+    view: 'items' | 'category' | 'branch';
     filters: Record<string, string | number>;
     locations: Option[];
     categories: Option[];
@@ -26,6 +30,14 @@ const props = defineProps<{
     canPrint: boolean;
     generatedAt: string;
 }>();
+const viewUrl = (view: string) =>
+    '/reports/damaged-stock?' +
+    new URLSearchParams({
+        ...Object.fromEntries(
+            Object.entries(props.filters).map(([k, v]) => [k, String(v)]),
+        ),
+        view,
+    }).toString();
 const printUrl = computed(
     () =>
         '/reports/damaged-stock/print?' +
@@ -51,6 +63,7 @@ defineOptions({
                 title="Damaged stock report"
                 description="Current faulty stock, grouped by SKU and location. Filter by category, brand or model and print the complete list."
             />
+            <ExportCsv />
             <div class="flex gap-2">
                 <Button as-child variant="outline"
                     ><Link href="/inventory/damaged"
@@ -63,7 +76,39 @@ defineOptions({
                 >
             </div>
         </div>
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="surface-panel p-4">
+                <p class="text-sm text-muted-foreground">Damaged SKUs</p>
+                <p class="mt-2 text-2xl font-semibold">{{ summary.skus }}</p>
+            </article>
+            <article class="surface-panel p-4">
+                <p class="text-sm text-muted-foreground">Quantity items</p>
+                <p class="mt-2 text-2xl font-semibold">
+                    {{ damageQuantity(summary.quantity) }}
+                </p>
+            </article>
+            <article class="surface-panel p-4">
+                <p class="text-sm text-muted-foreground">IMEI devices</p>
+                <p class="mt-2 text-2xl font-semibold">{{ summary.devices }}</p>
+            </article>
+            <article class="surface-panel p-4">
+                <p class="text-sm text-muted-foreground">
+                    {{ showCosts ? 'Damaged cost value' : 'Locations' }}
+                </p>
+                <p class="mt-2 text-2xl font-semibold">
+                    {{
+                        showCosts
+                            ? damageMoney(
+                                  summary.value ?? '0',
+                                  business.currency,
+                              )
+                            : summary.locations
+                    }}
+                </p>
+            </article>
+        </div>
         <ReportFilters
+            :preserve="['view']"
             action="/reports/damaged-stock"
             :filters="filters"
             :fields="[
@@ -117,66 +162,47 @@ defineOptions({
                         { value: 'serialized', label: 'IMEI devices' },
                     ],
                 },
-                {
-                    key: 'group_by',
-                    label: 'Summary by',
-                    type: 'select',
-                    emptyLabel: 'Category',
-                    options: [
-                        { value: 'category', label: 'Category' },
-                        { value: 'brand', label: 'Brand' },
-                    ],
-                },
             ]"
         />
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <article class="surface-panel p-4">
-                <p class="text-sm text-muted-foreground">Damaged SKUs</p>
-                <p class="mt-2 text-2xl font-semibold">{{ summary.skus }}</p>
-            </article>
-            <article class="surface-panel p-4">
-                <p class="text-sm text-muted-foreground">Quantity items</p>
-                <p class="mt-2 text-2xl font-semibold">
-                    {{ damageQuantity(summary.quantity) }}
-                </p>
-            </article>
-            <article class="surface-panel p-4">
-                <p class="text-sm text-muted-foreground">IMEI devices</p>
-                <p class="mt-2 text-2xl font-semibold">{{ summary.devices }}</p>
-            </article>
-            <article class="surface-panel p-4">
-                <p class="text-sm text-muted-foreground">
-                    {{ showCosts ? 'Damaged cost value' : 'Locations' }}
-                </p>
-                <p class="mt-2 text-2xl font-semibold">
-                    {{
-                        showCosts
-                            ? damageMoney(
-                                  summary.value ?? '0',
-                                  business.currency,
-                              )
-                            : summary.locations
-                    }}
-                </p>
-            </article>
-        </div>
-        <div class="table-panel overflow-x-auto">
-            <h2 class="border-b px-4 py-3 font-semibold">
-                {{ filters.group_by === 'brand' ? 'Brand' : 'Category' }}
-                summary
-            </h2>
+        <nav class="flex flex-wrap gap-2" aria-label="Damaged stock views">
+            <Link
+                v-for="item in [
+                    { key: 'items', label: 'Item view' },
+                    { key: 'category', label: 'Category view' },
+                    { key: 'branch', label: 'Branch view' },
+                ]"
+                :key="item.key"
+                :href="viewUrl(item.key)"
+                class="rounded border px-4 py-2 text-sm"
+                :class="
+                    view === item.key
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                "
+                >{{ item.label }}</Link
+            >
+        </nav>
+        <div v-if="view === 'category'" class="table-panel">
             <DamagedGroupTable
-                :groups="groups"
-                :group-by="String(filters.group_by)"
+                :groups="categoryGroups.data"
+                group-by="category"
                 :show-costs="showCosts"
                 :currency="business.currency"
-            />
+            /><ShiftPagination :links="categoryGroups.links" />
         </div>
-        <div class="table-panel overflow-x-auto">
+        <div v-else-if="view === 'branch'" class="table-panel">
+            <DamagedGroupTable
+                :groups="branchGroups.data"
+                group-by="branch"
+                :show-costs="showCosts"
+                :currency="business.currency"
+            /><ShiftPagination :links="branchGroups.links" />
+        </div>
+        <div v-else class="table-panel">
             <div class="flex justify-between gap-3 border-b px-4 py-3">
-                <h2 class="font-semibold">Damaged items by SKU</h2>
+                <h2 class="font-semibold">Damaged items</h2>
                 <span class="text-xs text-muted-foreground"
-                    >{{ rows.total }} SKU / location rows</span
+                    >{{ rows.total }} item / branch rows</span
                 >
             </div>
             <DamagedReportTable
