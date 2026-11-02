@@ -27,6 +27,8 @@ type Brand = {
     name: string;
     description: string | null;
     logo_url: string | null;
+    show_on_homepage: boolean;
+    homepage_order: number;
     status: string;
     products_count: number;
 };

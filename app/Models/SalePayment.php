@@ -18,7 +18,7 @@ use LogicException;
  * @property string $method
  * @property Carbon $paid_at
  */
-#[Fillable(['cashier_shift_id', 'business_id', 'amount', 'cash_tendered', 'change_given', 'operation_key', 'payload_hash', 'method', 'reference', 'paid_at', 'received_by'])]
+#[Fillable(['cashier_shift_id', 'business_id', 'web_bank_transfer_decision_id', 'web_cod_order_id', 'amount', 'cash_tendered', 'change_given', 'operation_key', 'payload_hash', 'method', 'reference', 'paid_at', 'received_by'])]
 class SalePayment extends Model
 {
     /** @use HasFactory<SalePaymentFactory> */
@@ -34,6 +34,18 @@ class SalePayment extends Model
     public function receiver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'received_by');
+    }
+
+    /** @return BelongsTo<WebBankTransferDecision, $this> */
+    public function webBankTransferDecision(): BelongsTo
+    {
+        return $this->belongsTo(WebBankTransferDecision::class);
+    }
+
+    /** @return BelongsTo<WebOrder, $this> */
+    public function webCodOrder(): BelongsTo
+    {
+        return $this->belongsTo(WebOrder::class, 'web_cod_order_id');
     }
 
     protected function casts(): array

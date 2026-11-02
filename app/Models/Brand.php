@@ -17,11 +17,13 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string|null $description
  * @property string|null $logo_path
+ * @property bool $show_on_homepage
+ * @property int $homepage_order
  * @property CatalogStatus $status
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'description', 'logo_path', 'status'])]
+#[Fillable(['name', 'description', 'logo_path', 'status', 'show_on_homepage', 'homepage_order'])]
 
 class Brand extends Model
 {
@@ -45,6 +47,6 @@ class Brand extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['status' => CatalogStatus::class];
+        return ['status' => CatalogStatus::class, 'show_on_homepage' => 'boolean', 'homepage_order' => 'integer'];
     }
 }

@@ -49,7 +49,13 @@ class SaveProduct
                 if ($product !== null) {
                     $product = $business->products()->lockForUpdate()->findOrFail($product->id);
                     foreach ($product->variants()->lockForUpdate()->get() as $saved) {
-                        $submitted = collect($variantRows)->firstWhere('id', $saved->id);
+                        $submitted = null;
+                        foreach ($variantRows as $candidate) {
+                            if (isset($candidate['id']) && (int) $candidate['id'] === $saved->id) {
+                                $submitted = $candidate;
+                                break;
+                            }
+                        }
                         $changesTracking = $submitted !== null && $submitted['tracking_mode'] !== $saved->tracking_mode->value;
                         $changesType = $attributes['product_type'] !== $product->product_type->value;
                         if ($changesTracking || $changesType) {

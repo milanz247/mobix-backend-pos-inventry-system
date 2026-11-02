@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\User;
 use App\SalePaymentStatus;
+use App\SaleSource;
 use App\SaleStatus;
 use App\Services\CustomerAccountService;
 use App\Services\LocationAccessService;
@@ -107,13 +108,13 @@ class SaleController extends Controller
             'sale' => $pageData->sale($sale, $request->user()->can('sales.costs.view')),
             'currency' => $sale->business->currency,
             'outstanding' => $sales->outstanding($sale)->__toString(),
-            'canAddItems' => (bool) $sale->is_credit && $sale->customer_id !== null && $sale->status === SaleStatus::Completed && $sale->payment_status !== SalePaymentStatus::Paid && $request->user()->can('sales.credit') && $request->user()->can('credit-sales.add-items') && $request->user()->can('sales.pos') && $request->user()->can('sales.create'),
+            'canAddItems' => $sale->source !== SaleSource::Ecommerce && (bool) $sale->is_credit && $sale->customer_id !== null && $sale->status === SaleStatus::Completed && $sale->payment_status !== SalePaymentStatus::Paid && $request->user()->can('sales.credit') && $request->user()->can('credit-sales.add-items') && $request->user()->can('sales.pos') && $request->user()->can('sales.create'),
             'canLinkCustomer' => $sale->customer_id === null && $request->user()->can('sales.customer-link'),
             'canPrintReceipt' => $request->user()->can('sales-receipts.print'),
             'canPrintReturn' => $request->user()->can('return-receipts.print'),
-            'canRecordPayment' => $request->user()->can('sale-payments.create'),
-            'canReturn' => $request->user()->can('sale-returns.create'),
-            'canRefund' => $request->user()->can('sale-refunds.create'),
+            'canRecordPayment' => $sale->source !== SaleSource::Ecommerce && $request->user()->can('sale-payments.create'),
+            'canReturn' => $sale->source !== SaleSource::Ecommerce && $request->user()->can('sale-returns.create'),
+            'canRefund' => $sale->source !== SaleSource::Ecommerce && $request->user()->can('sale-refunds.create'),
             'paymentMethods' => $this->paymentMethods(),
         ]);
     }

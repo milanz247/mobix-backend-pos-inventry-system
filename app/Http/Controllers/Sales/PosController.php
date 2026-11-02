@@ -15,6 +15,7 @@ use App\Services\CashierShiftService;
 use App\Services\LocationAccessService;
 use App\Services\SaleService;
 use App\Services\StockAvailabilityService;
+use App\Services\WebReservationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ use Inertia\Response;
 
 class PosController extends Controller
 {
-    public function index(Request $request, LocationAccessService $locationAccess, CashierShiftService $shifts, StockAvailabilityService $availability): Response
+    public function index(Request $request, LocationAccessService $locationAccess, CashierShiftService $shifts, StockAvailabilityService $availability, WebReservationService $reservations): Response
     {
         $user = $request->user();
         $business = $locationAccess->business();
@@ -57,6 +58,7 @@ class PosController extends Controller
                 ->where('identifier', $normalizedSearch)->with(['device.variant.product'])->first();
             $device = $identifier?->device;
             if ($device !== null && $device->location_id === $location->id && $device->status->value === 'in_stock'
+                && ! $reservations->hasActiveDevice($business->id, $device->id)
                 && $device->variant->status === CatalogStatus::Active && $device->variant->product->status === CatalogStatus::Active) {
                 $matchingDevice = [
                     'product_variant_id' => $device->product_variant_id,
@@ -118,7 +120,7 @@ class PosController extends Controller
             'saleSources' => array_map(fn (SaleSource $source): array => [
                 'value' => $source->value,
                 'label' => $source->label(),
-            ], SaleSource::cases()),
+            ], array_filter(SaleSource::cases(), fn (SaleSource $source): bool => $source !== SaleSource::Ecommerce)),
             'posSettings' => [
                 'show_sale_source' => $business->pos_show_sale_source,
                 'show_customer_name' => $business->pos_show_customer_name,

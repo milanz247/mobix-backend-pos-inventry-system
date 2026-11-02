@@ -7,6 +7,7 @@ use App\Http\Requests\Sales\StoreSaleReturnRequest;
 use App\Models\Sale;
 use App\Models\SaleReturn;
 use App\Models\SerializedDevice;
+use App\SaleSource;
 use App\Services\LocationAccessService;
 use App\Services\SaleService;
 use App\Support\SalePageData;
@@ -21,6 +22,7 @@ class SaleReturnController extends Controller
     public function create(Sale $sale, SaleService $sales, LocationAccessService $locations, SalePageData $pageData): Response
     {
         $sale = $sales->scoped(request()->user(), $sale);
+        abort_if($sale->source === SaleSource::Ecommerce, 403);
 
         return Inertia::render('sales/Return', [
             'sale' => $pageData->sale($sale),

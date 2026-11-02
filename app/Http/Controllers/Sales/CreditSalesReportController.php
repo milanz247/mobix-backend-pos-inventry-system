@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use LogicException;
 
 class CreditSalesReportController extends Controller
 {
@@ -28,23 +29,7 @@ class CreditSalesReportController extends Controller
         $customer = trim((string) ($filters['customer'] ?? ''));
         $locationId = isset($filters['location_id']) && $locationIds->contains((int) $filters['location_id']) ? (int) $filters['location_id'] : null;
 
-        $applyFilters = function (Builder $query) use ($product, $customer, $filters, $locationId): Builder {
-            return $query
-                ->when($product !== '', fn (Builder $sale): Builder => $sale->whereHas('lines', fn (Builder $lines): Builder => $lines
-                    ->where('product_name_snapshot', 'like', "%{$product}%")
-                    ->orWhere('variant_name_snapshot', 'like', "%{$product}%")
-                    ->orWhere('sku_snapshot', 'like', "%{$product}%")))
-                ->when($customer !== '', fn (Builder $sale): Builder => $sale->where(function (Builder $scope) use ($customer): void {
-                    $scope->where('customer_name', 'like', "%{$customer}%")
-                        ->orWhere('customer_phone', 'like', "%{$customer}%")
-                        ->orWhereHas('customer', fn (Builder $account) => $account->where('name', 'like', "%{$customer}%")->orWhere('phone', 'like', "%{$customer}%"));
-                }))
-                ->when(! empty($filters['date_from']), fn (Builder $sale): Builder => $sale->whereDate('posted_at', '>=', $filters['date_from']))
-                ->when(! empty($filters['date_to']), fn (Builder $sale): Builder => $sale->whereDate('posted_at', '<=', $filters['date_to']))
-                ->when($locationId !== null, fn (Builder $sale): Builder => $sale->where('location_id', $locationId));
-        };
-
-        $base = $applyFilters($accounts->balances($business, $request->user())->where('is_credit', true));
+        $base = $this->applyFilters($accounts->balances($business, $request->user())->where('is_credit', true), $product, $customer, $filters, $locationId);
         $summary = [
             'invoices' => (clone $base)->count(),
             'sales_total' => (string) (clone $base)->sum('net_total'),
@@ -61,9 +46,9 @@ class CreditSalesReportController extends Controller
                 'phone' => $sale->customer_phone,
                 'location' => $sale->location->name,
                 'cashier' => $sale->cashier->name,
-                'total' => $sale->net_total,
-                'paid' => $sale->net_paid,
-                'outstanding' => $sale->balance_due,
+                'total' => $this->balance($sale, 'net_total'),
+                'paid' => $this->balance($sale, 'net_paid'),
+                'outstanding' => $this->balance($sale, 'balance_due'),
                 'payment_status' => $sale->payment_status->value,
                 'lines' => $sale->lines->map(fn ($line): array => [
                     'product' => $line->product_name_snapshot,
@@ -87,5 +72,37 @@ class CreditSalesReportController extends Controller
             ],
             'currency' => $business->currency,
         ]);
+    }
+
+    /**
+     * @param  Builder<Sale>  $query
+     * @param  array<string, mixed>  $filters
+     * @return Builder<Sale>
+     */
+    private function applyFilters(Builder $query, string $product, string $customer, array $filters, ?int $locationId): Builder
+    {
+        return $query
+            ->when($product !== '', fn (Builder $sale): Builder => $sale->whereHas('lines', fn (Builder $lines): Builder => $lines
+                ->where('product_name_snapshot', 'like', "%{$product}%")
+                ->orWhere('variant_name_snapshot', 'like', "%{$product}%")
+                ->orWhere('sku_snapshot', 'like', "%{$product}%")))
+            ->when($customer !== '', fn (Builder $sale): Builder => $sale->where(function (Builder $scope) use ($customer): void {
+                $scope->where('customer_name', 'like', "%{$customer}%")
+                    ->orWhere('customer_phone', 'like', "%{$customer}%")
+                    ->orWhereHas('customer', fn (Builder $account) => $account->where('name', 'like', "%{$customer}%")->orWhere('phone', 'like', "%{$customer}%"));
+            }))
+            ->when(! empty($filters['date_from']), fn (Builder $sale): Builder => $sale->whereDate('posted_at', '>=', $filters['date_from']))
+            ->when(! empty($filters['date_to']), fn (Builder $sale): Builder => $sale->whereDate('posted_at', '<=', $filters['date_to']))
+            ->when($locationId !== null, fn (Builder $sale): Builder => $sale->where('location_id', $locationId));
+    }
+
+    private function balance(Sale $sale, string $attribute): string
+    {
+        $value = $sale->getAttribute($attribute);
+        if (! is_string($value) && ! is_numeric($value)) {
+            throw new LogicException("Missing calculated sale balance: {$attribute}");
+        }
+
+        return (string) $value;
     }
 }

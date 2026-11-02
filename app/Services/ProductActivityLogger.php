@@ -13,6 +13,17 @@ class ProductActivityLogger
 
     private const VARIANT_FIELDS = ['name', 'sku', 'barcode', 'model_number', 'storage_capacity', 'color', 'variant_attributes', 'condition', 'tracking_mode', 'unit', 'cost_price', 'selling_price', 'minimum_selling_price', 'status', 'components'];
 
+    /** @param array<string, mixed> $before
+     * @param  array<string, mixed>  $after
+     */
+    public function publication(Product $product, array $before, array $after): void
+    {
+        $changes = $this->diff($before, $after, ['status', 'slug', 'public_title', 'public_description', 'seo_title', 'seo_description']);
+        if ($changes !== []) {
+            $this->record($product, $product->id, $product->name, 'publication', 'updated', $changes);
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $before
      * @param  array<string, mixed>  $after

@@ -18,6 +18,7 @@ use App\Models\SerializedDeviceIdentifier;
 use App\Models\User;
 use App\ProductType;
 use App\SalePaymentStatus;
+use App\SaleSource;
 use App\SaleStatus;
 use App\VariantTrackingMode;
 use Brick\Math\BigDecimal;
@@ -34,6 +35,7 @@ class SaleService
         private readonly LocationAccessService $locationAccess,
         private readonly InventoryService $inventory,
         private readonly CashierShiftService $shifts,
+        private readonly WebReservationService $reservations,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -52,6 +54,7 @@ class SaleService
                 if (! empty($data['credit_sale_id'])) {
                     abort_unless($user->can('sales.credit') && $user->can('credit-sales.add-items'), 403);
                     $target = $business->sales()->lockForUpdate()->findOrFail((int) $data['credit_sale_id']);
+                    $this->assertPosMutable($target);
                     $this->assertSaleLocation($user, $target);
                     $addition = SaleAddition::query()->where('business_id', $business->id)->where('operation_key', $data['operation_key'])->first();
                     if ($addition !== null) {
@@ -260,12 +263,13 @@ class SaleService
     {
         try {
             return DB::transaction(function () use ($user, $sale, $data): SalePayment {
-                $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $business = $this->locationAccess->business();
                 if (DB::transactionLevel() > 0) {
                     Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
                 }
+                $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $sale = $business->sales()->lockForUpdate()->findOrFail($sale->id);
+                $this->assertPosMutable($sale);
                 $this->assertSaleLocation($user, $sale);
                 $amount = $this->money((string) $data['amount']);
                 $hash = $this->payloadHash(Arr::except($data, ['operation_key']));
@@ -319,12 +323,13 @@ class SaleService
     {
         try {
             return DB::transaction(function () use ($user, $sale, $data): SaleReturn {
-                $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $business = $this->locationAccess->business();
                 if (DB::transactionLevel() > 0) {
                     Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
                 }
+                $shiftId = $this->shifts->activeId($user, $sale->location_id);
                 $sale = $business->sales()->with(['lines.variant.product', 'lines.components.variant.product'])->lockForUpdate()->findOrFail($sale->id);
+                $this->assertPosMutable($sale);
                 $this->assertSaleLocation($user, $sale);
                 $location = $this->authorizedLocation($user, $business, (int) $data['location_id']);
                 if ($location->id !== $sale->location_id) {
@@ -517,11 +522,11 @@ class SaleService
                         ->where('identifier', $identifier)->lockForUpdate()->first();
                     $device = $identifierRow?->device()->lockForUpdate()->first();
                 } elseif (! $business->pos_require_imei_on_sale) {
-                    $device = SerializedDevice::query()
+                    $device = $this->reservations->excludeReservedDevices(SerializedDevice::query()
                         ->where('business_id', $business->id)
                         ->where('product_variant_id', $variant->id)
                         ->where('location_id', $location->id)
-                        ->where('status', 'in_stock')
+                        ->where('status', 'in_stock'))
                         ->oldest('id')
                         ->lockForUpdate()
                         ->first();
@@ -533,6 +538,7 @@ class SaleService
 
                     throw ValidationException::withMessages(["lines.{$index}.device_identifier" => $message]);
                 }
+                $this->reservations->assertDeviceFree($business->id, $device->id);
                 $basePrice = $device->unit_selling_price ?? $basePrice;
                 $costSnapshot = $device->unit_cost;
             }
@@ -873,7 +879,7 @@ class SaleService
     }
 
     /** @return array{tendered: string|null, change: string} */
-    private function paymentCashDetails(string $method, string $amount, mixed $cashTendered): array
+    public function paymentCashDetails(string $method, string $amount, mixed $cashTendered): array
     {
         if ($method !== 'cash') {
             if (filled($cashTendered)) {
@@ -892,6 +898,13 @@ class SaleService
             'tendered' => $tendered,
             'change' => $this->money(BigDecimal::of($tendered)->minus($amount)->__toString()),
         ];
+    }
+
+    private function assertPosMutable(Sale $sale): void
+    {
+        if ($sale->source === SaleSource::Ecommerce || $sale->web_order_id !== null) {
+            throw ValidationException::withMessages(['sale' => 'Ecommerce sale payments, additions and returns require a dedicated authorized workflow.']);
+        }
     }
 
     private function normalizeIdentifier(string $identifier): string

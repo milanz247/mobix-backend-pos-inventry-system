@@ -24,7 +24,7 @@ class CheckoutRequest extends FormRequest
             'customer_id' => ['nullable', 'integer'],
             'operation_key' => ['required', 'uuid'],
             'location_id' => ['required', 'integer', 'exists:locations,id'],
-            'source' => ['required', Rule::enum(SaleSource::class)],
+            'source' => ['required', Rule::enum(SaleSource::class), Rule::notIn([SaleSource::Ecommerce->value])],
             'customer_name' => ['nullable', 'string', 'max:150'],
             'customer_phone' => ['nullable', 'string', 'max:32'],
             'customer_email' => ['nullable', 'email', 'max:254'],

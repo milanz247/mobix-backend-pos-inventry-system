@@ -135,6 +135,7 @@ class ProductController extends Controller
             ->with([
                 'category:id,name',
                 'brand:id,name',
+                'webListing',
                 'variants' => fn (HasMany $query) => $query
                     ->with(['bundleComponents.componentVariant.product:id,name,status'])
                     ->orderBy('name')
@@ -200,6 +201,15 @@ class ProductController extends Controller
                 : null,
             'canViewActivity' => $canViewActivity,
             'canViewCosts' => $canViewCosts,
+            'canManageStorefront' => $request->user()->can('storefront.publish'),
+            'webListing' => $product->webListing === null ? null : [
+                'status' => $product->webListing->status,
+                'slug' => $product->webListing->slug,
+                'public_title' => $product->webListing->public_title,
+                'public_description' => $product->webListing->public_description,
+                'seo_title' => $product->webListing->seo_title,
+                'seo_description' => $product->webListing->seo_description,
+            ],
             'productTypes' => $this->options(ProductType::cases()),
             'trackingModes' => $this->options(VariantTrackingMode::cases()),
             'conditions' => $this->options(ProductCondition::cases()),

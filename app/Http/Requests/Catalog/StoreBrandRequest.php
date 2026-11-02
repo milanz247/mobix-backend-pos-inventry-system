@@ -35,6 +35,8 @@ class StoreBrandRequest extends FormRequest
                 Rule::unique('brands', 'name')->where(fn (Builder $query) => $query->where('business_id', $this->currentBusiness()->id)),
             ],
             'description' => ['nullable', 'string', 'max:2000'],
+            'show_on_homepage' => ['sometimes', 'boolean'],
+            'homepage_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
             'status' => ['required', Rule::enum(CatalogStatus::class)],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'extensions:jpg,jpeg,png,webp', 'max:2048'],
         ];

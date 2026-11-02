@@ -8,6 +8,7 @@ use App\Models\SerializedDevice;
 use App\SerializedDeviceStatus;
 use App\Services\InventoryService;
 use App\Services\LocationAccessService;
+use App\Services\WebReservationService;
 use App\Support\InventoryPageData;
 use App\VariantTrackingMode;
 use Illuminate\Http\RedirectResponse;
@@ -17,11 +18,11 @@ use Inertia\Response;
 
 class StockTransferController extends Controller
 {
-    public function create(Request $request, InventoryPageData $pageData, LocationAccessService $locationAccess): Response
+    public function create(Request $request, InventoryPageData $pageData, LocationAccessService $locationAccess, WebReservationService $reservations): Response
     {
         $locationIds = $locationAccess->accessibleQuery($request->user())->pluck('id');
-        $devices = SerializedDevice::query()->with(['variant:id,product_id,name,sku', 'variant.product:id,name', 'location:id,name'])
-            ->whereIn('location_id', $locationIds)->where('status', SerializedDeviceStatus::InStock->value)
+        $devices = $reservations->excludeReservedDevices(SerializedDevice::query()->with(['variant:id,product_id,name,sku', 'variant.product:id,name', 'location:id,name'])
+            ->whereIn('location_id', $locationIds)->where('status', SerializedDeviceStatus::InStock->value))
             ->orderBy('imei')->limit(500)->get()->map(fn (SerializedDevice $device): array => [
                 'id' => $device->id, 'location_id' => $device->location_id,
                 'label' => $device->variant->product->name.' — '.$device->variant->name.' · '.$device->imei,

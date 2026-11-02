@@ -32,12 +32,10 @@ class ApplyBusinessPreferences
             $timeFormat = $business->time_format->value;
         }
 
-        config()->set([
-            'app.timezone' => $timezone,
-            'app.time_format' => $timeFormat,
-        ]);
-
-        date_default_timezone_set($timezone);
+        // Persisted datetimes and reservation deadlines use UTC. Changing the
+        // application timezone mid-request makes Eloquent reinterpret those
+        // timestamps as local wall time and can expire valid reservations.
+        config()->set('app.time_format', $timeFormat);
 
         $request->attributes->set('businessPreferences', [
             'name' => $businessName,

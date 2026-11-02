@@ -10,6 +10,7 @@ use App\Models\SalePayment;
 use App\Models\SaleRefund;
 use App\Models\SaleReturn;
 use App\Models\SaleReturnLine;
+use App\SaleSource;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Support\Facades\Storage;
@@ -50,7 +51,7 @@ class SalePageData
             'returned_total' => $sale->returns->reduce(fn (BigDecimal $sum, SaleReturn $return): BigDecimal => $sum->plus((string) $return->total), BigDecimal::zero())->toScale(2, RoundingMode::HalfUp)->__toString(),
             'refund_total' => $sale->refunds->reduce(fn (BigDecimal $sum, SaleRefund $refund): BigDecimal => $sum->plus((string) $refund->amount), BigDecimal::zero())->toScale(2, RoundingMode::HalfUp)->__toString(),
             'notes' => $sale->notes,
-            'lines' => $sale->lines->map(function (SaleLine $line) use ($showCosts): array {
+            'lines' => $sale->lines->map(function (SaleLine $line) use ($showCosts, $sale): array {
                 $returnedLines = $line->returnLines->where('is_component', false);
                 $returnedQuantity = $returnedLines->reduce(fn (BigDecimal $sum, $item): BigDecimal => $sum->plus((string) $item->quantity), BigDecimal::zero());
                 $returnedValue = $returnedLines->reduce(fn (BigDecimal $sum, $item): BigDecimal => $sum->plus((string) $item->total), BigDecimal::zero());
@@ -67,7 +68,7 @@ class SalePageData
                     'tracking_mode' => $line->tracking_mode->value,
                     'is_combo' => $line->is_combo,
                     'is_service' => $line->is_service,
-                    'imei' => $line->imei_snapshot,
+                    'imei' => $sale->source === SaleSource::Ecommerce ? null : $line->imei_snapshot,
                     'quantity' => $line->quantity,
                     'unit_price' => $line->unit_price,
                     'discount_amount' => $line->discount_amount,
@@ -82,7 +83,7 @@ class SalePageData
                         'name' => $component->name_snapshot,
                         'sku' => $component->sku_snapshot,
                         'quantity' => $component->quantity,
-                        'imei' => $component->imei_snapshot,
+                        'imei' => $sale->source === SaleSource::Ecommerce ? null : $component->imei_snapshot,
                     ])->values()->all(),
                 ];
             })->values()->all(),

@@ -36,7 +36,7 @@ class StockOverviewReportController extends Controller
             'rows' => $page->items(), 'pagination' => ['previous' => $page->previousPageUrl(), 'next' => $page->nextPageUrl(), 'total' => $page->total()],
             'totals' => $clean($totals), 'locationSummary' => $locations->map($clean), 'canViewCosts' => $costs,
             'locations' => $allowed, 'categories' => $business->categories()->get(['id', 'name']), 'brands' => $business->brands()->get(['id', 'name']),
-            'filters' => $this->filters($request, $allowed->modelKeys()), 'currency' => $business->currency, 'generatedAt' => now()->toIso8601String(),
+            'filters' => $this->filters($request, array_values(array_map('intval', $allowed->modelKeys()))), 'currency' => $business->currency, 'generatedAt' => now()->toIso8601String(),
         ]);
     }
 
@@ -52,8 +52,15 @@ class StockOverviewReportController extends Controller
         return response()->streamDownload(function () use ($columns, $query) {
             $sheetPath = tempnam(sys_get_temp_dir(), 'stock-sheet-');
             $zipPath = tempnam(sys_get_temp_dir(), 'stock-xlsx-');
-            $handle = fopen($sheetPath, 'wb');
+            $handle = null;
             try {
+                if ($sheetPath === false || $zipPath === false) {
+                    throw new \RuntimeException('Could not create export files.');
+                }
+                $handle = fopen($sheetPath, 'wb');
+                if ($handle === false) {
+                    throw new \RuntimeException('Could not open export file.');
+                }
                 fwrite($handle, '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>');
                 $write = function (array $values, bool $header = false) use ($handle) {
                     fwrite($handle, '<row>');
@@ -88,8 +95,13 @@ class StockOverviewReportController extends Controller
             } finally {
                 if (is_resource($handle)) {
                     fclose($handle);
-                } @unlink($sheetPath);
-                @unlink($zipPath);
+                }
+                if (is_string($sheetPath)) {
+                    @unlink($sheetPath);
+                }
+                if (is_string($zipPath)) {
+                    @unlink($zipPath);
+                }
             }
         }, 'stock-overview.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
@@ -99,6 +111,10 @@ class StockOverviewReportController extends Controller
         return view('reports.stock-overview', ['rows' => $this->query($request, $access)->orderBy('location')->orderBy('sku')->lazy(500), 'costs' => $request->user()->can('sales.costs.view'), 'business' => $access->business()]);
     }
 
+    /**
+     * @param  array<int, int>  $locationIds
+     * @return array{search: string, location_id: int|null, category_id: int|null, brand_id: int|null}
+     */
     private function filters(Request $request, array $locationIds): array
     {
         $requestedLocation = $request->integer('location_id') ?: null;
@@ -114,7 +130,7 @@ class StockOverviewReportController extends Controller
     private function query(Request $request, LocationAccessService $access): QueryBuilder
     {
         $business = $access->business();
-        $ids = $access->accessibleQuery($request->user())->where('status', 'active')->pluck('id')->all();
+        $ids = $access->accessibleQuery($request->user())->where('status', 'active')->pluck('id')->map(fn ($id): int => (int) $id)->values()->all();
         $filters = $this->filters($request, $ids);
         $base = function (string $table) use ($business, $ids, $filters) {
             return DB::table($table)->join('product_variants as v', 'v.id', '=', 's.product_variant_id')
@@ -136,6 +152,7 @@ class StockOverviewReportController extends Controller
         return DB::query()->fromSub($quantity->unionAll($devices), 'stock');
     }
 
+    /** @return array<string, mixed> */
     private function visibleRow(object $row, bool $costs): array
     {
         $data = (array) $row;

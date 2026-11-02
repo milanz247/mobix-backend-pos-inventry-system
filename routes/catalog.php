@@ -4,10 +4,16 @@ use App\Http\Controllers\Catalog\BrandController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Catalog\ProductActivityController;
 use App\Http\Controllers\Catalog\ProductController;
+use App\Http\Controllers\Catalog\ProductGalleryController;
 use App\Http\Controllers\Catalog\VariantSearchController;
+use App\Http\Controllers\Catalog\WebProductListingController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function (): void {
+    Route::get('storefront/products/{product}/gallery', [ProductGalleryController::class, 'edit'])->middleware(['can:products.update', 'can:storefront.publish'])->name('storefront.gallery.edit');
+    Route::post('storefront/products/{product}/gallery', [ProductGalleryController::class, 'update'])->middleware(['can:products.update', 'can:storefront.publish', 'throttle:20,1'])->name('storefront.gallery.update');
+    Route::get('storefront/products', [WebProductListingController::class, 'index'])->middleware(['can:products.view', 'can:storefront.publish'])->name('storefront.products.index');
+    Route::put('storefront/products/{product}', [WebProductListingController::class, 'update'])->middleware(['can:products.view', 'can:storefront.publish'])->name('storefront.products.update');
     Route::get('products', [ProductController::class, 'index'])->middleware('can:products.view')->name('products.index');
     Route::get('products/activity', ProductActivityController::class)->middleware(['can:product-activity.view', 'can:products.view'])->name('products.activity');
     Route::get('products/create', [ProductController::class, 'create'])->middleware(['can:products.create', 'can:variants.manage'])->name('products.create');
@@ -17,6 +23,7 @@ Route::middleware('auth')->group(function (): void {
     Route::put('products/{product}', [ProductController::class, 'update'])->middleware(['can:products.update', 'can:variants.manage'])->name('products.update');
     Route::patch('products/{product}/status', [ProductController::class, 'updateStatus'])->middleware('can:products.deactivate')->name('products.status.update');
     Route::delete('products/{product}', [ProductController::class, 'destroy'])->middleware('can:products.delete')->name('products.destroy');
+    Route::put('products/{product}/web-listing', [WebProductListingController::class, 'update'])->middleware(['can:products.view', 'can:storefront.publish'])->name('products.web-listing.update');
 
     Route::get('categories', [CategoryController::class, 'index'])->middleware('can:categories.view')->name('categories.index');
     Route::post('categories', [CategoryController::class, 'store'])->middleware('can:categories.create')->name('categories.store');

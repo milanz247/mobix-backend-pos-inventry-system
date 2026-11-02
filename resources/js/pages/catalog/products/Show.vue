@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Pencil } from '@lucide/vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
@@ -68,12 +68,38 @@ const props = defineProps<{
     conditions: Option[];
     currency: string;
     canViewActivity: boolean;
+    canManageStorefront: boolean;
+    webListing: {
+        status: string;
+        slug: string;
+        public_title: string | null;
+        public_description: string | null;
+        seo_title: string | null;
+        seo_description: string | null;
+    } | null;
     activity: {
         data: ActivityEntry[];
         links: PageLink[];
         total: number;
     } | null;
 }>();
+
+const publicationForm = useForm({
+    status: props.webListing?.status ?? 'draft',
+    slug:
+        props.webListing?.slug ??
+        props.product.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, ''),
+    public_title: props.webListing?.public_title ?? '',
+    public_description: props.webListing?.public_description ?? '',
+    seo_title: props.webListing?.seo_title ?? '',
+    seo_description: props.webListing?.seo_description ?? '',
+});
+
+const savePublication = () =>
+    publicationForm.put(`/products/${props.product.id}/web-listing`);
 
 const auth = usePage<{ auth: Auth }>().props.auth;
 const can = (permission: string): boolean =>
@@ -219,6 +245,198 @@ defineOptions({
                 </div>
             </section>
         </div>
+
+        <section class="surface-panel p-5" aria-labelledby="storefront-title">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <h2 id="storefront-title" class="text-lg font-semibold">
+                        Storefront publication
+                    </h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        POS status and website publication are separate.
+                    </p>
+                </div>
+                <Badge
+                    :variant="
+                        webListing?.status === 'published'
+                            ? 'success'
+                            : 'secondary'
+                    "
+                    >{{ webListing?.status ?? 'draft' }}</Badge
+                >
+            </div>
+            <form
+                v-if="canManageStorefront"
+                class="mt-5 grid gap-4 sm:grid-cols-2"
+                @submit.prevent="savePublication"
+            >
+                <div>
+                    <label
+                        for="web-status"
+                        class="mb-1 block text-sm font-medium"
+                        >Publication status</label
+                    >
+                    <select
+                        id="web-status"
+                        v-model="publicationForm.status"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                    </select>
+                    <p
+                        v-if="publicationForm.errors.status"
+                        class="mt-1 text-sm text-destructive"
+                    >
+                        {{ publicationForm.errors.status }}
+                    </p>
+                </div>
+                <div>
+                    <label for="web-slug" class="mb-1 block text-sm font-medium"
+                        >Public slug</label
+                    >
+                    <input
+                        id="web-slug"
+                        v-model="publicationForm.slug"
+                        maxlength="180"
+                        required
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                    <p
+                        v-if="publicationForm.errors.slug"
+                        class="mt-1 text-sm text-destructive"
+                    >
+                        {{ publicationForm.errors.slug }}
+                    </p>
+                </div>
+                <div>
+                    <label
+                        for="web-title"
+                        class="mb-1 block text-sm font-medium"
+                        >Public title (optional)</label
+                    >
+                    <input
+                        id="web-title"
+                        v-model="publicationForm.public_title"
+                        maxlength="180"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                    <p
+                        v-if="publicationForm.errors.public_title"
+                        class="mt-1 text-sm text-destructive"
+                    >
+                        {{ publicationForm.errors.public_title }}
+                    </p>
+                </div>
+                <div>
+                    <label
+                        for="web-seo-title"
+                        class="mb-1 block text-sm font-medium"
+                        >SEO title (optional)</label
+                    >
+                    <input
+                        id="web-seo-title"
+                        v-model="publicationForm.seo_title"
+                        maxlength="180"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                    <p
+                        v-if="publicationForm.errors.seo_title"
+                        class="mt-1 text-sm text-destructive"
+                    >
+                        {{ publicationForm.errors.seo_title }}
+                    </p>
+                </div>
+                <div class="sm:col-span-2">
+                    <label
+                        for="web-description"
+                        class="mb-1 block text-sm font-medium"
+                        >Public description (optional)</label
+                    >
+                    <textarea
+                        id="web-description"
+                        v-model="publicationForm.public_description"
+                        maxlength="10000"
+                        rows="3"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                    <p
+                        v-if="publicationForm.errors.public_description"
+                        class="mt-1 text-sm text-destructive"
+                    >
+                        {{ publicationForm.errors.public_description }}
+                    </p>
+                </div>
+                <div class="sm:col-span-2">
+                    <label
+                        for="web-seo-description"
+                        class="mb-1 block text-sm font-medium"
+                        >SEO description (optional)</label
+                    >
+                    <textarea
+                        id="web-seo-description"
+                        v-model="publicationForm.seo_description"
+                        maxlength="320"
+                        rows="2"
+                        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    />
+                    <p
+                        v-if="publicationForm.errors.seo_description"
+                        class="mt-1 text-sm text-destructive"
+                    >
+                        {{ publicationForm.errors.seo_description }}
+                    </p>
+                </div>
+                <div class="sm:col-span-2">
+                    <Button type="submit" :disabled="publicationForm.processing"
+                        >Save storefront listing</Button
+                    >
+                </div>
+            </form>
+            <div v-else class="mt-4 text-sm text-muted-foreground">
+                <p>
+                    Public title: {{ webListing?.public_title || product.name }}
+                </p>
+                <p>Public slug: {{ webListing?.slug || 'Not set' }}</p>
+                <p>
+                    Public description:
+                    {{
+                        webListing?.public_description ||
+                        product.description ||
+                        'Not set'
+                    }}
+                </p>
+                <p>SEO title: {{ webListing?.seo_title || 'Not set' }}</p>
+                <p>
+                    SEO description:
+                    {{ webListing?.seo_description || 'Not set' }}
+                </p>
+            </div>
+            <div
+                v-if="canManageStorefront"
+                class="mt-5 border-t border-border/70 pt-5 text-sm"
+            >
+                <h3 class="font-semibold">Public listing preview</h3>
+                <p class="mt-2 text-lg font-semibold">
+                    {{ publicationForm.public_title || product.name }}
+                </p>
+                <p class="mt-1 whitespace-pre-line text-muted-foreground">
+                    {{
+                        publicationForm.public_description ||
+                        product.description ||
+                        'No public description.'
+                    }}
+                </p>
+                <p class="mt-2 text-xs text-muted-foreground">
+                    /shop/{{ publicationForm.slug || 'slug' }} · SEO:
+                    {{
+                        publicationForm.seo_title ||
+                        publicationForm.public_title ||
+                        product.name
+                    }}
+                </p>
+            </div>
+        </section>
 
         <section class="space-y-3" aria-labelledby="variants-title">
             <div>

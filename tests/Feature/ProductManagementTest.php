@@ -314,6 +314,29 @@ test('authorized users can create categories and brands and duplicate names are 
         ->and(Brand::query()->where('name', 'Samsung')->count())->toBe(1);
 });
 
+test('brand logo can be uploaded and replaced through the multipart edit form', function () {
+    Storage::fake('public');
+    $user = catalogManager('brands.create', 'brands.update');
+    $this->actingAs($user)->post(route('brands.store'), [
+        'name' => 'Example Brand', 'description' => null, 'status' => 'active',
+        'logo' => UploadedFile::fake()->image('first.png', 400, 180),
+    ])->assertRedirect(route('brands.index'))->assertSessionHasNoErrors();
+
+    $brand = Brand::query()->where('name', 'Example Brand')->sole();
+    $firstPath = $brand->logo_path;
+    Storage::disk('public')->assertExists($firstPath);
+
+    $this->actingAs($user)->post(route('brands.update', $brand), [
+        '_method' => 'PUT', 'name' => 'Example Brand', 'description' => null, 'status' => 'active',
+        'logo' => UploadedFile::fake()->image('second.png', 400, 180),
+    ])->assertRedirect(route('brands.index'))->assertSessionHasNoErrors();
+
+    $brand->refresh();
+    expect($brand->logo_path)->not->toBe($firstPath);
+    Storage::disk('public')->assertExists($brand->logo_path);
+    Storage::disk('public')->assertMissing($firstPath);
+});
+
 test('combo products save component quantities without creating their own stock', function () {
     $user = catalogManager('sales.costs.view', 'products.view', 'products.create', 'variants.manage', 'bundles.manage');
     $business = Business::query()->sole();

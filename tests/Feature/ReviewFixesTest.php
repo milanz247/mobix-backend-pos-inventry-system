@@ -8,7 +8,9 @@ use App\Models\InventoryStock;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Sale;
 use App\Models\User;
+use App\SalePaymentStatus;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -65,4 +67,29 @@ test('catalogue transaction preserves restricted costs and blocks historical typ
     expect($variant->fresh()->cost_price)->toBe('123.45');
     $payload['product_type'] = 'service';
     expect(fn () => app(SaveProduct::class)->handle($business, $payload, $product))->toThrow(ValidationException::class);
+});
+
+test('credit report renders calculated balances only for an authorized location', function () {
+    extract(reviewFixture());
+    foreach (['sales.view', 'credit-sales.view'] as $permission) {
+        $user->givePermissionTo(Permission::findOrCreate($permission, 'web'));
+    }
+    $sale = Sale::factory()->create([
+        'business_id' => $business->id,
+        'location_id' => $location->id,
+        'cashier_id' => $user->id,
+        'is_credit' => true,
+        'total' => '100.00',
+        'paid_total' => '25.00',
+        'payment_status' => SalePaymentStatus::PartiallyPaid,
+    ]);
+
+    $this->actingAs($user)->get(route('sales.credit.report'))->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('summary.invoices', 1)
+            ->where('summary.outstanding_total', '75.00')
+            ->where('sales.data.0.id', $sale->id)
+            ->where('sales.data.0.total', '100.00')
+            ->where('sales.data.0.paid', '25.00')
+            ->where('sales.data.0.outstanding', '75.00'));
 });

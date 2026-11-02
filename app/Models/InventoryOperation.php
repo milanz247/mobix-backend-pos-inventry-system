@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -60,6 +61,12 @@ class InventoryOperation extends Model
     public function deviceEvents(): HasMany
     {
         return $this->hasMany(SerializedDeviceEvent::class);
+    }
+
+    /** @return HasOne<WebOrderFulfillment, $this> */
+    public function webFulfillment(): HasOne
+    {
+        return $this->hasOne(WebOrderFulfillment::class);
     }
 
     protected function casts(): array

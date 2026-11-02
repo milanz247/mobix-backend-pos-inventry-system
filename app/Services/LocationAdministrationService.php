@@ -12,7 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class LocationAdministrationService
 {
-    public function __construct(private readonly LocationAccessService $locationAccess) {}
+    public function __construct(
+        private readonly LocationAccessService $locationAccess,
+        private readonly WebReservationService $reservations,
+    ) {}
 
     /** @param array<string, mixed> $attributes */
     public function create(User $actor, array $attributes): Location
@@ -35,12 +38,15 @@ class LocationAdministrationService
     public function update(Location $location, array $attributes): Location
     {
         return DB::transaction(function () use ($location, $attributes): Location {
+            $business = $this->locationAccess->business();
+            Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
             $location = Location::query()->lockForUpdate()->findOrFail($location->id);
             $this->ensureCurrentBusiness($location);
 
             if ($location->is_main && $attributes['status'] === LocationStatus::Inactive->value) {
                 $this->fail('status', __('The main location cannot be deactivated.'));
             }
+            $this->assertNoActiveReservationsOnDeactivation($location, $attributes['status'] ?? null);
 
             $location->update(Arr::only($attributes, ['name', 'code', 'type', 'phone', 'email', 'address', 'city', 'status']));
 
@@ -51,12 +57,15 @@ class LocationAdministrationService
     public function updateStatus(Location $location, LocationStatus $status): void
     {
         DB::transaction(function () use ($location, $status): void {
+            $business = $this->locationAccess->business();
+            Business::query()->whereKey($business->id)->lockForUpdate()->firstOrFail();
             $location = Location::query()->lockForUpdate()->findOrFail($location->id);
             $this->ensureCurrentBusiness($location);
 
             if ($location->is_main && $status === LocationStatus::Inactive) {
                 $this->fail('status', __('The main location cannot be deactivated.'));
             }
+            $this->assertNoActiveReservationsOnDeactivation($location, $status->value);
 
             $location->update(['status' => $status]);
         });
@@ -111,6 +120,14 @@ class LocationAdministrationService
         abort_unless($location->business_id === $business->id, 404);
 
         return $business;
+    }
+
+    private function assertNoActiveReservationsOnDeactivation(Location $location, ?string $status): void
+    {
+        if ($status === LocationStatus::Inactive->value
+            && $this->reservations->hasActiveAtLocation($location->business_id, $location->id)) {
+            $this->fail('status', __('This location has active online stock reservations.'));
+        }
     }
 
     private function fail(string $key, string $message): never

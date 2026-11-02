@@ -9,6 +9,7 @@ enum SaleSource: string
     case Facebook = 'facebook';
     case Phone = 'phone';
     case Other = 'other';
+    case Ecommerce = 'ecommerce';
 
     public function label(): string
     {
@@ -18,6 +19,7 @@ enum SaleSource: string
             self::Facebook => 'Facebook',
             self::Phone => 'Phone',
             self::Other => 'Other',
+            self::Ecommerce => 'Ecommerce',
         };
     }
 }

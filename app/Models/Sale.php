@@ -12,7 +12,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 /**
  * @property Carbon|null $due_date
@@ -38,7 +40,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, SaleReturn> $returns
  * @property-read Collection<int, SaleRefund> $refunds
  */
-#[Fillable(['due_date', 'customer_id', 'is_credit', 'cashier_shift_id', 'business_id', 'location_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
+#[Fillable(['due_date', 'customer_id', 'is_credit', 'cashier_shift_id', 'business_id', 'location_id', 'web_order_id', 'sale_number', 'operation_key', 'payload_hash', 'cashier_id', 'source', 'customer_name', 'customer_phone', 'customer_email', 'subtotal', 'discount_total', 'tax_total', 'total', 'paid_total', 'status', 'payment_status', 'inventory_operation_id', 'notes', 'posted_at'])]
 class Sale extends Model
 {
     /** @use HasFactory<SaleFactory> */
@@ -72,6 +74,18 @@ class Sale extends Model
     public function inventoryOperation(): BelongsTo
     {
         return $this->belongsTo(InventoryOperation::class);
+    }
+
+    /** @return BelongsTo<WebOrder, $this> */
+    public function webOrder(): BelongsTo
+    {
+        return $this->belongsTo(WebOrder::class);
+    }
+
+    /** @return HasOne<WebOrderFulfillment, $this> */
+    public function webFulfillment(): HasOne
+    {
+        return $this->hasOne(WebOrderFulfillment::class);
     }
 
     /** @return HasMany<SaleLine, $this> */
@@ -112,5 +126,14 @@ class Sale extends Model
             'payment_status' => SalePaymentStatus::class,
             'posted_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $sale): void {
+            if (($sale->source === SaleSource::Ecommerce) !== ($sale->web_order_id !== null)) {
+                throw ValidationException::withMessages(['web_order_id' => 'Ecommerce sales require a web order; POS sales cannot link to one.']);
+            }
+        });
     }
 }

@@ -18,6 +18,7 @@ use App\Models\SaleReturn;
 use App\Models\SerializedDevice;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\WebOrderReservation;
 use App\ProductType;
 use App\SerializedDeviceEventType;
 use App\SerializedDeviceStatus;
@@ -25,6 +26,7 @@ use App\StockMovementType;
 use App\VariantTrackingMode;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +35,10 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryService
 {
-    public function __construct(private readonly LocationAccessService $locationAccess) {}
+    public function __construct(
+        private readonly LocationAccessService $locationAccess,
+        private readonly WebReservationService $reservations,
+    ) {}
 
     /** @param array<string, mixed> $data */
     public function receive(User $user, array $data, bool $opening = false): InventoryOperation
@@ -226,6 +231,7 @@ class InventoryService
                 if ($device === null) {
                     throw ValidationException::withMessages(['lines' => __('The selected device is no longer in stock at this location or was not received on this purchase.')]);
                 }
+                $this->reservations->assertDeviceFree($business->id, $device->id);
 
                 $operation->lines()->create([
                     'business_id' => $business->id,
@@ -317,6 +323,122 @@ class InventoryService
 
             return $operation->fresh(['lines']) ?? $operation;
         }, 3);
+    }
+
+    /**
+     * Post only the accepted web allocation. The caller has consumed these reservations inside
+     * its outer transaction; the reservation service verifies all resulting physical deltas.
+     *
+     * @param  Collection<int, WebOrderReservation>  $allocation
+     * @param  array<int, SaleLine>  $linesByOrderItem
+     */
+    public function postExactWebSale(User $actor, Sale $sale, Collection $allocation, array $linesByOrderItem): InventoryOperation
+    {
+        if (DB::transactionLevel() < 1 || $sale->web_order_id === null || $sale->inventory_operation_id !== null || $allocation->isEmpty()) {
+            throw new \LogicException('Exact web stock posting requires a new linked sale in the handover transaction.');
+        }
+        $business = $this->locationAccess->business();
+        if ($sale->business_id !== $business->id) {
+            throw ValidationException::withMessages(['order' => 'The sale belongs to another business.']);
+        }
+        $location = $this->authorizedLocation($actor, $sale->location_id);
+        $operation = $this->existingOrNewOperation($business, $actor, [
+            'operation_key' => $sale->operation_key, 'location_id' => $location->id,
+            'reference' => $sale->sale_number, 'reason' => 'web_pickup_handover', 'notes' => null,
+        ], InventoryOperationType::Sale);
+        $operation->update(['source_location_id' => $location->id]);
+        $costs = [];
+        $snapshots = [];
+        foreach (array_keys($linesByOrderItem) as $itemId) {
+            $json = DB::table('web_order_items')->where('business_id', $business->id)
+                ->where('web_order_id', $sale->web_order_id)->where('id', $itemId)
+                ->value('private_inventory_snapshot');
+            $parts = $json === null ? [] : json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+            if (! is_array($parts) || $parts === []) {
+                throw ValidationException::withMessages(['reservation' => 'Accepted inventory snapshots are missing.']);
+            }
+            foreach ($parts as $part) {
+                if (! is_array($part) || ! isset($part['variant_id'], $part['quantity'], $part['sku'], $part['name'], $part['unit_price']) ||
+                    ! array_key_exists('device_id', $part) || ! array_key_exists('imei', $part) || ! array_key_exists('condition', $part)) {
+                    throw ValidationException::withMessages(['reservation' => 'An accepted inventory snapshot is incomplete.']);
+                }
+                $key = $itemId.':'.$part['variant_id'].':'.($part['device_id'] ?? 'quantity');
+                if (isset($snapshots[$key])) {
+                    throw ValidationException::withMessages(['reservation' => 'Duplicate accepted inventory snapshot.']);
+                }
+                $snapshots[$key] = $part;
+            }
+        }
+        foreach ($allocation as $reservation) {
+            if ($reservation->status !== 'consumed' || $reservation->web_order_id !== $sale->web_order_id ||
+                $reservation->business_id !== $sale->business_id || $reservation->location_id !== $location->id ||
+                ! isset($linesByOrderItem[$reservation->web_order_item_id])) {
+                throw ValidationException::withMessages(['reservation' => 'The exact order allocation is inconsistent.']);
+            }
+            $line = $linesByOrderItem[$reservation->web_order_item_id];
+            $variant = ProductVariant::query()->where('business_id', $business->id)->with('product')
+                ->findOrFail($reservation->component_variant_id);
+            $quantity = BigDecimal::of((string) $reservation->quantity)->toScale(3, RoundingMode::Unnecessary)->__toString();
+            $key = $reservation->web_order_item_id.':'.$variant->id.':'.($reservation->serialized_device_id ?? 'quantity');
+            $snapshot = $snapshots[$key] ?? null;
+            if ($snapshot === null || BigDecimal::of((string) $snapshot['quantity'])->compareTo($quantity) !== 0) {
+                throw ValidationException::withMessages(['reservation' => 'The allocation differs from its accepted snapshot.']);
+            }
+            unset($snapshots[$key]);
+            $device = null;
+            if ($reservation->serialized_device_id !== null) {
+                $device = SerializedDevice::query()->where('business_id', $business->id)
+                    ->where('location_id', $location->id)->lockForUpdate()->findOrFail($reservation->serialized_device_id);
+                if ($device->product_variant_id !== $variant->id || $quantity !== '1.000' ||
+                    $device->imei !== $snapshot['imei'] || $device->condition->value !== $snapshot['condition']) {
+                    throw ValidationException::withMessages(['reservation' => 'The reserved device does not match its accepted component.']);
+                }
+                $cost = (string) $device->unit_cost;
+            } else {
+                if ($variant->tracking_mode !== VariantTrackingMode::QuantityBased) {
+                    throw ValidationException::withMessages(['reservation' => 'The reserved quantity tracking mode changed.']);
+                }
+                $cost = (string) $variant->cost_price;
+            }
+            $costs[$line->id] = ($costs[$line->id] ?? BigDecimal::zero())
+                ->plus(BigDecimal::of($cost)->multipliedBy($quantity));
+            if ($line->is_combo) {
+                $line->components()->create([
+                    'business_id' => $business->id, 'product_variant_id' => $variant->id,
+                    'serialized_device_id' => $device?->id, 'sku_snapshot' => $snapshot['sku'],
+                    'name_snapshot' => $snapshot['name'],
+                    'imei_snapshot' => $snapshot['imei'], 'quantity' => $quantity,
+                    'unit_cost_snapshot' => $cost,
+                ]);
+            } elseif ($variant->id !== $line->product_variant_id ||
+                $line->serialized_device_id !== $device?->id) {
+                throw ValidationException::withMessages(['reservation' => 'The sale line does not match its reserved stock.']);
+            }
+            if ($device !== null) {
+                $this->markDeviceSold($actor, $operation, $sale, $location, $device,
+                    (string) $snapshot['unit_price']);
+            } else {
+                $operation->lines()->create([
+                    'business_id' => $business->id, 'product_variant_id' => $variant->id,
+                    'quantity' => '-'.$quantity, 'unit_cost' => $cost,
+                ]);
+                $this->changeQuantity($operation, $location, $variant, '-'.$quantity, StockMovementType::Sale, $sale);
+            }
+        }
+        if ($snapshots !== []) {
+            throw ValidationException::withMessages(['reservation' => 'Accepted inventory snapshots contain unconsumed allocations.']);
+        }
+        foreach ($linesByOrderItem as $line) {
+            if (! isset($costs[$line->id])) {
+                throw ValidationException::withMessages(['reservation' => 'A sale line has no exact stock allocation.']);
+            }
+            $unitCost = $costs[$line->id]->dividedBy((string) $line->quantity, 2, RoundingMode::HalfUp)->__toString();
+            DB::table('sale_lines')->where('id', $line->id)->where('business_id', $business->id)
+                ->update(['cost_snapshot' => $unitCost]);
+        }
+        $sale->update(['inventory_operation_id' => $operation->id]);
+
+        return $operation;
     }
 
     public function returnSale(User $user, SaleReturn $saleReturn): InventoryOperation
@@ -443,9 +565,9 @@ class InventoryService
             if ($deviceCount % 1000 !== 0) {
                 throw ValidationException::withMessages(['lines' => __('Serialized bundle components must resolve to whole devices.')]);
             }
-            $devices = SerializedDevice::query()->where('business_id', $sale->business_id)
+            $devices = $this->reservations->excludeReservedDevices(SerializedDevice::query()->where('business_id', $sale->business_id)
                 ->where('product_variant_id', $variant->id)->where('location_id', $location->id)
-                ->where('status', SerializedDeviceStatus::InStock->value)->orderBy('id')
+                ->where('status', SerializedDeviceStatus::InStock->value))->orderBy('id')
                 ->limit(intdiv($deviceCount, 1000))->lockForUpdate()->get();
             if ($devices->count() !== intdiv($deviceCount, 1000)) {
                 throw ValidationException::withMessages(['lines' => __('A serialized combo component is no longer available.')]);
@@ -472,6 +594,7 @@ class InventoryService
 
     private function markDeviceSold(User $user, InventoryOperation $operation, Sale $sale, Location $location, SerializedDevice $device, string $sellingPrice): void
     {
+        $this->reservations->assertDeviceFree($sale->business_id, $device->id);
         if ($device->location_id !== $location->id || $device->status !== SerializedDeviceStatus::InStock) {
             throw ValidationException::withMessages(['lines' => __('The selected serialized device is no longer available at this location.')]);
         }
@@ -696,6 +819,7 @@ class InventoryService
                 if ($device->location_id !== $source->id || $device->status !== SerializedDeviceStatus::InStock) {
                     throw ValidationException::withMessages(['device_ids' => __('Every device must be in stock at the source location.')]);
                 }
+                $this->reservations->assertDeviceFree($business->id, $device->id);
 
                 $device->events()->create([
                     'business_id' => $business->id,
@@ -732,6 +856,9 @@ class InventoryService
 
             if (in_array($device->status, [SerializedDeviceStatus::Sold, SerializedDeviceStatus::ReturnedToSupplier], true)) {
                 throw ValidationException::withMessages(['status' => __('Sold and supplier-returned devices cannot be changed through inventory adjustment.')]);
+            }
+            if ($newStatus !== $device->status) {
+                $this->reservations->assertDeviceFree($business->id, $device->id);
             }
 
             if (! $operation->deviceEvents()->exists()) {
@@ -789,8 +916,13 @@ class InventoryService
                 throw ValidationException::withMessages(['components' => __('Serialized combo components must use whole-device quantities.')]);
             }
             $available = $variant->tracking_mode === VariantTrackingMode::Serialized
-                ? (string) $variant->serializedDevices()->where('location_id', $location->id)->where('status', SerializedDeviceStatus::InStock->value)->count()
-                : (string) ($variant->inventoryStocks()->where('location_id', $location->id)->value('quantity_on_hand') ?? '0');
+                ? (string) $this->reservations->excludeReservedDevices(SerializedDevice::query()
+                    ->where('business_id', $location->business_id)->where('product_variant_id', $variant->id)
+                    ->where('location_id', $location->id)->where('status', SerializedDeviceStatus::InStock->value))->count()
+                : $this->reservations->freeQuantity(
+                    (string) ($variant->inventoryStocks()->where('location_id', $location->id)->value('quantity_on_hand') ?? '0'),
+                    $location->business_id, $location->id, $variant->id,
+                );
 
             return [
                 'product_variant_id' => $variant->id,
@@ -909,6 +1041,10 @@ class InventoryService
 
         if ($afterMinor < 0) {
             throw ValidationException::withMessages(['quantity' => __('Insufficient stock. This operation would make stock negative.')]);
+        }
+
+        if ($this->quantityToMinor($delta) < 0) {
+            $this->reservations->assertQuantityFloor($this->minorToQuantity($afterMinor), $operation->business_id, $location->id, $variant->id);
         }
 
         $before = $this->minorToQuantity($beforeMinor);

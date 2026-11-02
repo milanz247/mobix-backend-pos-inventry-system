@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -20,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property ProductType $product_type
  * @property string|null $description
+ * @property list<string>|null $gallery_paths
  * @property string|null $image_path
  * @property CatalogStatus $status
  * @property int $active_variants_count
@@ -28,7 +30,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['category_id', 'brand_id', 'name', 'product_type', 'description', 'image_path', 'status'])]
+#[Fillable(['category_id', 'brand_id', 'name', 'product_type', 'description', 'image_path', 'gallery_paths', 'status'])]
 
 class Product extends Model
 {
@@ -61,12 +63,19 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class);
     }
 
+    /** @return HasOne<WebProductListing, $this> */
+    public function webListing(): HasOne
+    {
+        return $this->hasOne(WebProductListing::class);
+    }
+
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
             'product_type' => ProductType::class,
             'status' => CatalogStatus::class,
+            'gallery_paths' => 'array',
         ];
     }
 }

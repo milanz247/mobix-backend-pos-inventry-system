@@ -9,6 +9,10 @@ use App\Http\Controllers\Settings\PosSettingsController;
 use App\Http\Controllers\Settings\ProfilePhotoController;
 use App\Http\Controllers\Settings\ProfileSettingsController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\WebDeliveryAreaController;
+use App\Http\Controllers\Settings\WebHomeBannerController;
+use App\Http\Controllers\Settings\WebPickupLocationController;
+use App\Http\Controllers\Settings\WebStorefrontSettingController;
 use App\PermissionName;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +20,25 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::middleware(['auth'])->group(function () {
+    Route::middleware('can:'.PermissionName::StorefrontManageHomepage->value)->group(function (): void {
+        Route::get('settings/storefront-web', [WebStorefrontSettingController::class, 'edit'])->name('storefront-web-settings.edit');
+        Route::put('settings/storefront-web', [WebStorefrontSettingController::class, 'update'])->name('storefront-web-settings.update');
+        Route::get('settings/storefront-homepage', [WebHomeBannerController::class, 'edit'])->name('storefront-homepage.edit');
+        Route::post('settings/storefront-homepage', [WebHomeBannerController::class, 'store'])->name('storefront-homepage.store');
+        Route::post('settings/storefront-homepage/{banner}', [WebHomeBannerController::class, 'update'])->name('storefront-homepage.update');
+        Route::patch('settings/storefront-homepage/{banner}/status', [WebHomeBannerController::class, 'status'])->name('storefront-homepage.status');
+    });
+    Route::middleware('can:'.PermissionName::StorefrontManagePickupLocations->value)->group(function (): void {
+        Route::get('settings/storefront-pickup', [WebPickupLocationController::class, 'index'])->name('storefront-pickup.index');
+        Route::put('settings/storefront-pickup/{location}', [WebPickupLocationController::class, 'update'])->name('storefront-pickup.update');
+    });
+    Route::middleware('can:'.PermissionName::StorefrontManageDelivery->value)->group(function (): void {
+        Route::get('settings/storefront-delivery', [WebDeliveryAreaController::class, 'index'])->name('storefront-delivery.index');
+        Route::post('settings/storefront-delivery', [WebDeliveryAreaController::class, 'store'])->name('storefront-delivery.store');
+        Route::put('settings/storefront-delivery/{area}', [WebDeliveryAreaController::class, 'update'])->name('storefront-delivery.update');
+        Route::put('settings/storefront-delivery/{area}/locations', [WebDeliveryAreaController::class, 'saveMapping'])->name('storefront-delivery.locations.save');
+        Route::delete('settings/storefront-delivery/{area}/locations/{mapping}', [WebDeliveryAreaController::class, 'removeMapping'])->name('storefront-delivery.locations.remove');
+    });
     Route::get('settings/appearance', fn () => Inertia::render('settings/Appearance'))
         ->name('appearance.edit');
 

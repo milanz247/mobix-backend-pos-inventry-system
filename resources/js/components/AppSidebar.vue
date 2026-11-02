@@ -8,6 +8,7 @@ import {
     Package,
     Palette,
     ShoppingCart,
+    Store,
     Settings,
     Users,
     Wallet,
@@ -193,7 +194,35 @@ const settingsNavItems = computed<NavItem[]>(() => [
     { title: 'My profile', href: editProfile() },
 ]);
 
-const { isCurrentUrl } = useCurrentUrl();
+const ecommerceNavItems = computed<NavItem[]>(() => [
+    ...(can('storefront.manage-homepage')
+        ? [{ title: 'Web Settings', href: '/settings/storefront-web' }]
+        : []),
+    ...(can('storefront.manage-homepage')
+        ? [{ title: 'Homepage Banners', href: '/settings/storefront-homepage' }]
+        : []),
+    ...(can('products.view') && can('storefront.publish')
+        ? [{ title: 'Storefront Products', href: '/storefront/products' }]
+        : []),
+    ...(can('storefront.view-orders')
+        ? [{ title: 'Online Orders', href: '/storefront/orders' }]
+        : []),
+    ...(can('storefront.manage-delivery')
+        ? [{ title: 'Delivery Areas', href: '/settings/storefront-delivery' }]
+        : []),
+    ...(can('storefront.manage-pickup-locations')
+        ? [{ title: 'Pickup Locations', href: '/settings/storefront-pickup' }]
+        : []),
+]);
+const ecommerceIsActive = computed(() =>
+    ecommerceNavItems.value.some(
+        (item) =>
+            page.url.split('?')[0] === item.href ||
+            page.url.startsWith(`${item.href}/`),
+    ),
+);
+
+const { isCurrentUrl, isCurrentOrParentUrl } = useCurrentUrl();
 const settingsAreActive = computed(() =>
     settingsNavItems.value.some((item) => isCurrentUrl(item.href)),
 );
@@ -224,6 +253,7 @@ const salesIsActive = computed(() =>
 );
 
 type SidebarSection =
+    | 'ecommerce'
     | 'users'
     | 'catalog'
     | 'inventory'
@@ -233,26 +263,34 @@ type SidebarSection =
     | 'settings';
 
 const openSection = ref<SidebarSection | null>(
-    usersAreActive.value
-        ? 'users'
-        : reportsAreActive.value
-          ? 'reports'
-          : page.url.startsWith('/inventory')
-            ? 'inventory'
-            : catalogIsActive.value
-              ? 'catalog'
-              : purchasingIsActive.value
-                ? 'purchasing'
-                : salesIsActive.value
-                  ? 'sales'
-                  : settingsAreActive.value
-                    ? 'settings'
-                    : null,
+    ecommerceIsActive.value
+        ? 'ecommerce'
+        : usersAreActive.value
+          ? 'users'
+          : reportsAreActive.value
+            ? 'reports'
+            : page.url.startsWith('/inventory')
+              ? 'inventory'
+              : catalogIsActive.value
+                ? 'catalog'
+                : purchasingIsActive.value
+                  ? 'purchasing'
+                  : salesIsActive.value
+                    ? 'sales'
+                    : settingsAreActive.value
+                      ? 'settings'
+                      : null,
 );
 
 const updateOpenSection = (section: SidebarSection, isOpen: boolean): void => {
     openSection.value = isOpen ? section : null;
 };
+watch(
+    () => page.url,
+    () => {
+        if (ecommerceIsActive.value) openSection.value = 'ecommerce';
+    },
+);
 watch(reportsAreActive, (active) => {
     if (active) {
         openSection.value = 'reports';
@@ -322,6 +360,52 @@ watch(reportsAreActive, (active) => {
                                     ></SidebarMenuSub
                                 ></CollapsibleContent
                             >
+                        </SidebarMenuItem>
+                    </Collapsible>
+                </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarGroup v-if="ecommerceNavItems.length" class="px-2 py-0">
+                <SidebarMenu>
+                    <Collapsible
+                        as-child
+                        :open="openSection === 'ecommerce'"
+                        class="group/collapsible"
+                        @update:open="updateOpenSection('ecommerce', $event)"
+                    >
+                        <SidebarMenuItem>
+                            <CollapsibleTrigger as-child>
+                                <SidebarMenuButton
+                                    tooltip="Ecommerce"
+                                    :is-active="ecommerceIsActive"
+                                >
+                                    <Store /><span>Ecommerce</span>
+                                    <ChevronRight
+                                        class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                                    />
+                                </SidebarMenuButton>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                <SidebarMenuSub>
+                                    <SidebarMenuSubItem
+                                        v-for="item in ecommerceNavItems"
+                                        :key="item.title"
+                                    >
+                                        <SidebarMenuSubButton
+                                            as-child
+                                            :is-active="
+                                                isCurrentOrParentUrl(item.href)
+                                            "
+                                        >
+                                            <Link :href="item.href"
+                                                ><span>{{
+                                                    item.title
+                                                }}</span></Link
+                                            >
+                                        </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                </SidebarMenuSub>
+                            </CollapsibleContent>
                         </SidebarMenuItem>
                     </Collapsible>
                 </SidebarMenu>
@@ -400,7 +484,6 @@ watch(reportsAreActive, (active) => {
                                         <SidebarMenuSubButton
                                             as-child
                                             :is-active="isCurrentUrl(item.href)"
-                                            class="data-[active=true]:bg-blue-600 data-[active=true]:text-white data-[active=true]:hover:bg-blue-600"
                                         >
                                             <Link :href="item.href">
                                                 <span>{{ item.title }}</span>

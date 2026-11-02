@@ -2,8 +2,8 @@
 
 use App\Http\Controllers\Inventory\DamagedStockController;
 use App\Http\Controllers\Inventory\DamagedStockReportController;
-use App\Http\Controllers\Inventory\InventoryOverviewController;
 use App\Http\Controllers\Inventory\InventoryOperationReportController;
+use App\Http\Controllers\Inventory\InventoryOverviewController;
 use App\Http\Controllers\Inventory\LocationInventoryController;
 use App\Http\Controllers\Inventory\OpeningStockController;
 use App\Http\Controllers\Inventory\ReorderLevelController;

@@ -32,6 +32,20 @@ enum PermissionName: string
     case ProductsCreate = 'products.create';
     case ProductsUpdate = 'products.update';
     case ProductsDeactivate = 'products.deactivate';
+    case StorefrontPublish = 'storefront.publish';
+    case StorefrontManageDelivery = 'storefront.manage-delivery';
+    case StorefrontManagePickupLocations = 'storefront.manage-pickup-locations';
+    case StorefrontManageHomepage = 'storefront.manage-homepage';
+    case StorefrontViewOrders = 'storefront.view-orders';
+    case StorefrontConfirmOrders = 'storefront.confirm-orders';
+    case StorefrontCancelOrders = 'storefront.cancel-orders';
+    case StorefrontViewPaymentProofs = 'storefront.view-payment-proofs';
+    case StorefrontVerifyPayments = 'storefront.verify-payments';
+    case StorefrontPrepareOrders = 'storefront.prepare-orders';
+    case StorefrontVerifyPicks = 'storefront.verify-picks';
+    case StorefrontMarkReady = 'storefront.mark-ready';
+    case StorefrontConfirmBankOrders = 'storefront.confirm-bank-orders';
+    case StorefrontHandoverOrders = 'storefront.handover-orders';
     case CategoriesView = 'categories.view';
     case CategoriesCreate = 'categories.create';
     case CategoriesUpdate = 'categories.update';
@@ -102,7 +116,11 @@ enum PermissionName: string
     {
         return match ($this) {
             self::DashboardView => 'Dashboard',
-            self::ProductsDelete, self::ProductActivityView => 'Products', self::CategoriesDelete => 'Categories', self::BrandsDelete => 'Brands',
+            self::ProductsDelete, self::ProductActivityView, self::StorefrontPublish => 'Products', self::StorefrontManageDelivery => 'Storefront delivery', self::StorefrontManagePickupLocations => 'Storefront pickup', self::StorefrontManageHomepage => 'Storefront homepage',
+            self::StorefrontViewOrders, self::StorefrontConfirmOrders, self::StorefrontCancelOrders,
+            self::StorefrontViewPaymentProofs, self::StorefrontVerifyPayments, self::StorefrontPrepareOrders,
+            self::StorefrontVerifyPicks, self::StorefrontMarkReady, self::StorefrontConfirmBankOrders,
+            self::StorefrontHandoverOrders => 'Storefront orders', self::CategoriesDelete => 'Categories', self::BrandsDelete => 'Brands',
             self::SuppliersDelete => 'Suppliers', self::PurchasesDelete => 'Purchases',
             self::InvoiceSettingsView, self::InvoiceSettingsUpdate => 'Invoice Settings',
             self::PosSettingsView, self::PosSettingsUpdate => 'POS Settings',
@@ -180,6 +198,15 @@ enum PermissionName: string
             self::ProductActivityView => 'View product activity history',
             self::PurchasesDelete => 'Delete draft invoice',
             self::UsersChangeStatus, self::LocationsChangeStatus => 'Activate / deactivate',
+            self::StorefrontViewOrders => 'View web orders', self::StorefrontConfirmOrders => 'Record calls and confirm COD orders',
+            self::StorefrontCancelOrders => 'Cancel declined COD orders',
+            self::StorefrontViewPaymentProofs => 'View bank transfer proofs', self::StorefrontVerifyPayments => 'Verify bank transfer payments',
+            self::StorefrontPrepareOrders => 'Start web order preparation', self::StorefrontVerifyPicks => 'Verify web order picks',
+            self::StorefrontMarkReady => 'Mark web orders ready',
+            self::StorefrontConfirmBankOrders => 'Confirm verified bank transfer orders',
+            self::StorefrontHandoverOrders => 'Collect COD and hand over shop pickup orders',
+            self::StorefrontManagePickupLocations => 'Manage customer pickup locations',
+            self::StorefrontManageHomepage => 'Manage storefront homepage and web settings',
             self::DamagedStockCreate => 'Move stock to damaged', self::DamagedStockRepair => 'Return repaired stock', self::DamagedStockWriteOff => 'Write off damaged stock',
             self::CreditSalesView => 'View credit invoices', self::CreditSalesAddItems => 'Add items to credit bill',
             self::CustomersView => 'View customers and statements', self::CustomersCreate => 'Add customer',
@@ -238,6 +265,14 @@ enum PermissionName: string
     {
         return match (true) {
             $this === self::PosAccess => 'view',
+            $this === self::StorefrontViewOrders => 'view',
+            $this === self::StorefrontConfirmOrders => 'edit',
+            $this === self::StorefrontCancelOrders => 'delete',
+            $this === self::StorefrontViewPaymentProofs => 'view',
+            $this === self::StorefrontVerifyPayments => 'edit',
+            $this === self::StorefrontPrepareOrders, $this === self::StorefrontVerifyPicks,
+            $this === self::StorefrontMarkReady, $this === self::StorefrontConfirmBankOrders,
+            $this === self::StorefrontHandoverOrders => 'edit',
             $this === self::SalesCredit => 'add',
             str_ends_with($this->value, '.view') => 'view',
             str_ends_with($this->value, '.create') => 'add',
@@ -271,6 +306,13 @@ enum PermissionName: string
         $specific = match ($this) {
             self::UsersCreate, self::UsersUpdate => ['users.view', 'users.assign-roles'],
             self::ProductsCreate, self::ProductsUpdate => ['products.view', 'variants.manage'],
+            self::StorefrontPublish => ['products.view'],
+            self::StorefrontManageDelivery => ['locations.view'],
+            self::StorefrontConfirmOrders, self::StorefrontCancelOrders, self::StorefrontViewPaymentProofs => ['storefront.view-orders'],
+            self::StorefrontVerifyPayments => ['storefront.view-orders', 'storefront.view-payment-proofs'],
+            self::StorefrontPrepareOrders, self::StorefrontVerifyPicks, self::StorefrontMarkReady => ['storefront.view-orders'],
+            self::StorefrontConfirmBankOrders => ['storefront.view-orders', 'storefront.view-payment-proofs'],
+            self::StorefrontHandoverOrders => ['storefront.view-orders', 'shifts.view'],
             self::VariantsManage, self::BundlesManage => ['products.view'],
             self::PosAccess => ['shifts.view'],
             self::SalesCreate => ['sales.view', 'sales.pos', 'shifts.view'],

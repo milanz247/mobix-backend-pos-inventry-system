@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property numeric-string|null $unit_selling_price
  * @property Carbon $received_at
  * @property-read ProductVariant $variant
+ * @property-read Business $business
  * @property-read Location $location
  * @property-read Collection<int, SerializedDeviceEvent> $events
  */
@@ -35,6 +36,12 @@ class SerializedDevice extends Model
 {
     /** @use HasFactory<SerializedDeviceFactory> */
     use HasFactory;
+
+    /** @return BelongsTo<Business, $this> */
+    public function business(): BelongsTo
+    {
+        return $this->belongsTo(Business::class);
+    }
 
     /** @return BelongsTo<ProductVariant, $this> */
     public function variant(): BelongsTo
