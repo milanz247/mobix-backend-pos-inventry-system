@@ -8,6 +8,8 @@ use App\Models\Sale;
 use App\Models\SerializedDevice;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\WebHomeBanner;
+use App\Models\WebProductListing;
 use App\SystemRole;
 use Brick\Math\BigDecimal;
 use Database\Seeders\DemoDataSeeder;
@@ -19,7 +21,7 @@ test('demo data seeder creates locations users roles permissions and location ac
 
     $this->seed(DemoDataSeeder::class);
 
-    $milan = User::query()->where('email', 'milan@nalakamobile.test')->sole();
+    $milan = User::query()->where('email', 'milanmadusankamms@gmail.com')->sole();
 
     expect($business->locations()->count())->toBe(4)
         ->and($business->locations()->where('is_main', true)->count())->toBe(1)
@@ -36,14 +38,19 @@ test('demo data seeder creates an initial business owner and complete catalogue 
     $this->seed(DemoDataSeeder::class);
 
     $business = Business::query()->with('owner')->sole();
-    $owner = User::query()->where('email', 'milan@nalakamobile.test')->sole();
+    $owner = User::query()->where('email', 'milanmadusankamms@gmail.com')->sole();
 
-    expect($business->name)->toBe('NalakaMobile Demo Shop')
+    expect($business->name)->toBe('Mobix Mobile Demo Shop')
         ->and($business->currency)->toBe('LKR')
         ->and($business->owner_id)->toBe($owner->id)
         ->and($owner->name)->toBe('Milan')
         ->and($owner->hasRole(SystemRole::Owner->value))->toBeTrue()
-        ->and($business->products()->count())->toBe(20)
+        ->and($business->products()->count())->toBe(30)
+        ->and($business->categories()->count())->toBe(7)
+        ->and($business->products()->whereNotNull('image_path')->count())->toBe(30)
+        ->and(WebProductListing::query()->where('business_id', $business->id)->where('status', 'published')->count())->toBe(30)
+        ->and(WebHomeBanner::query()->where('business_id', $business->id)->count())->toBe(2)
+        ->and(WebHomeBanner::query()->where('business_id', $business->id)->where('is_active', true)->count())->toBe(1)
         ->and($business->locations()->where('status', 'active')->count())->toBe(4)
         ->and($business->locations()->where('is_main', true)->count())->toBe(1)
         ->and(Sale::query()->where('business_id', $business->id)->count())->toBe(5)
@@ -64,9 +71,11 @@ test('demo data seeder can run repeatedly without duplicating users locations or
             'cashier@nalakamobile.test',
             'technician@nalakamobile.test',
         ])->count())->toBe(0)
-        ->and($business->products()->count())->toBe(20)
-        ->and($business->productVariants()->count())->toBe(24)
-        ->and(User::query()->where('email', 'milan@nalakamobile.test')->count())->toBe(1)
+        ->and($business->products()->count())->toBe(30)
+        ->and($business->productVariants()->count())->toBe(44)
+        ->and(WebProductListing::query()->where('business_id', $business->id)->count())->toBe(30)
+        ->and(WebHomeBanner::query()->where('business_id', $business->id)->count())->toBe(2)
+        ->and(User::query()->where('email', 'milanmadusankamms@gmail.com')->count())->toBe(1)
         ->and(InventoryOperation::query()->where('business_id', $business->id)->count())->toBeGreaterThan(0)
         ->and(InventoryStock::query()->where('business_id', $business->id)->count())->toBeGreaterThan(0)
         ->and(SerializedDevice::query()->where('business_id', $business->id)->count())->toBeGreaterThan(0)
@@ -101,7 +110,7 @@ test('demo seeder does not reset an existing Milan account password', function (
     $business = Business::factory()->create();
     $milan = User::factory()->create([
         'name' => 'Existing Milan',
-        'email' => 'milan@nalakamobile.test',
+        'email' => 'milanmadusankamms@gmail.com',
         'password' => 'ExistingPassword#2026',
     ]);
 

@@ -57,6 +57,7 @@ class DemoDataSeeder extends Seeder
         $this->seedInventory($business, $business->owner, $locations);
         $this->seedPurchase($business, $business->owner, $locations['main']);
         $this->seedSales($business, $business->owner, $locations);
+        $this->call(DemoStorefrontSeeder::class);
     }
 
     /** @return Collection<string, Location> */
@@ -132,7 +133,7 @@ class DemoDataSeeder extends Seeder
         }
 
         $owner = app(CreateNewUser::class)->create([
-            'business_name' => 'NalakaMobile Demo Shop',
+            'business_name' => 'Mobix Mobile Demo Shop',
             'business_type' => 'mobile_sales_and_repairs',
             'business_email' => 'hello@nalakamobile.test',
             'business_phone' => '0713000100',
@@ -140,7 +141,7 @@ class DemoDataSeeder extends Seeder
             'business_city' => 'Kurunegala',
             'currency' => 'LKR',
             'name' => 'Milan',
-            'email' => 'milan@nalakamobile.test',
+            'email' => config('demo.owner_email'),
             'phone' => '0713000105',
             'password' => $password,
             'password_confirmation' => $password,
@@ -159,7 +160,7 @@ class DemoDataSeeder extends Seeder
         }
 
         $milan = User::query()->firstOrCreate(
-            ['email' => 'milan@nalakamobile.test'],
+            ['email' => config('demo.owner_email')],
             [
                 'name' => 'Milan',
                 'phone' => '0713000105',

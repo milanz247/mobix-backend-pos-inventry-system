@@ -11,12 +11,12 @@ test('demo catalogue seeder creates every supported product type with LKR prices
 
     $this->seed(DemoCatalogSeeder::class);
 
-    expect($business->categories()->count())->toBe(4)
+    expect($business->categories()->count())->toBe(7)
         ->and($business->brands()->count())->toBe(6)
-        ->and($business->products()->count())->toBe(20)
-        ->and($business->productVariants()->count())->toBe(24)
+        ->and($business->products()->count())->toBe(30)
+        ->and($business->productVariants()->count())->toBe(44)
         ->and($business->products()->where('product_type', 'simple')->count())->toBe(13)
-        ->and($business->products()->where('product_type', 'variable')->count())->toBe(3)
+        ->and($business->products()->where('product_type', 'variable')->count())->toBe(13)
         ->and($business->products()->where('product_type', 'serialized')->count())->toBe(2)
         ->and($business->products()->where('product_type', 'combo')->count())->toBe(2);
 
@@ -52,8 +52,8 @@ test('demo catalogue seeder is idempotent and preserves customized records', fun
 
     $this->seed(DemoCatalogSeeder::class);
 
-    expect(Product::query()->where('business_id', $business->id)->count())->toBe(20)
-        ->and(ProductVariant::query()->where('business_id', $business->id)->count())->toBe(24)
+    expect(Product::query()->where('business_id', $business->id)->count())->toBe(30)
+        ->and(ProductVariant::query()->where('business_id', $business->id)->count())->toBe(44)
         ->and($variant->refresh()->selling_price)->toBe('4999.00')
         ->and($category->refresh()->description)->toBe('Customized accessories description.');
 });

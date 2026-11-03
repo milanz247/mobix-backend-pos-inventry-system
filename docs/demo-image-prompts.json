@@ -1,0 +1,133 @@
+{
+  "tool": "built-in imagegen",
+  "prompts": [
+    {
+      "name": "charger-25w",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a black Samsung style 25W USB-C wall charger. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "cable-usbc",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a coiled white USB-C to USB-C cable. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "clear-case",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a transparent smartphone protective case. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "screen-protector",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a clear tempered glass smartphone screen protector with a small cleaning kit. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "iphone-display",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: an iPhone 13 replacement OLED display assembly shown front and back. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "samsung-battery",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a Samsung A-series replacement smartphone battery. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "galaxy-s24",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: Samsung Galaxy S24 smartphone in black and gray, front and back. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "redmi-note",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: Xiaomi Redmi Note 14 Pro smartphones in black and lavender, front and back. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "iphone-13",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: iPhone 13 smartphones in midnight and blue, front and back. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "powerbank",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a black 10000mAh portable USB-C power bank. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "charger-33w",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a white 33W USB-C wall charger. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "lightning-cable",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a coiled white USB-C to Lightning cable. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "s24-case",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a navy blue silicone case for Samsung Galaxy S24. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "s24-glass",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a clear Samsung Galaxy S24 screen protector beside a black smartphone. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "charging-flex",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a smartphone USB-C charging port flex circuit board replacement part. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "iphone-battery",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: an iPhone 13 replacement battery with ribbon cable. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "oppo-reno",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: Oppo Reno 12 smartphones in silver and pink front and back. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "galaxy-a15",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a blue black Samsung Galaxy A15 smartphone front and back. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "starter-pack",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a smartphone accessories starter kit with black wall charger white cable transparent case and screen protector. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "protection-pack",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a transparent smartphone case and tempered glass screen protection kit. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "wireless-earbuds",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: white wireless earbuds in an open white charging case. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "headphones",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: black and cream over-ear wireless headphones. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "bluetooth-speaker",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a compact cylindrical portable Bluetooth speaker in black. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "smartwatch",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a square smartwatch with black and pink silicone strap variants. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "fitness-band",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a slim fitness tracker wristband with black and blue straps. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "tablet",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a silver 11 inch tablet computer front and back. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "tablet-keyboard",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a dark tablet keyboard cover with a tablet installed. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "car-charger",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a compact black dual USB car charger. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "wireless-pad",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a circular black wireless phone charging pad with a white variant. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "phone-stand",
+      "prompt": "Use case: product-mockup. Asset type: square ecommerce catalog photograph. Subject: a foldable aluminum desktop phone stand in silver and black. Centered complete product, soft warm off-white seamless studio backdrop, subtle grounded shadow, ample margins, realistic materials, consistent premium store photography. No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "hero-mobile",
+      "prompt": "Use case: product-mockup. Asset type: ecommerce homepage banner. Subject: BANNER: a premium smartphone, tablet, smartwatch and earbuds arranged on sculptural dark teal podiums, wide landscape advertising photography, products on right half, left half dark teal empty negative space for website text overlay.  No added text, no watermark. Illustrative demo product photo."
+    },
+    {
+      "name": "hero-accessories",
+      "prompt": "Use case: product-mockup. Asset type: ecommerce homepage banner. Subject: BANNER: elegant headphones, charging accessories, powerbank and phone cases on warm cream podiums, wide landscape advertising photography, products on right half, left half empty warm cream negative space for website text overlay.  No added text, no watermark. Illustrative demo product photo."
+    }
+  ]
+}

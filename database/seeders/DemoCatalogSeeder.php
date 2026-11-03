@@ -223,6 +223,40 @@ class DemoCatalogSeeder extends Seeder
             ],
         ]);
 
+        // Additional departments keep the demo useful for a complete mobile store.
+        $departments = [
+            'Audio' => 'Earbuds, headphones, and portable speakers.',
+            'Wearables' => 'Smartwatches and fitness trackers.',
+            'Tablets' => 'Tablets and productivity accessories.',
+        ];
+        foreach ($departments as $name => $description) {
+            $categories->put($name, $business->categories()->firstOrCreate(['name' => $name], ['description' => $description]));
+        }
+
+        $extras = [
+            ['Wireless Earbuds Pro', 'Audio', 'EARBUDS', 'White', 'Black', 4200, 6900],
+            ['Studio Wireless Headphones', 'Audio', 'HEADPHONES', 'Black', 'Cream', 8500, 12900],
+            ['Portable Bluetooth Speaker', 'Audio', 'SPEAKER', 'Black', 'Blue', 3800, 5900],
+            ['Smart Watch Active', 'Wearables', 'WATCH', 'Black', 'Pink', 7200, 11500],
+            ['Fitness Band Fit', 'Wearables', 'BAND', 'Black', 'Blue', 4500, 7500],
+            ['Tab Air 11 Wi-Fi', 'Tablets', 'TABLET', 'Silver', 'Space Gray', 65000, 89000],
+            ['Tablet Keyboard Cover', 'Tablets', 'KEYBOARD', 'Black', 'Gray', 6800, 9900],
+            ['Dual USB Car Charger', 'Accessories', 'CAR-CHARGER', 'Black', 'Silver', 1600, 2900],
+            ['15W Wireless Charging Pad', 'Accessories', 'WIRELESS-PAD', 'Black', 'White', 3200, 4900],
+            ['Foldable Desktop Phone Stand', 'Accessories', 'STAND', 'Silver', 'Black', 1400, 2500],
+        ];
+        foreach ($extras as [$name, $department, $sku, $firstColor, $secondColor, $cost, $price]) {
+            $this->createProduct($business, $categories->get($department), $otherBrand instanceof Brand ? $otherBrand : null, [
+                'name' => $name,
+                'product_type' => ProductType::Variable,
+                'description' => $name.'. Available in two colours with local collection and islandwide delivery. Illustrative demo product; specifications and prices are sample data.',
+                'variants' => [
+                    $this->quantityVariant($firstColor, 'DEMO-EXTRA-'.$sku.'-01', null, (string) $cost, (string) $price, (string) ($price - 500), color: $firstColor),
+                    $this->quantityVariant($secondColor, 'DEMO-EXTRA-'.$sku.'-02', null, (string) $cost, (string) $price, (string) ($price - 500), color: $secondColor),
+                ],
+            ]);
+        }
+
         $this->createBundle($business, $other, $otherBrand instanceof Brand ? $otherBrand : null);
         $this->createBundle(
             $business,
