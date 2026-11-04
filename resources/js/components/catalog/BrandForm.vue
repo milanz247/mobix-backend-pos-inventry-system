@@ -35,6 +35,7 @@ const canChangeStatus = usePage<{
 
 const logoPreview = ref<string | null>(null);
 const logoError = ref('');
+const removeLogo = ref(false);
 function previewLogo(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -42,6 +43,7 @@ function previewLogo(event: Event): void {
     logoPreview.value = null;
     logoError.value = '';
     if (!file) return;
+    removeLogo.value = false;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
         logoError.value = 'Choose a JPG, PNG or WebP image no larger than 2 MB.';
         input.value = '';
@@ -133,7 +135,7 @@ onBeforeUnmount(() => {
                 <Label for="logo">Brand logo (optional)</Label>
                 <div class="flex flex-wrap items-center gap-4">
                     <img
-                        v-if="logoPreview || brand?.logo_url"
+                        v-if="logoPreview || (brand?.logo_url && !removeLogo)"
                         :src="logoPreview || brand?.logo_url || ''"
                         alt="Brand logo preview"
                         class="h-24 w-52 rounded-lg border border-border bg-white object-contain p-4"
@@ -149,9 +151,13 @@ onBeforeUnmount(() => {
                         @change="previewLogo"
                         class="max-w-lg"
                     />
+                    <label v-if="brand?.logo_url" class="flex min-h-11 items-center gap-2 text-sm">
+                        <input v-model="removeLogo" name="remove_logo" type="checkbox" value="1" />
+                        Remove current logo
+                    </label>
                 </div>
                 <p id="logo-guidance" class="text-xs text-muted-foreground">
-                    JPG, PNG or WebP, up to 2 MB. Recommended: 600 × 240 px with a transparent background. The storefront fits the whole logo without cropping.
+                    JPG, PNG or WebP, up to 2 MB. SVG is not accepted. Recommended: 600 × 240 px; the storefront fits the whole logo without cropping.
                 </p>
                 <p class="text-xs text-muted-foreground">
                     Brands marked Show on homepage appear when active and linked to a published, eligible product. Changes appear on the storefront's next page load.

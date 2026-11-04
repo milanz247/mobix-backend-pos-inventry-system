@@ -8,14 +8,18 @@ use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\SerializedDevice;
+use App\Models\StorefrontDeviceSelection;
 use App\Models\User;
+use App\Models\WebOrder;
 use App\Models\WebProductListing;
 use App\ProductCondition;
 use App\VariantTrackingMode;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 
 function storefrontContext(): array
@@ -44,6 +48,51 @@ function storefrontProduct(array $context, string $name = 'Test Phone', string $
     ]);
 
     return compact('product', 'option', 'listing');
+}
+
+function storefrontReserveDevice(array $context, Product $product, ProductVariant $variant, SerializedDevice $device, string $status = 'active'): void
+{
+    $order = WebOrder::query()->create([
+        'business_id' => $context['business']->id,
+        'location_id' => $context['location']->id,
+        'reference' => (string) Str::ulid(),
+        'submission_key' => (string) Str::uuid(),
+        'payload_hash' => hash('sha256', Str::random()),
+        'status' => 'pending_confirmation',
+        'currency' => $context['business']->currency,
+        'subtotal' => '1000.00',
+        'total' => '1000.00',
+    ]);
+    $itemId = DB::table('web_order_items')->insertGetId([
+        'business_id' => $context['business']->id,
+        'web_order_id' => $order->id,
+        'product_id' => $product->id,
+        'product_variant_id' => $variant->id,
+        'line_number' => 1,
+        'product_name_snapshot' => $product->name,
+        'product_slug_snapshot' => 'reserved-used-phone',
+        'variant_name_snapshot' => $variant->name,
+        'quantity' => '1.000',
+        'unit_price' => '1000.00',
+        'line_total' => '1000.00',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('web_order_reservations')->insert([
+        'business_id' => $context['business']->id,
+        'web_order_id' => $order->id,
+        'web_order_item_id' => $itemId,
+        'location_id' => $context['location']->id,
+        'component_variant_id' => $variant->id,
+        'serialized_device_id' => $device->id,
+        'active_device_id' => $status === 'active' ? $device->id : null,
+        'reservation_line_key' => (string) Str::ulid(),
+        'quantity' => '1.000',
+        'status' => $status,
+        'expires_at' => now()->addMinutes(10),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 }
 
 test('existing products are unpublished and direct access returns not found', function () {
@@ -172,6 +221,198 @@ test('used serialized starting price reflects eligible devices without exposing 
     $response = $this->getJson('/api/storefront/v1/products/used-phone')->assertOk()
         ->assertJsonPath('data.starting_price', '900.00')->assertJsonPath('data.availability', 'in_stock');
     expect($response->getContent())->not->toContain('123456789012345');
+});
+
+test('used device options return only eligible devices and expose no private inventory fields', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Used Phone', 'used-options', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    $eligible = SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used,
+        'unit_selling_price' => '950.00', 'imei' => '359111111111111', 'imei2' => '359222222222222', 'serial_number' => 'PRIVATE-SERIAL',
+    ]);
+    foreach ([
+        ['condition' => ProductCondition::New, 'status' => 'in_stock'],
+        ['condition' => ProductCondition::Refurbished, 'status' => 'in_stock'],
+        ['condition' => ProductCondition::Used, 'status' => 'sold'],
+        ['condition' => ProductCondition::Used, 'status' => 'damaged'],
+        ['condition' => ProductCondition::Used, 'status' => 'in_repair'],
+        ['condition' => ProductCondition::Used, 'status' => 'returned_to_supplier'],
+    ] as $attributes) {
+        SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create(['business_id' => $ctx['business']->id] + $attributes);
+    }
+    $inactiveLocation = Location::factory()->for($ctx['business'])->create(['status' => 'inactive']);
+    SerializedDevice::factory()->for($inactiveLocation)->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used,
+    ]);
+
+    $response = $this->getJson('/api/storefront/v1/products/used-options/device-options?variant='.$variant->id)
+        ->assertOk()->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.price', '950.00')
+        ->assertJsonPath('data.0.condition', 'Used')
+        ->assertJsonPath('data.0.availability', 'in_stock')
+        ->assertJsonPath('data.0.storage_capacity', $variant->storage_capacity)
+        ->assertJsonPath('data.0.color', $variant->color);
+    $body = $response->getContent();
+    foreach ([(string) $eligible->id, '359111111111111', '359222222222222', 'PRIVATE-SERIAL', 'unit_cost', 'location_id', 'location_name', 'supplier', 'staff', 'reservation'] as $private) {
+        expect($body)->not->toContain($private);
+    }
+});
+
+test('used device options use variant price fallback and reject unpublished products and invalid variants', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Used Fallback', 'used-fallback', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized, 'selling_price' => '1200.00',
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used, 'unit_selling_price' => null,
+    ]);
+    $this->getJson('/api/storefront/v1/products/used-fallback/device-options?variant='.$variant->id)
+        ->assertOk()->assertJsonPath('data.0.price', '1200.00');
+    $newVariant = ProductVariant::factory()->for($ctx['business'])->for($product)->create(['condition' => ProductCondition::New, 'tracking_mode' => VariantTrackingMode::Serialized]);
+    $this->getJson('/api/storefront/v1/products/used-fallback/device-options?variant='.$newVariant->id)->assertUnprocessable();
+    ['option' => $usedVariantOnDifferentProduct] = storefrontProduct($ctx, 'Another Used Phone', 'another-used-phone', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $this->getJson('/api/storefront/v1/products/used-fallback/device-options?variant='.$usedVariantOnDifferentProduct->id)->assertUnprocessable();
+    $product->webListing()->update(['status' => 'draft']);
+    $this->getJson('/api/storefront/v1/products/used-fallback/device-options?variant='.$variant->id)->assertNotFound();
+});
+
+test('device selection keys are opaque scoped and create ten minute hashed tokens without reservations', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Used Token Phone', 'used-token-phone', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    $device = SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used, 'unit_selling_price' => '875.00',
+        'imei' => '358333333333333', 'serial_number' => 'OPAQUE-TEST-SERIAL',
+    ]);
+    $option = $this->getJson('/api/storefront/v1/products/used-token-phone/device-options?variant='.$variant->id)
+        ->assertOk()->json('data.0');
+    expect($option['option_key'])->not->toContain((string) $device->id, $device->imei, 'OPAQUE-TEST-SERIAL');
+    $selection = $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $option['option_key']])
+        ->assertCreated()->assertJsonStructure(['data' => ['token', 'expires_at']])->json('data');
+    expect(strlen($selection['token']))->toBe(64)
+        ->and(StorefrontDeviceSelection::query()->where('business_id', $ctx['business']->id)->count())->toBe(1)
+        ->and(StorefrontDeviceSelection::query()->first()->token_hash)->toBe(hash('sha256', $selection['token']))
+        ->and(StorefrontDeviceSelection::query()->first()->selected_price)->toBe('875.00')
+        ->and(StorefrontDeviceSelection::query()->first()->expires_at->diffInMinutes(now()))->toBeLessThanOrEqual(10)
+        ->and(StorefrontDeviceSelection::query()->first()->expires_at->diffInMinutes(now()))->toBeGreaterThanOrEqual(9)
+        ->and(DB::table('web_order_reservations')->count())->toBe(0);
+    expect($selection['token'])->not->toContain((string) $device->id, $device->imei, 'OPAQUE-TEST-SERIAL', '875.00');
+});
+
+test('invalid or stale device option keys fail generically and recheck price status and location', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Rechecked Used Phone', 'rechecked-used', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    $device = SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used, 'unit_selling_price' => '999.00',
+    ]);
+    $key = $this->getJson('/api/storefront/v1/products/rechecked-used/device-options?variant='.$variant->id)->json('data.0.option_key');
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => substr($key, 0, -1).'x'])->assertUnprocessable();
+    $device->update(['unit_selling_price' => '1000.00']);
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $key])->assertUnprocessable()
+        ->assertJsonPath('error.message', 'This device option is no longer available. Refresh the options and try again.');
+
+    $key = $this->getJson('/api/storefront/v1/products/rechecked-used/device-options?variant='.$variant->id)->json('data.0.option_key');
+    $device->update(['status' => 'sold']);
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $key])->assertUnprocessable();
+
+    $device->update(['status' => 'in_stock']);
+    $key = $this->getJson('/api/storefront/v1/products/rechecked-used/device-options?variant='.$variant->id)->json('data.0.option_key');
+    $ctx['location']->update(['status' => 'inactive']);
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $key])->assertUnprocessable();
+});
+
+test('device option keys reject expiry and cross-business scope', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Scoped Used Phone', 'scoped-used-phone', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    $device = SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used,
+    ]);
+    $key = $this->getJson('/api/storefront/v1/products/scoped-used-phone/device-options?variant='.$variant->id)->json('data.0.option_key');
+    $expiresAtBoundaryKey = Crypt::encryptString(json_encode([
+        'business' => $ctx['business']->id, 'product' => $product->id, 'variant' => $variant->id,
+        'device' => $device->id, 'price' => '1000.00', 'expires' => now()->timestamp,
+    ], JSON_THROW_ON_ERROR));
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $expiresAtBoundaryKey])->assertUnprocessable();
+    $this->travel(11)->minutes();
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $key])->assertUnprocessable();
+
+    $wrongScopeKey = Crypt::encryptString(json_encode([
+        'business' => $ctx['business']->id + 1000, 'product' => $product->id, 'variant' => $variant->id,
+        'device' => $device->id, 'price' => '1000.00', 'expires' => now()->addMinute()->timestamp,
+    ], JSON_THROW_ON_ERROR));
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $wrongScopeKey])->assertUnprocessable()
+        ->assertJsonPath('error.message', 'This device option is no longer available. Refresh the options and try again.');
+});
+
+test('active device reservations hide options while transitioned expired reservations do not', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Reserved Used Phone', 'reserved-used-phone', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    $device = SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used,
+    ]);
+
+    storefrontReserveDevice($ctx, $product, $variant, $device);
+    $this->getJson('/api/storefront/v1/products/reserved-used-phone/device-options?variant='.$variant->id)
+        ->assertOk()->assertJsonCount(0, 'data');
+
+    DB::table('web_order_reservations')->where('serialized_device_id', $device->id)->update([
+        'status' => 'expired', 'active_device_id' => null, 'transitioned_at' => now(), 'updated_at' => now(),
+    ]);
+    $this->getJson('/api/storefront/v1/products/reserved-used-phone/device-options?variant='.$variant->id)
+        ->assertOk()->assertJsonCount(1, 'data');
+});
+
+test('selection creation rejects a device reserved after options were loaded', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Race Used Phone', 'race-used-phone', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    $device = SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used,
+    ]);
+    $key = $this->getJson('/api/storefront/v1/products/race-used-phone/device-options?variant='.$variant->id)
+        ->assertOk()->json('data.0.option_key');
+
+    storefrontReserveDevice($ctx, $product, $variant, $device);
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $key])
+        ->assertUnprocessable()
+        ->assertJsonPath('error.message', 'This device option is no longer available. Refresh the options and try again.');
+    expect(StorefrontDeviceSelection::query()->count())->toBe(0)
+        ->and($device->fresh()->status)->toBe('in_stock');
+});
+
+test('selection creation rejects a used device whose condition changes after options were loaded', function () {
+    $ctx = storefrontContext();
+    ['product' => $product, 'option' => $variant] = storefrontProduct($ctx, 'Condition Changed Phone', 'condition-changed-phone', [
+        'condition' => ProductCondition::Used, 'tracking_mode' => VariantTrackingMode::Serialized,
+    ]);
+    $product->update(['product_type' => 'serialized']);
+    $device = SerializedDevice::factory()->for($ctx['location'])->for($variant, 'variant')->create([
+        'business_id' => $ctx['business']->id, 'condition' => ProductCondition::Used,
+    ]);
+    $key = $this->getJson('/api/storefront/v1/products/condition-changed-phone/device-options?variant='.$variant->id)
+        ->assertOk()->json('data.0.option_key');
+    $device->update(['condition' => ProductCondition::Refurbished]);
+
+    $this->postJson('/api/storefront/v1/device-selections', ['option_key' => $key])->assertUnprocessable();
 });
 
 test('catalog is scoped to the initial business', function () {

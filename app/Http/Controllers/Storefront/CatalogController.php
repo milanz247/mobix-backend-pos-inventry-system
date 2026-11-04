@@ -11,9 +11,11 @@ use App\Models\Brand;
 use App\Models\Business;
 use App\Models\Category;
 use App\Services\StorefrontCatalogService;
+use App\Services\StorefrontDeviceSelectionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
 
 class CatalogController extends Controller
 {
@@ -108,6 +110,21 @@ class CatalogController extends Controller
         ])->values()->all();
 
         return new AvailabilityResource(['slug' => $product->webListing->slug, 'advisory' => true, 'variants' => array_values($variants)]);
+    }
+
+    public function deviceOptions(Request $request, string $slug, StorefrontDeviceSelectionService $selections): JsonResponse
+    {
+        $input = $request->validate(['variant' => ['required', 'integer', 'min:1']]);
+        $result = $selections->options($this->business(), $slug, (int) $input['variant']);
+
+        return response()->json(['data' => $result['options']]);
+    }
+
+    public function createDeviceSelection(Request $request, StorefrontDeviceSelectionService $selections): JsonResponse
+    {
+        $input = $request->validate(['option_key' => ['required', 'string', 'max:4096']]);
+
+        return response()->json(['data' => $selections->createSelection($this->business(), $input['option_key'])], 201);
     }
 
     private function business(): Business

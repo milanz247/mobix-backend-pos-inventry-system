@@ -23,6 +23,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 
+require_once __DIR__.'/../../Support/SelectedDeviceSelection.php';
+
 function staffOrderFixture($test, string $method = 'cod', bool $used = false, bool $combo = false): array
 {
     config()->set('storefront.offer_ttl_minutes', 20);
@@ -71,7 +73,8 @@ function staffOrderFixture($test, string $method = 'cod', bool $used = false, bo
         'name' => 'Central', 'base_delivery_fee' => '250.00', 'currency' => $business->currency, 'is_active' => true]);
     WebLocationDeliveryArea::query()->create(['business_id' => $business->id, 'delivery_area_id' => $area->id,
         'location_id' => $location->id, 'selection_priority' => 1, 'is_active' => true]);
-    $added = $test->postJson('/api/storefront/v1/cart/items', ['product_id' => $product->id,
+    $selection = $used ? ['device_selection_token' => selectFixtureDevice($test, $product, $variant, $device)] : [];
+    $added = $test->postJson('/api/storefront/v1/cart/items', [...$selection, 'product_id' => $product->id,
         'variant_id' => $variant->id, 'quantity' => 1])->assertCreated();
     $token = $added->headers->get('X-Storefront-Cart-Token');
     $headers = ['X-Storefront-Cart-Token' => $token];

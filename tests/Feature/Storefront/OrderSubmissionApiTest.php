@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Mockery\MockInterface;
 
+require_once __DIR__.'/../../Support/SelectedDeviceSelection.php';
+
 function submissionFixture($test, string $method = 'cod', bool $used = false, bool $secondLine = false): array
 {
     config()->set('storefront.offer_ttl_minutes', 20);
@@ -52,7 +54,8 @@ function submissionFixture($test, string $method = 'cod', bool $used = false, bo
     $device = $used ? SerializedDevice::factory()->for($location)->for($variant, 'variant')->create([
         'business_id' => $business->id, 'condition' => ProductCondition::Used, 'unit_selling_price' => '900.00',
     ]) : null;
-    $added = $test->postJson('/api/storefront/v1/cart/items', ['product_id' => $product->id,
+    $selection = $used ? ['device_selection_token' => selectFixtureDevice($test, $product, $variant, $device)] : [];
+    $added = $test->postJson('/api/storefront/v1/cart/items', [...$selection, 'product_id' => $product->id,
         'variant_id' => $variant->id, 'quantity' => 1])->assertCreated();
     $token = $added->headers->get('X-Storefront-Cart-Token');
     if ($secondLine) {
@@ -303,7 +306,7 @@ test('changed used device price or condition requires a new accepted offer', fun
         ->assertStatus(409)->assertJsonPath('error.code', 'DEVICE_UNAVAILABLE');
     $fixture['device']->update(['unit_selling_price' => '900.00', 'condition' => ProductCondition::Refurbished]);
     $this->postJson('/api/storefront/v1/orders', submissionBody($fixture), submissionHeaders($fixture))
-        ->assertStatus(409)->assertJsonPath('error.code', 'OFFER_STALE');
+        ->assertStatus(409)->assertJsonPath('error.code', 'DEVICE_UNAVAILABLE');
     expect(WebOrder::query()->count())->toBe(0);
     expect(DB::table('web_order_reservations')->count())->toBe(0);
 });

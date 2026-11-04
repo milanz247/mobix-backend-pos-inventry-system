@@ -31,6 +31,8 @@ class StorefrontOrderSubmissionService
         private readonly WebReservationService $reservations,
         private readonly WebFulfillmentPolicy $fulfillmentPolicy,
         private readonly WebPickupLocationService $pickupLocations,
+        private readonly StorefrontSelectedDeviceService $selectedDeviceContinuity,
+        private readonly StorefrontOfferTermsService $offerTerms,
     ) {}
 
     /** @return array{data: array<string, mixed>, credential: string, replayed: bool} */
@@ -116,7 +118,12 @@ class StorefrontOrderSubmissionService
             if ($cartItems->isEmpty() || $offerItems->isEmpty() || $quoteItems->count() !== $cartItems->count()) {
                 throw new StorefrontCartException('OFFER_STALE', 'Cart contents changed. Request a fresh offer.', 409);
             }
-            $quoteByVariant = $quoteItems->keyBy('product_variant_id');
+            // Legacy ordinary offers retain their original digest contract. Used offers require version 2.
+            if (($offer->terms_digest_version !== null && $offer->terms_digest_version !== 2)
+                || ($offer->terms_digest_version === 2
+                    && ! hash_equals((string) $offer->terms_digest, $this->offerTerms->digest($offer, $offerItems)))) {
+                throw new StorefrontCartException('OFFER_STALE', 'The accepted terms changed. Request a fresh offer.', 409);
+            }
             $offeredByCartKey = $offerItems->groupBy('source_cart_item_key');
             if ($offeredByCartKey->count() !== $cartItems->count()) {
                 throw new StorefrontCartException('OFFER_STALE', 'Cart contents changed. Request a fresh offer.', 409);
@@ -131,15 +138,25 @@ class StorefrontOrderSubmissionService
             foreach ($cartItems as $cartItem) {
                 $product = $this->catalog->products($business)->whereKey($cartItem->product_id)->first();
                 $variant = $product?->variants->firstWhere('id', $cartItem->product_variant_id);
-                $quoted = $quoteByVariant->get($cartItem->product_variant_id);
+                $quoted = $variant === null ? null : $this->selectedDeviceContinuity->quoteLine($quoteItems, $cartItem, $variant, 'OFFER_STALE');
                 $offered = $offeredByCartKey->get($cartItem->public_key);
                 if ($product === null || $variant === null || $quoted === null || $offered === null ||
                     $quoted->product_id !== $product->id || (int) $quoted->quantity !== $cartItem->quantity ||
                     $offered->sum('quantity') !== $cartItem->quantity) {
                     throw new StorefrontCartException('OFFER_STALE', 'A product or cart line changed. Request a fresh offer.', 409);
                 }
+                $selectedDevice = $this->selectedDeviceContinuity->resolve($business, $variant, $cartItem, false, 'DEVICE_UNAVAILABLE');
+                if ($selectedDevice !== null && ($offer->terms_digest_version !== 2 || $selectedDevice->location_id !== $location->id
+                    || $quoted->selected_location_id !== $location->id || $offered->count() !== 1)) {
+                    throw new StorefrontCartException('OFFER_STALE', 'A selected option changed. Request a fresh offer.', 409);
+                }
                 $catalogLines[] = ['product' => $product, 'variant' => $variant, 'quantity' => $cartItem->quantity];
                 foreach ($offered as $offeredItem) {
+                    if ($selectedDevice !== null && ($offeredItem->serialized_device_id !== $cartItem->serialized_device_id
+                        || $offeredItem->condition_snapshot !== $quoted->selected_condition
+                        || (string) $offeredItem->unit_price !== $quoted->unit_price)) {
+                        throw new StorefrontCartException('OFFER_STALE', 'A selected option changed. Request a fresh offer.', 409);
+                    }
                     $this->validateOfferLine($business, $offer, $offeredItem, $product, $variant, $cartItem->public_key);
                     $lineAllocations = $this->validateAllocations($business, $offeredItem, $product, $variant);
                     foreach ($lineAllocations as $allocation) {

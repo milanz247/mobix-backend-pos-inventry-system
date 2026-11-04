@@ -337,6 +337,28 @@ test('brand logo can be uploaded and replaced through the multipart edit form', 
     Storage::disk('public')->assertMissing($firstPath);
 });
 
+test('brand logo can be removed and unsupported SVG uploads are rejected', function () {
+    Storage::fake('public');
+    $user = catalogManager('brands.create', 'brands.update');
+    $this->actingAs($user)->post(route('brands.store'), [
+        'name' => 'Logo Removal Brand', 'description' => null, 'status' => 'active',
+        'logo' => UploadedFile::fake()->image('logo.png', 120, 60),
+    ])->assertRedirect(route('brands.index'))->assertSessionHasNoErrors();
+
+    $brand = Brand::query()->where('name', 'Logo Removal Brand')->sole();
+    $logoPath = $brand->logo_path;
+    $this->actingAs($user)->post(route('brands.update', $brand), [
+        '_method' => 'PUT', 'name' => $brand->name, 'description' => null, 'status' => 'active', 'remove_logo' => '1',
+    ])->assertRedirect(route('brands.index'))->assertSessionHasNoErrors();
+    expect($brand->fresh()->logo_path)->toBeNull();
+    Storage::disk('public')->assertMissing($logoPath);
+
+    $this->actingAs($user)->post(route('brands.store'), [
+        'name' => 'SVG Rejected Brand', 'description' => null, 'status' => 'active',
+        'logo' => UploadedFile::fake()->createWithContent('unsafe.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+    ])->assertSessionHasErrors('logo');
+});
+
 test('combo products save component quantities without creating their own stock', function () {
     $user = catalogManager('sales.costs.view', 'products.view', 'products.create', 'variants.manage', 'bundles.manage');
     $business = Business::query()->sole();

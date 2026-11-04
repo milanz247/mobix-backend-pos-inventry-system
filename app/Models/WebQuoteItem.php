@@ -19,10 +19,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property numeric-string $line_total
  * @property string $availability
  * @property bool $requires_device_confirmation
+ * @property string|null $source_cart_item_key
+ * @property int|null $serialized_device_id
+ * @property int|null $selected_location_id
+ * @property string|null $selected_condition
  */
 class WebQuoteItem extends Model
 {
-    protected $fillable = ['business_id', 'web_quote_id', 'product_id', 'product_variant_id', 'product_slug', 'product_name', 'variant_name', 'quantity', 'unit_price', 'line_total', 'availability', 'requires_device_confirmation'];
+    protected $fillable = ['business_id', 'web_quote_id', 'product_id', 'product_variant_id', 'product_slug', 'product_name', 'variant_name', 'quantity', 'unit_price', 'line_total', 'availability', 'requires_device_confirmation', 'source_cart_item_key', 'serialized_device_id', 'selected_location_id', 'selected_condition'];
+
+    protected $hidden = ['source_cart_item_key', 'serialized_device_id', 'selected_location_id', 'selected_condition'];
 
     protected function casts(): array
     {

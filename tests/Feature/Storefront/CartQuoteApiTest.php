@@ -13,10 +13,13 @@ use App\Models\WebOrder;
 use App\Models\WebProductListing;
 use App\ProductCondition;
 use App\Services\WebReservationService;
+use App\VariantTrackingMode;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+
+require_once __DIR__.'/../../Support/SelectedDeviceSelection.php';
 
 function webCartContext(): array
 {
@@ -49,7 +52,14 @@ function webCartStock(array $ctx, ProductVariant $variant, string $quantity = '5
 
 function webCartAdd($test, Product $product, ProductVariant|int $variant, int $quantity = 1, ?string $token = null)
 {
-    return $test->postJson('/api/storefront/v1/cart/items', ['product_id' => $product->id,
+    $selection = [];
+    if ($variant instanceof ProductVariant && $variant->condition === ProductCondition::Used
+        && $variant->tracking_mode === VariantTrackingMode::Serialized && $quantity === 1) {
+        $device = $variant->serializedDevices()->where('status', 'in_stock')->firstOrFail();
+        $selection = ['device_selection_token' => selectFixtureDevice($test, $product, $variant, $device)];
+    }
+
+    return $test->postJson('/api/storefront/v1/cart/items', [...$selection, 'product_id' => $product->id,
         'variant_id' => $variant instanceof ProductVariant ? $variant->id : $variant, 'quantity' => $quantity], $token ? ['X-Storefront-Cart-Token' => $token] : []);
 }
 
@@ -140,7 +150,7 @@ test('quantity-based stock is checked for requested quantity and does not mutate
     expect(DB::table('stock_movements')->count())->toBe(0);
 });
 
-test('used serialized phones use eligible device starting price without exposing IMEI', function () {
+test('used serialized phones quote the selected device price without exposing IMEI', function () {
     $ctx = webCartContext();
     ['product' => $product, 'variant' => $variant] = webCartProduct($ctx, 'used', [
         'condition' => ProductCondition::Used, 'tracking_mode' => 'serialized', 'selling_price' => '1200.00',

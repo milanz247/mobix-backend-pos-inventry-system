@@ -25,6 +25,11 @@ class CartResource extends JsonResource
                 'unit_price' => $item['unit_price'], 'line_total' => $item['line_total'],
                 'image_url' => $item['image_url'], 'availability' => $item['availability'],
                 'requires_device_confirmation' => $item['requires_device_confirmation'],
+                'selected_device' => $item['selected_device'] === null ? null : [
+                    'condition' => $item['selected_device']['condition'],
+                    'unit_price' => $item['selected_device']['unit_price'],
+                    'availability' => $item['selected_device']['availability'],
+                ],
             ], $cart['items']),
             'item_count' => $cart['item_count'], 'currency' => $cart['currency'],
             'indicative_subtotal' => $cart['indicative_subtotal'], 'can_quote' => $cart['can_quote'],

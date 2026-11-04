@@ -16,12 +16,15 @@ use App\Models\WebProductListing;
 use App\Models\WebQuote;
 use App\ProductCondition;
 use App\Services\WebReservationService;
+use App\VariantTrackingMode;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
+
+require_once __DIR__.'/../../Support/SelectedDeviceSelection.php';
 
 function offerContext(): array
 {
@@ -67,7 +70,12 @@ function offerRequestPayload(string $reference): array
 
 function preparedOffer($test, array $ctx, Product $product, ProductVariant $variant, int $quantity = 1): array
 {
-    $added = $test->postJson('/api/storefront/v1/cart/items', ['product_id' => $product->id,
+    $selection = [];
+    if ($variant->condition === ProductCondition::Used && $variant->tracking_mode === VariantTrackingMode::Serialized) {
+        $device = $variant->serializedDevices()->where('status', 'in_stock')->firstOrFail();
+        $selection = ['device_selection_token' => selectFixtureDevice($test, $product, $variant, $device)];
+    }
+    $added = $test->postJson('/api/storefront/v1/cart/items', [...$selection, 'product_id' => $product->id,
         'variant_id' => $variant->id, 'quantity' => $quantity])->assertCreated();
     $token = $added->headers->get('X-Storefront-Cart-Token');
     $quote = $test->postJson('/api/storefront/v1/quotes', [], ['X-Storefront-Cart-Token' => $token])->assertOk();

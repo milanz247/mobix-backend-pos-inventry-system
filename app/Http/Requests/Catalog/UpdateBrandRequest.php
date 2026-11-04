@@ -50,6 +50,7 @@ class UpdateBrandRequest extends FormRequest
             'show_on_homepage' => ['sometimes', 'boolean'],
             'homepage_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
             'status' => ['required', Rule::enum(CatalogStatus::class)],
+            'remove_logo' => ['sometimes', 'boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'extensions:jpg,jpeg,png,webp', 'max:2048'],
         ];
     }

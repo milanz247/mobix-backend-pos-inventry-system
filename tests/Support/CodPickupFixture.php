@@ -19,6 +19,8 @@ use App\Services\WebOrderStaffService;
 use App\VariantTrackingMode;
 use Illuminate\Support\Str;
 
+require_once __DIR__.'/SelectedDeviceSelection.php';
+
 function codPickupFixture($test, bool $serialized = false, bool $combo = false, bool $shared = false, string $componentQuantity = '2.000', bool $componentSerialized = false): array
 {
     config()->set('storefront.order_submission_enabled', true);
@@ -61,14 +63,17 @@ function codPickupFixture($test, bool $serialized = false, bool $combo = false, 
     $device = $serialized || $componentSerialized ? SerializedDevice::factory()->for($location)->for($componentSerialized ? $component : $variant, 'variant')->create([
         'business_id' => $business->id, 'condition' => ProductCondition::Used, 'unit_selling_price' => '900.00',
     ]) : null;
+    $selection = $serialized ? ['device_selection_token' => selectFixtureDevice($test, $product, $variant, $device)] : [];
     $added = $test->postJson('/api/storefront/v1/cart/items', [
-        'product_id' => $product->id, 'variant_id' => $variant->id, 'quantity' => 1,
+        ...$selection, 'product_id' => $product->id, 'variant_id' => $variant->id, 'quantity' => 1,
     ])->assertCreated();
     $token = $added->headers->get('X-Storefront-Cart-Token');
     $headers = ['X-Storefront-Cart-Token' => $token];
     if ($shared && $component !== null) {
+        $componentSelection = $componentSerialized
+            ? ['device_selection_token' => selectFixtureDevice($test, $component->product, $component, $device)] : [];
         $test->postJson('/api/storefront/v1/cart/items', [
-            'product_id' => $component->product_id, 'variant_id' => $component->id, 'quantity' => 1,
+            ...$componentSelection, 'product_id' => $component->product_id, 'variant_id' => $component->id, 'quantity' => 1,
         ], $headers)->assertCreated();
     }
     $quote = $test->postJson('/api/storefront/v1/quotes', [], $headers)->assertOk();

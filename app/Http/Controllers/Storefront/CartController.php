@@ -27,9 +27,10 @@ class CartController extends Controller
             'product_id' => ['required', 'integer', 'min:1'],
             'variant_id' => ['required', 'integer', 'min:1'],
             'quantity' => ['required', 'integer', 'between:1,10'],
+            'device_selection_token' => ['sometimes', 'string', 'regex:/\A[a-f0-9]{64}\z/'],
         ]);
         $business = $this->business();
-        $result = $carts->add($business, $request->header('X-Storefront-Cart-Token'), (int) $input['product_id'], (int) $input['variant_id'], (int) $input['quantity']);
+        $result = $carts->add($business, $request->header('X-Storefront-Cart-Token'), (int) $input['product_id'], (int) $input['variant_id'], (int) $input['quantity'], $input['device_selection_token'] ?? null);
         $response = (new CartResource($carts->view($business, $result['cart'])))->response()->setStatusCode(201);
         if ($result['token'] !== null) {
             $response->headers->set('X-Storefront-Cart-Token', $result['token']);

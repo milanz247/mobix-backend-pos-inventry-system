@@ -100,12 +100,14 @@ class BrandController extends Controller
     public function update(UpdateBrandRequest $request, Brand $brand): RedirectResponse
     {
         $brand = Business::query()->where('setup_key', 'initial')->sole()->brands()->findOrFail($brand->id);
-        $attributes = $request->safe()->except('logo');
+        $attributes = $request->safe()->except(['logo', 'remove_logo']);
         $previousLogoPath = $brand->logo_path;
         $newLogoPath = $this->storeLogo($request->file('logo'));
 
         if ($newLogoPath !== null) {
             $attributes['logo_path'] = $newLogoPath;
+        } elseif ($request->boolean('remove_logo')) {
+            $attributes['logo_path'] = null;
         }
 
         try {
@@ -118,8 +120,9 @@ class BrandController extends Controller
             throw $exception;
         }
 
-        if ($newLogoPath !== null
+        if (($newLogoPath !== null || $request->boolean('remove_logo'))
             && $previousLogoPath !== null
+            && $previousLogoPath !== $newLogoPath
             && ! Brand::query()->where('logo_path', $previousLogoPath)->exists()) {
             Storage::disk('public')->delete($previousLogoPath);
         }

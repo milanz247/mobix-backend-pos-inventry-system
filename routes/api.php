@@ -18,12 +18,17 @@ Route::prefix('storefront/v1')->middleware('throttle:storefront-catalog')->group
     Route::get('products', [CatalogController::class, 'products']);
     Route::get('products/{slug}', [CatalogController::class, 'product']);
     Route::get('products/{slug}/availability', [CatalogController::class, 'availability']);
+    Route::get('products/{slug}/device-options', [CatalogController::class, 'deviceOptions']);
     Route::get('delivery-areas', [OrderOfferController::class, 'deliveryAreas']);
     Route::get('pickup-locations', [PickupLocationController::class, 'index']);
     Route::get('home-banner', [HomeBannerController::class, 'show']);
     Route::get('site-announcement', [SiteAnnouncementController::class, 'show']);
     Route::get('shopping-status', [SiteAnnouncementController::class, 'shoppingStatus']);
     Route::get('contact', [SiteAnnouncementController::class, 'contact']);
+});
+
+Route::prefix('storefront/v1')->middleware(['throttle:storefront-cart', NoStoreStorefrontCart::class])->group(function (): void {
+    Route::post('device-selections', [CatalogController::class, 'createDeviceSelection']);
 });
 
 Route::prefix('storefront/v1')->middleware(['throttle:storefront-cart', NoStoreStorefrontCart::class])->group(function (): void {

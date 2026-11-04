@@ -6,6 +6,7 @@ use App\Exceptions\StorefrontCartException;
 use App\Models\Business;
 use App\Models\Location;
 use App\Models\ProductVariant;
+use App\Models\SerializedDevice;
 use App\Models\WebCart;
 use App\Models\WebDeliveryArea;
 use App\Models\WebOrderOffer;
@@ -19,7 +20,8 @@ use Illuminate\Support\Str;
 class StorefrontOrderOfferService
 {
     public function __construct(private readonly StorefrontCatalogService $catalog, private readonly StorefrontCartDemandService $demand,
-        private readonly WebFulfillmentPolicy $fulfillmentPolicy, private readonly WebPickupLocationService $pickupLocations) {}
+        private readonly WebFulfillmentPolicy $fulfillmentPolicy, private readonly WebPickupLocationService $pickupLocations,
+        private readonly StorefrontSelectedDeviceService $selectedDevices, private readonly StorefrontOfferTermsService $offerTerms) {}
 
     /** @param array<string, mixed> $input
      * @return array<string, mixed>
@@ -40,7 +42,7 @@ class StorefrontOrderOfferService
             if ($quote === null || $quote->status !== 'indicative' || $quote->expires_at->isPast() || $quote->currency !== $business->currency) {
                 throw new StorefrontCartException('QUOTE_STALE', 'Request a fresh indicative quote before continuing.', 409);
             }
-            $cartItems = $cart->items()->orderBy('id')->get();
+            $cartItems = $cart->items()->orderBy('serialized_device_id')->orderBy('id')->get();
             $quoted = $quote->items->map(fn ($line) => $line->product_id.':'.$line->product_variant_id.':'.$line->quantity)->sort()->values()->all();
             $current = $cartItems->map(fn ($line) => $line->product_id.':'.$line->product_variant_id.':'.$line->quantity)->sort()->values()->all();
             if ($current === [] || $quoted !== $current) {
@@ -76,12 +78,16 @@ class StorefrontOrderOfferService
                 if ($product === null || $variant === null || $variant->business_id !== $business->id) {
                     throw new StorefrontCartException('QUOTE_STALE', 'A product is no longer available. Request a fresh quote.', 409);
                 }
-                $price = $this->catalog->startingPrice($variant);
-                $quotedLine = $quote->items->first(fn ($line) => $line->product_variant_id === $variant->id);
-                if ($price === null || $quotedLine === null || BigDecimal::of($price)->compareTo($quotedLine->unit_price) !== 0) {
+                $device = $this->selectedDevices->resolve($business, $variant, $item, true, 'QUOTE_STALE');
+                $quotedLine = $this->selectedDevices->quoteLine($quote->items, $item, $variant);
+                if ($device !== null && $device->location_id !== $quotedLine->selected_location_id) {
+                    throw new StorefrontCartException('QUOTE_STALE', 'A selected option changed. Request a fresh quote.', 409);
+                }
+                $price = $device === null ? $this->catalog->startingPrice($variant) : $item->selected_unit_price;
+                if ($price === null || BigDecimal::of($price)->compareTo($quotedLine->unit_price) !== 0) {
                     throw new StorefrontCartException('QUOTE_STALE', 'A product price or availability has changed. Request a fresh quote.', 409);
                 }
-                $lines[] = ['item' => $item, 'product' => $product, 'variant' => $variant];
+                $lines[] = ['item' => $item, 'product' => $product, 'variant' => $variant, 'device' => $device];
             }
 
             $selection = null;
@@ -116,17 +122,8 @@ class StorefrontOrderOfferService
                 'condition' => $item['condition_snapshot'], 'included_device_conditions' => $item['included_device_conditions'], 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'], 'line_total' => $item['line_total'],
             ], $items);
-            $terms = ['reference' => $reference, 'currency' => $business->currency, 'fulfillment_mode' => $mode->value,
-                'area' => $area?->code, 'area_name' => $area?->name,
-                'pickup_location_code' => $pickupDetails['code'] ?? null,
-                'pickup_location_name' => $pickupDetails['name'] ?? null,
-                'pickup_location_address' => $pickupDetails['address'] ?? null,
-                'pickup_location_city' => $pickupDetails['city'] ?? null,
-                'location_id' => $selection['mapping']->location_id, 'payment_method' => $input['payment_method'],
-                'subtotal' => (string) $subtotal, 'delivery_fee' => $fee, 'total' => (string) $total,
-                'items' => $items, 'contact' => $input['contact'], 'address' => $input['address'] ?? [], 'expires_at' => $expiresAt->toIso8601String()];
-            // Hash the canonical commercial snapshot, including private allocations, without exposing them.
-            $digest = hash('sha256', json_encode($terms, JSON_THROW_ON_ERROR));
+            // Placeholder exists only inside this transaction; replaced after snapshot normalization.
+            $digest = str_repeat('0', 64);
             $offer = WebOrderOffer::query()->create([
                 'business_id' => $business->id, 'web_cart_id' => $cart->id, 'web_quote_id' => $quote->id,
                 'delivery_area_id' => $area?->id, 'location_id' => $selection['mapping']->location_id,
@@ -140,11 +137,16 @@ class StorefrontOrderOfferService
                 'currency' => $business->currency, 'subtotal' => (string) $subtotal, 'discount_total' => '0.00',
                 'delivery_fee' => $fee, 'total' => (string) $total, 'payment_method' => $input['payment_method'],
                 'contact_snapshot' => $input['contact'], 'address_snapshot' => $input['address'] ?? [],
-                'terms_digest' => $digest, 'expires_at' => $expiresAt,
+                'terms_digest' => $digest, 'terms_digest_version' => 2, 'expires_at' => $expiresAt,
             ]);
             foreach ($items as $index => $item) {
                 $offer->items()->create($item + ['business_id' => $business->id, 'line_number' => $index + 1]);
             }
+
+            // Read database-normalized snapshots before hashing so acceptance can recompute exactly.
+            $offer->refresh();
+            $digest = $this->offerTerms->digest($offer, $offer->items()->orderBy('line_number')->get());
+            $offer->update(['terms_digest' => $digest]);
 
             return ['reference' => $reference, 'expires_at' => $expiresAt->toIso8601String(), 'currency' => $business->currency,
                 'fulfillment_mode' => $mode->value,
@@ -158,7 +160,7 @@ class StorefrontOrderOfferService
         });
     }
 
-    /** @param list<array{item: mixed, product: mixed, variant: ProductVariant}> $lines
+    /** @param list<array{item: mixed, product: mixed, variant: ProductVariant, device: SerializedDevice|null}> $lines
      * @return list<array<string, mixed>>|null
      */
     private function evaluateLocation(Business $business, Location $location, array $lines): ?array
@@ -168,6 +170,15 @@ class StorefrontOrderOfferService
         ], $lines);
         if (! $this->demand->canFulfill($business, $location, $demandLines)) {
             return null;
+        }
+        $pinnedIds = [];
+        foreach ($lines as $line) {
+            if ($line['device'] !== null) {
+                if ($line['device']->location_id !== $location->id || isset($pinnedIds[$line['device']->id])) {
+                    return null;
+                }
+                $pinnedIds[$line['device']->id] = true;
+            }
         }
         $demand = [];
         $variants = [];
@@ -190,6 +201,9 @@ class StorefrontOrderOfferService
                     $component->product->status->value !== 'active' || in_array($component->product->product_type, [ProductType::Combo, ProductType::Service], true)) {
                     return null;
                 }
+                if ($line['device'] !== null) {
+                    continue;
+                }
                 $id = $component->id;
                 $demand[$id] = ($demand[$id] ?? BigDecimal::zero())->plus($requirement['quantity']);
                 $variants[$id] = $component;
@@ -205,7 +219,7 @@ class StorefrontOrderOfferService
                     return null;
                 }
                 $devices = $variant->serializedDevices()->where('business_id', $business->id)->where('location_id', $location->id)
-                    ->where('status', 'in_stock')
+                    ->where('status', 'in_stock')->whereNotIn('id', array_keys($pinnedIds))
                     ->when($variant->condition === ProductCondition::Used, fn ($query) => $query->where('condition', 'used'))
                     ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('web_order_reservations as r')
                         ->whereColumn('r.active_device_id', 'serialized_devices.id')->where('r.business_id', $business->id)->where('r.status', 'active'))
@@ -228,7 +242,8 @@ class StorefrontOrderOfferService
                 $allocation = ['variant_id' => $component->id, 'quantity' => $requirement['quantity']];
                 if ($component->tracking_mode === VariantTrackingMode::Serialized) {
                     $count = (int) $requirement['quantity'];
-                    $allocation['device_ids'] = $devicesByVariant[$component->id]->splice(0, $count)->pluck('id')->all();
+                    $allocation['device_ids'] = $line['device'] !== null
+                        ? [$line['device']->id] : $devicesByVariant[$component->id]->splice(0, $count)->pluck('id')->all();
                     if ($line['product']->product_type === ProductType::Combo) {
                         $allocation['device_prices'] = [];
                         foreach ($allocation['device_ids'] as $selectedId) {

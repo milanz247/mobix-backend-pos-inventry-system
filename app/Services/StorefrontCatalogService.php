@@ -7,6 +7,7 @@ use App\Models\Business;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\SerializedDevice;
 use App\ProductCondition;
 use App\ProductType;
 use Brick\Math\BigDecimal;
@@ -74,29 +75,36 @@ class StorefrontCatalogService
     public function startingPrice(ProductVariant $variant): ?string
     {
         if ($variant->tracking_mode->value === 'serialized' && $variant->condition === ProductCondition::Used) {
-            $amount = DB::table('serialized_devices as devices')
-                ->join('locations as locations', function ($join): void {
-                    $join->on('locations.id', '=', 'devices.location_id')
-                        ->on('locations.business_id', '=', 'devices.business_id');
-                })
-                ->where('devices.business_id', $variant->business_id)
-                ->where('devices.product_variant_id', $variant->id)
-                ->where('devices.status', 'in_stock')
-                ->where('devices.condition', ProductCondition::Used->value)
-                ->where('locations.status', 'active')
-                ->whereNotExists(function ($query): void {
-                    $query->selectRaw('1')->from('web_order_reservations as reserved')
-                        ->whereColumn('reserved.active_device_id', 'devices.id')
-                        ->whereColumn('reserved.business_id', 'devices.business_id')
-                        ->where('reserved.status', 'active');
-                })
-                ->selectRaw('MIN(COALESCE(devices.unit_selling_price, ?)) as price', [$variant->selling_price])
+            $amount = $this->eligibleUsedDevices($variant->business, $variant)
+                ->selectRaw('MIN(COALESCE(serialized_devices.unit_selling_price, ?)) as price', [$variant->selling_price])
                 ->value('price');
 
             return $amount === null ? null : BigDecimal::of((string) $amount)->toScale(2)->__toString();
         }
 
         return (string) $variant->selling_price;
+    }
+
+    /** @return Builder<SerializedDevice> */
+    public function eligibleUsedDevices(Business $business, ProductVariant $variant): Builder
+    {
+        return SerializedDevice::query()
+            ->where('serialized_devices.business_id', $business->id)
+            ->where('serialized_devices.product_variant_id', $variant->id)
+            ->where('serialized_devices.status', 'in_stock')
+            ->where('serialized_devices.condition', ProductCondition::Used->value)
+            ->whereHas('location', fn (Builder $location) => $location->where('business_id', $business->id)->where('status', 'active'))
+            ->whereNotExists(function ($query) use ($business): void {
+                $query->selectRaw('1')->from('web_order_reservations as reserved')
+                    ->whereColumn('reserved.active_device_id', 'serialized_devices.id')
+                    ->where('reserved.business_id', $business->id)
+                    ->where('reserved.status', 'active');
+            });
+    }
+
+    public function usedDevicePrice(SerializedDevice $device, ProductVariant $variant): string
+    {
+        return BigDecimal::of((string) ($device->unit_selling_price ?? $variant->selling_price))->toScale(2)->__toString();
     }
 
     public function availability(ProductVariant $variant, Business $business): string
